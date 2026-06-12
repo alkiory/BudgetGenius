@@ -1,0 +1,54 @@
+services:
+  backend:
+    container_name: bg-backend-gce
+    ports:
+      - "3000:5000"
+    env_file:
+      - .env
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - PGSSLMODE=disable
+      - DB_HOST=database
+      - DB_NAME=budgetgenius_prod
+      - DB_USER=postgres_admin_prod
+      # DB_PASS/DB_PASSWORD is provided via the .env file
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  database:
+    container_name: bg-db-gce
+    environment:
+      - POSTGRES_USER=postgres_admin_prod
+      - POSTGRES_DB=budgetgenius_prod
+    env_file:
+      - .env  # Provides POSTGRES_PASSWORD
+    volumes:
+      - pgdata_gce:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres_admin_prod -d budgetgenius_prod"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    container_name: bg-redis-gce
+    env_file:
+      - .env  # Provides REDIS_PASSWORD if set
+    volumes:
+      - redisdata_gce:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata_gce:
+  redisdata_gce:
