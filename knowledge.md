@@ -1,0 +1,736 @@
+# BudgetGenius — AI Model Knowledge Guide
+
+> **Purpose:** This document provides a comprehensive, structured understanding of the BudgetGenius codebase to enable AI coding agents (GitHub Copilot, Claude, Cursor, etc.) to effectively navigate, extend, and build upon this repository. It should be read before any development task begins.
+
+---
+
+## 1. Project Identity
+
+**BudgetGenius** is a full-stack personal finance management web application. It allows users to track income and expenses, create budgets, set savings goals, and receive AI-powered financial insights.
+
+- **Target Users:** Individuals managing personal or household finances.
+- **Business Model:** Freemium — core features are free; reports, savings goals, and investment tracking are premium-gated.
+- **Language Support:** English & Spanish (bilingual UI and AI assistant).
+
+---
+
+## 2. High-Level Architecture
+
+```
+                       ┌──────────────────┐
+                       │   webClient      │  React 19 + Vite 6
+                       │   (port 3001)    │  Tailwind CSS + Recharts
+                       └────────┬─────────┘
+                                │ HTTP (axios)
+                       ┌────────▼─────────┐
+                       │   api            │  NestJS 10
+                       │   (port 3000)    │  TypeORM + Passport.js
+                       └──┬──────┬──────┬─┘
+                          │      │      │
+                    ┌─────▼┐ ┌──▼──┐ ┌─▼────┐
+                    │PostgreSQL│Redis│ │OpenAI│
+                    │(RDS/15) │(7.2)│ │(GPT) │
+                    └─────────┘└─────┘ └──────┘
+```
+
+### 2.1 Monorepo Structure
+
+The project is a **pnpm workspace monorepo** orchestrated by **Turbo**:
+
+```
+BudgetGenius/
+├── apps/
+│   ├── api/              # NestJS backend
+│   └── webClient/        # React/Vite frontend
+├── docs/
+│   └── rpi/              # RPI Framework (Research, Plan, Implement)
+├── scripts/
+│   └── bootstrap.sh       # One-command setup script
+├── docker-compose.yml     # Base service definitions
+├── docker-compose.dev.yml # Development overrides
+├── docker-compose.prod.yml# Production overrides
+├── turbo.json             # Turbo pipeline configuration
+├── pnpm-workspace.yaml   # Workspace definition
+└── package.json           # Root workspace scripts
+```
+
+### 2.2 Layered Architecture (Both Frontend & Backend)
+
+Both apps follow a **Clean Architecture / Hexagonal** pattern with strict layer separation:
+
+| Layer | Backend (`apps/api/src/`) | Frontend (`apps/webClient/src/`) |
+|-------|--------------------------|----------------------------------|
+| **Domain** | `domain/` — Entities, repository port interfaces, value objects | `domain/` — Entity types, repository interfaces |
+| **Application** | `application/` — Service classes (business logic) | `application/` — Service functions |
+| **Infrastructure** | `infrastructure/` — Modules, controllers, strategies, config, middleware | `infrastructure/` — API config, Firebase config, error boundary |
+| **Adapters** | `adapters/` — Repository implementations, HTTP controllers, DTOs | `adapters/` — HTTP repository implementations, Redux store, hooks, context |
+
+**Critical rule:** Dependencies point inward. Domain never imports from Application or Infrastructure.
+
+---
+
+## 3. Tech Stack
+
+### Backend (`apps/api`)
+| Category | Technology | Version |
+|----------|-----------|---------|
+| Framework | NestJS | 10.x |
+| Language | TypeScript | 5.7 |
+| ORM | TypeORM | 0.3.21 |
+| Database | PostgreSQL | 15 |
+| Cache/Sessions | Redis (ioredis) | 5.5 |
+| Auth | Passport.js, JWT, bcryptjs, Firebase Admin | — |
+| Rate Limiting | @nestjs/throttler + Redis | 6.4 |
+| API Docs | Swagger/OpenAPI (@nestjs/swagger) | 11.x |
+| AI | OpenAI SDK | 4.x |
+| Logging | Winston + Morgan | — |
+| Package Manager | pnpm | 10.x |
+
+### Frontend (`apps/webClient`)
+| Category | Technology | Version |
+|----------|-----------|---------|
+| Framework | React | 19.0 |
+| Build Tool | Vite | 6.2 |
+| Language | TypeScript | 5.7 |
+| Styling | Tailwind CSS | 3.x |
+| State Management | Redux Toolkit + React Query (TanStack) | — |
+| Routing | React Router | 7.3 |
+| Charts | Recharts | 2.x |
+| Icons | Lucide React | — |
+| Testing | Playwright | 1.51 |
+| Auth | Firebase JS SDK | 11.x |
+
+### Infrastructure
+| Category | Technology |
+|----------|-----------|
+| CI/CD | GitHub Actions |
+| Containerization | Docker + Docker Compose |
+| Hosting (Frontend) | Vercel + Firebase Hosting |
+| Hosting (Backend) | Docker on VPS / AWS |
+| DB Hosting | AWS RDS (PostgreSQL) |
+| Monorepo Orchestration | Turbo |
+
+---
+
+## 4. Directory Structure & Layer Conventions
+
+### 4.1 Backend: `apps/api/src/`
+
+```
+apps/api/src/
+├── main.ts                         # Bootstrap — creates NestJS app
+├── app.module.ts                   # Root module — all imports registered
+├── app.service.ts                  # Root service
+├── app.controller.ts               # Root controller (health, status)
+├── data-source.ts                  # TypeORM CLI DataSource config
+├── setup-db.ts                     # Database setup helper
+├── domain/                         # ——— CORE BUSINESS LAYER ———
+│   ├── index.ts
+│   ├── auth/
+│   │   ├── AuthRepository.ts       # Repository port (interface)
+│   │   ├── auth.entity.ts          # Auth-related types
+│   │   └── password-reset.entity.ts
+│   ├── user/
+│   │   ├── user.entity.ts          # User TypeORM entity
+│   │   ├── user-settings.entity.ts # UserSettings TypeORM entity
+│   │   ├── UserRepository.ts       # Repository port (interface)
+│   │   ├── UserAuthProvider.ts
+│   │   ├── UserEmail.ts
+│   │   └── UserPassword.ts
+│   └── dashboard/
+│       ├── transaction.entity.ts
+│       ├── budget.entity.ts
+│       ├── budget-category.entity.ts
+│       ├── expense-category.entity.ts
+│       ├── goal.entity.ts
+│       ├── saving-goal.entity.ts
+│       ├── income.entity.ts
+│       └── overview.entity.ts
+├── application/                    # ——— BUSINESS LOGIC LAYER ———
+│   ├── auth/
+│   │   ├── auth.service.ts
+│   │   └── dto/                    # Data Transfer Objects
+│   ├── user/
+│   │   ├── user.service.ts
+│   │   ├── user-seeder.service.ts
+│   │   ├── user-settings.service.ts
+│   │   └── dto/
+│   ├── ai/
+│   │   └── ai.service.ts           # OpenAI "Finny" assistant
+│   └── dashboard/
+│       └── services/               # Transaction, Budget, Goal, etc.
+├── infrastructure/                 # ——— TECHNICAL DETAILS LAYER ———
+│   ├── database.module.ts
+│   ├── core/core.module.ts         # Core middleware setup
+│   ├── middleware/
+│   │   └── user-settings.middleware.ts
+│   ├── config/
+│   │   ├── strategy/jwt.strategy.ts
+│   │   ├── cookie.service.ts
+│   │   ├── redis.service.ts
+│   │   └── throttler-behind-proxy.guard.ts
+│   ├── auth/
+│   │   ├── google.strategy.ts
+│   │   ├── firebase-auth.strategy.ts (middleware)
+│   │   └── module/auth.module.ts
+│   ├── log/logger.service.ts       # Winston wrapper
+│   ├── dashboard/dashboard.module.ts
+│   ├── user/user.module.ts
+│   ├── user/user-settings.module.ts
+│   └── ai/module/ai.module.ts
+├── adapters/                       # ——— IMPLEMENTATION LAYER ———
+│   ├── app.controller.ts           # Root + Test controllers
+│   └── dashboard/
+│       ├── http/                   # Controllers (Transaction, Budget, etc.)
+│       └── persistence/           # Repository implementations
+└── migrations/                     # TypeORM migration files
+```
+
+### 4.2 Frontend: `apps/webClient/src/`
+
+```
+apps/webClient/src/
+├── main.tsx                        # Entry point
+├── App.tsx                         # Root component (wraps with ErrorBoundary, Routes, Toaster)
+├── index.css                       # Global styles + Tailwind directives
+├── domain/                         # ——— CORE BUSINESS LAYER ———
+│   ├── auth/
+│   │   ├── AuthRepository.ts       # Repository interface
+│   │   └── auth.entity.ts
+│   ├── user/
+│   │   ├── UserRepository.ts
+│   │   ├── user.entity.ts
+│   │   └── userSettings.ts
+│   ├── dashboard/
+│   │   ├── dashboard.entity.ts
+│   │   ├── dashboard.repository.ts
+│   │   └── ... (budgets, goals, etc.)
+│   └── index.ts
+├── application/                    # ——— BUSINESS LOGIC LAYER ———
+│   ├── auth/auth.service.ts
+│   └── user/user.service.ts
+├── infrastructure/                 # ——— TECHNICAL DETAILS LAYER ———
+│   ├── api.config.ts               # Axios instance
+│   ├── firebaseConfig.ts
+│   ├── errorBoundary.tsx
+│   ├── request-queue.ts
+│   └── toast.config.tsx
+├── adapters/                       # ——— IMPLEMENTATION LAYER ———
+│   ├── http/                       # Repository implementations (budget, transaction, etc.)
+│   ├── store/rootStore.ts          # Redux store
+│   ├── hooks/                      # Custom hooks (useMobile, themeContext, etc.)
+│   ├── storage/cookie.util.ts
+│   └── query/                      # React Query hooks
+├── presentation/                   # ——— UI LAYER ———
+│   ├── utils/
+│   │   ├── routes.ts               # Route names + paths enums
+│   │   ├── color.ts
+│   │   ├── currencyService.ts
+│   │   ├── localeInspector.ts
+│   │   └── toast.tsx
+│   ├── routes/
+│   │   ├── route-config.tsx        # All route definitions
+│   │   ├── protected-route.tsx     # Auth guard
+│   │   └── premium-pages.tsx       # Premium feature guard
+│   ├── layouts/
+│   │   ├── landing.tsx             # Public landing layout
+│   │   ├── auth.tsx                # Auth pages layout
+│   │   └── main.tsx                # Dashboard layout (sidebar + header)
+│   ├── pages/
+│   │   ├── cta.tsx                 # Homepage/landing
+│   │   ├── auth/                   # Login, Signup, Forgot/Reset Password
+│   │   ├── dashboard/              # Dashboard, Transactions, Budgets, Goals, etc.
+│   │   ├── upgrade/                # Premium upgrade page
+│   │   ├── contact/                # Privacy, Terms, Contact Sales
+│   │   ├── demo/                   # How It Works
+│   │   └── user/                   # Profile, User List
+│   └── components/
+│       ├── ui/                     # Reusable UI primitives (Button, Card, Input, Modal, etc.)
+│       ├── dashboard/              # Dashboard-specific (sidebar, header, main-content)
+│       ├── profile/                # Profile-specific components
+│       └── logo.tsx, loader.tsx, etc.
+└── tests/                          # Playwright E2E tests
+```
+
+### 4.3 Import Aliases (tsconfig paths)
+
+**Backend (`apps/api/tsconfig.json`):**
+```
+@domain/*       → src/domain/*
+@application/*  → src/application/*
+@infrastructure/* → src/infrastructure/*
+@adapters/*     → src/adapters/*
+```
+
+**Frontend (`apps/webClient/vite.config.ts`):**
+```
+@domain/*       → src/domain/*
+@application/*  → src/application/*
+@infrastructure/* → src/infrastructure/*
+@adapters/*     → src/adapters/*
+@presentation/* → src/presentation/*
+```
+
+> **Always use these aliases** in imports. Never use relative paths like `../../domain/...`.
+
+---
+
+## 5. Domain Model
+
+### 5.1 Entity Relationship Diagram
+
+```
+User (1) ──────< Transaction (N)
+User (1) ──────< Budget (N) ──────< BudgetCategory (N)
+User (1) ──────< Goal (N)
+User (1) ──────< SavingGoal (N)
+User (1) ──────< Income (N)
+User (1) ──────< Overview (N)       # Monthly snapshots
+User (1) ──────< ExpenseCategory (N)
+User (1) ──────< UserSettings (N)
+                   # note ①
+```
+
+> **Note ①:** UserSettings is `@ManyToOne` on User with no `OneToMany` inverse declared on the User entity — it exists in the database schema but is not navigable from User via TypeORM relations.
+
+### 5.2 Entity Details
+
+| Entity | Table | Key Fields | Notes |
+|--------|-------|-----------|-------|
+| **User** | `users` | id, name, surname, email, password (nullable), authProvider ('email'\|'google'), role, isPremium, refreshToken | bcrypt hashing via `@BeforeInsert`/`@BeforeUpdate` hooks. Emails are used as login identifiers. |
+| **Transaction** | `transactions` | id, date, description, category, amount, status, userId FK | Core financial record. Amount uses numeric transformer. |
+| **Budget** | `budgets` | id, name, period, startDate, endDate, totalAllocated, totalSpent, userId FK | One budget has many BudgetCategories (cascade). |
+| **BudgetCategory** | `budget_categories` | id, name, allocated, spent, budgetId FK | Belongs to a Budget. CASCADE delete from budget. |
+| **Goal** | `goals` | id, name, description, targetAmount, currentAmount, startDate, dueDate, status, type, contributionFrequency, notes, userId FK | Long-term financial goals. Status defaults to 'active'. Type defaults to 'short-term'. |
+| **SavingGoal** | `saving_goals` | id, name, current, target, percentage, targetDate, category, color, userId FK | Premium feature. Visual progress tracking. |
+| **Income** | `incomes` | id, date, description, amount, category, recurrence, userId FK | Recurring income tracking. |
+| **Overview** | `overview` | id, balance, income, expenses, period, userId FK | Monthly financial snapshots/aggregates. |
+| **ExpenseCategory** | `expense_categories` | id, name, value, userId FK | User-defined expense categorization. |
+| **UserSettings** | `user_settings` | id, timezone, currency, locale, userId FK | Per-user localization preferences. |
+| **PasswordReset** | `password_reset_tokens` | id, email, token, createdAt | Temporary tokens for password reset flow. |
+
+### 5.3 Database Schema
+
+All tables live under the **`bg_public`** PostgreSQL schema (not `public`). Entity decorators don't explicitly set schema — it's configured at the TypeORM connection level.
+
+---
+
+## 6. Key Patterns & Conventions
+
+### 6.1 Authentication Flow
+
+1. **Email/Password Login:** User sends credentials → `AuthService.login()` validates locally in dev, verifies with Firebase in production → JWT access token (1h) + refresh token (7d) issued → refresh token stored in Redis.
+2. **Google OAuth:** Redirect to Google → callback → `GoogleStrategy` → `AuthService.validateOAuthUser()` (transactional upsert) → JWT tokens returned via postMessage to opener window.
+3. **Firebase Login:** Frontend sends Firebase ID token → `FirebaseAuthMiddleware` verifies with Firebase Admin SDK → user attached to request.
+4. **Token Refresh:** Client sends refresh token → `AuthService.refreshToken()` validates against Redis → new access token issued.
+5. **Token Extraction:** JWT strategy tries cookies first (`accessToken` cookie), then `Authorization: Bearer <token>` header.
+6. **Rate Limiting:** 4 requests per 10 seconds per device/client IP, stored in Redis.
+
+### 6.2 Repository Pattern
+
+Every domain aggregate has a **port interface** in `domain/` and an **implementation** in `adapters/`.
+
+**Backend example:**
+```typescript
+// domain/auth/AuthRepository.ts — interface
+export interface AuthRepository {
+  findByEmail(email: string): Promise<User | null>;
+  // ...
+}
+
+// adapters/auth/persistence/auth.repository.ts — implementation
+@Injectable()
+export class AuthRepositoryImpl implements AuthRepository { ... }
+```
+
+**Frontend example:**
+```typescript
+// domain/dashboard/budgets/budget.repository.ts — interface
+export interface BudgetRepository {
+  getAll(): Promise<Budget[]>;
+  // ...
+}
+
+// adapters/http/budget.repository.ts — implementation using axios
+export const HttpBudgetRepository: BudgetRepository = { ... }
+```
+
+### 6.3 Controller → Service → Repository Flow
+
+```
+HTTP Request → Controller (adapters/dashboard/http/*.controller.ts)
+            → Service (application/dashboard/services/*.service.ts)
+            → Repository (adapters/dashboard/persistence/*.repository.ts)
+            → TypeORM Entity → PostgreSQL
+```
+
+Controllers handle HTTP concerns (validation, status codes). Services handle business logic. Repositories handle data access.
+
+### 6.4 Naming Conventions
+
+- **Files:** kebab-case (`transaction.service.ts`, `saving-goal.entity.ts`)
+- **Classes/Interfaces:** PascalCase (`TransactionService`, `AuthRepository`)
+- **Variables/Functions:** camelCase (`findByEmail`, `userId`)
+- **Constants:** UPPER_SNAKE_CASE for environment-related only
+- **Enums:** PascalCase (`RoutePaths`, `UserRole`)
+- **Database tables:** snake_case (configured via TypeORM defaults)
+- **Database columns:** camelCase in entities, snake_case in database (via `name` option in `@Column`)
+
+### 6.5 Import Organization
+
+Imports are grouped in this order (separated by blank lines):
+1. Third-party libraries
+2. NestJS-specific modules
+3. Project internal modules (using aliases)
+
+### 6.6 Module Registration Pattern (Backend)
+
+All modules are registered in `app.module.ts`. New features follow this pattern:
+1. Create entity in `domain/`
+2. Add to TypeORM `forFeature()` in the module
+3. Create repository port interface
+4. Create repository implementation
+5. Create service in `application/`
+6. Create controller in `adapters/`
+7. Register all in the module's `providers` and `controllers`
+8. Import the module in `app.module.ts`
+
+### 6.7 Route Registration Pattern (Frontend)
+
+All routes use the `RoutePaths` enum from `presentation/utils/routes.ts`. New routes:
+1. Add path to `RoutePaths` enum
+2. Add route definition to `route-config.tsx`
+3. Place under `ProtectedRoute` for authenticated, `PremiumRoute` for premium
+
+---
+
+## 7. Development Workflow
+
+### 7.1 Quick Start
+
+```bash
+# One-command setup
+chmod +x scripts/bootstrap.sh
+./scripts/bootstrap.sh
+
+# Or manual:
+pnpm install
+cp apps/api/.env.example apps/api/.env.development
+cp apps/webClient/.env.example apps/webClient/.env.development
+# Fill in env vars, then:
+pnpm dev    # Starts both API + Frontend via Turbo
+```
+
+### 7.2 Individual Service Development
+
+```bash
+# Backend only
+cd apps/api && pnpm run dev
+
+# Frontend only
+cd apps/webClient && pnpm run dev
+```
+
+### 7.3 Docker Development
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# Starts: PostgreSQL, Redis, Backend (3000), Frontend (3001)
+```
+
+### 7.4 Key Commands (from root)
+
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Start all services in dev mode |
+| `pnpm build` | Build entire workspace |
+| `pnpm test` | Run all tests |
+| `pnpm --filter api test` | Run backend tests only |
+| `pnpm --filter frontend-web test` | Run frontend Playwright tests |
+| `pnpm --filter api migration:run` | Run database migrations |
+| `pnpm --filter api migration:create` | Create new migration |
+
+### 7.5 Quality Gates (per RPI Implement Phase)
+
+Before marking any task complete:
+1. **Build** must pass (no compilation errors)
+2. **Lint** must pass (no lint violations)
+3. **Tests** must pass (no test failures)
+
+---
+
+## 8. Environment Configuration
+
+### 8.1 Required Environment Variables
+
+**Backend (`apps/api/.env.development`):**
+
+```env
+# Database
+DB_HOST=database            # 'database' for Docker, 'localhost' for local
+DB_PORT=5432
+DB_USER=postgres_admin_dev
+DB_PASS=dev_password
+DB_NAME=budgetgenius_dev
+DB_URL=postgresql://...
+
+# Server
+HOST=0.0.0.0
+PORT=5000
+NODE_ENV=development
+FRONTEND_URL=http://localhost:3001
+
+# JWT (REQUIRED — app won't start without it)
+JWT_SECRET=<generated-secret>
+
+# Redis
+REDIS_HOST=redis            # 'redis' for Docker, 'localhost' for local
+REDIS_PORT=6379
+
+# OpenAI (for AI assistant)
+OPENAI_API_KEY=sk-...
+
+# OAuth (optional)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+# Firebase (optional — multiple vars)
+FIREBASE_PROJECT_ID=
+FIREBASE_CLIENT_EMAIL=
+FIREBASE_PRIVATE_KEY=
+FIREBASE_API_KEY=
+FIREBASE_AUTH_DOMAIN=
+FIREBASE_STORAGE_BUCKET=
+FIREBASE_MESSAGING_SENDER_ID=
+FIREBASE_APP_ID=
+FIREBASE_MEASURENT_ID=
+```
+
+**Frontend (`apps/webClient/.env.development`):**
+
+```env
+VITE_API_URL=http://localhost:3000/api
+VITE_FRONTEND_URL=http://localhost:3001
+
+# Firebase (optional)
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+VITE_FIREBASE_MEASURENT_ID=
+```
+
+---
+
+## 9. CI/CD & Deployment
+
+### 9.1 GitHub Actions Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `ci.yml` | Push to main, PR to main/dev | Backend tests + Docker build/push + SSH deploy; Frontend tests |
+| `playwright.yml` | Push to main/dev, PR | E2E Playwright tests |
+| `firebase-hosting-merge.yml` | Push to main | Deploy frontend to Firebase Hosting |
+| `firebase-hosting-pull-request.yml` | PR | Preview channel on Firebase Hosting |
+
+### 9.2 Deployment Targets
+
+- **Frontend:** Vercel (primary) + Firebase Hosting (static files)
+- **Backend:** Docker container on VPS (SSH deploy via GitHub Actions)
+- **Database:** AWS RDS PostgreSQL (production) / Docker PostgreSQL (dev)
+- **Cache:** Redis (Docker in dev, managed in prod)
+
+### 9.3 Docker Services
+
+| Service | Container Name (dev) | Port Mapping | Purpose |
+|---------|---------------------|-------------|---------|
+| backend | bg-backend-dev | 3000:5000 | NestJS API |
+| frontend | bg-frontend-dev | 3001:80 | React SPA (nginx) |
+| database | bg-db-dev | 5432:5432 | PostgreSQL 15 |
+| redis | bg-redis-dev | 6379:6379 | Redis 7.2 |
+
+---
+
+## 10. Testing Strategy
+
+### 10.1 Backend Tests (Jest)
+
+- **Location:** `apps/api/test/`
+- **Types:** Unit tests for services, E2E tests for API endpoints
+- **Config:** `jest.config.ts` (unit), `test/jest-e2e.json` (e2e)
+- **Status:** ✅ **15 tests passing** — all service tests pass, including `auth-service.spec.ts`, `user-service.spec.ts`, and `transaction.service.spec.ts`
+- **Key test files:**
+  - `user-service.spec.ts`
+  - `auth-service.spec.ts`
+  - `transaction.service.spec.ts`
+  - `user.e2e-spec.ts`
+  - `app.e2e-spec.ts`
+
+### 10.2 Frontend Tests (Playwright)
+
+- **Location:** `apps/webClient/tests/`
+- **Types:** E2E browser tests
+- **Config:** `playwright.config.ts` (baseURL: `http://localhost:5173` — Vite dev server)
+- **Status:** ✅ **15 tests passing** — all `home.spec.ts` and `auth.spec.ts` tests pass in ~11s
+- **Key test files:**
+  - `home.spec.ts` — Landing page, theme toggle, and how-it-works navigation
+  - `auth.spec.ts` — Login validation, successful authentication flow
+  - `i18n.spec.ts` — Bilingual support (English/Spanish locale switching)
+- **Mocks:** `tests/mocks/` directory
+
+### 10.3 Running Tests
+
+```bash
+# All tests
+pnpm test
+
+# Backend only
+pnpm --filter api test
+
+# Frontend E2E only
+pnpm --filter frontend-web test
+
+# Frontend with UI
+pnpm --filter frontend-web test:ui
+```
+
+---
+
+## 11. RPI Framework Integration
+
+This project integrates the **RPI (Research, Plan, Implement)** framework for structured, AI-assisted development. The framework is documented in `docs/rpi/`.
+
+### 11.1 When to Use RPI
+
+Use RPI for any non-trivial feature or change request. Do NOT use RPI for:
+- Single-line bug fixes
+- Typo corrections
+- Trivially obvious changes
+
+### 11.2 Phase Flow
+
+```
+Ambiguity → [Research] → [Plan] → [Implement] → Outcome
+                ↓            ↓          ↓
+             FAR Scale    FACTS Scale  Quality Gates
+             (Mean≥4.00)  (Mean≥3.00)  (Build→Lint→Test)
+```
+
+### 11.3 Creating a New RPI Task
+
+1. Create a subdirectory: `rpi/<task-name>/`
+2. Run Research phase → output `research.md` with FAR score ≥ 4.00
+3. Run Plan phase → output `plan.md` with FACTS score ≥ 3.00
+4. Run Implement phase → execute checkboxes sequentially with quality gates
+5. Each task checkbox marked `[x]` only after Build → Lint → Test all pass
+
+### 11.4 Artifacts
+
+- `rpi/<task-name>/research.md` — Problem context, affected files, code examples, FAR score
+- `rpi/<task-name>/plan.md` — Implementation overview, atomic tasks, FACTS score
+- `rpi/<task-name>/implement-postmortem.md` — Only if catastrophic failure (3+ consecutive failures)
+
+---
+
+## 12. Anti-Patterns & Pitfalls
+
+### 12.1 Do NOT:
+
+- ❌ Skip the RPI framework for complex changes
+- ❌ Mix layer concerns (e.g., put business logic in controllers)
+- ❌ Use relative imports — always use `@domain/`, `@application/`, etc.
+- ❌ Cast variables as `any` (TypeScript)
+- ❌ Modify TypeORM entities without creating a migration
+- ❌ Store secrets in code — use environment variables
+- ❌ Proceed with failing tests to "make progress"
+- ❌ Modify the `plan.md` task list except for checking completed tasks
+- ❌ Write code before the Research phase is validated
+
+### 12.2 Common Pitfalls:
+
+- **SSL confusion:** Docker PostgreSQL does NOT use TLS. SSL must be `false` in TypeORM config for Docker. Only enable for external services like AWS RDS.
+- **Redis host:** Uses `redis` in Docker (container name), `localhost` for local dev.
+- **Database schema:** Always `bg_public`, not `public`.
+- **Password hashing:** User entity has `@BeforeInsert`/`@BeforeUpdate` hooks that auto-hash passwords — do not hash manually.
+- **Firebase initialization:** In dev mode (`NODE_ENV=development`), Firebase validation is skipped entirely.
+- **Token extraction order:** JWT strategy checks cookies FIRST, then Authorization header.
+- **Premium gating:** Reports, Savings, and Investments pages are behind `<PremiumRoute>` wrapper.
+
+---
+
+## 13. Current State & Architecture Decisions
+
+### 13.1 What Exists
+
+- ✅ Full authentication system (email/password, Google OAuth, Firebase)
+- ✅ JWT with refresh token rotation (Redis-backed)
+- ✅ Rate limiting (Redis-backed)
+- ✅ Dashboard with transaction tracking
+- ✅ Budget management with categories
+- ✅ Financial goals (short-term & long-term)
+- ✅ Savings goals with progress tracking
+- ✅ Income tracking with recurrence
+- ✅ Monthly financial overviews
+- ✅ AI financial assistant ("Finny" via OpenAI)
+- ✅ User settings (timezone, currency, locale)
+- ✅ Password reset flow
+- ✅ Bilingual support (EN/ES) in AI assistant
+- ✅ Premium feature gating
+- ✅ Landing page with testimonials
+- ✅ CI/CD with Docker deployment
+
+### 13.2 Architecture Choices & Rationale
+
+- **Clean Architecture layers** enforced by `eslint` import boundaries
+- **TypeORM** chosen over Prisma for its decorator-based approach matching NestJS patterns
+- **Redis** used for refresh tokens, rate limiting, and AI conversation history (not just cache)
+- **React Query** for server state, Redux Toolkit for client state (auth, settings)
+- **Playwright** over Cypress for cross-browser E2E testing
+- **pnpm** over npm/yarn for strict dependency resolution and workspace support
+- **Turbo** for parallel task orchestration in monorepo
+
+### 13.3 Known Technical Debt / Improvement Areas
+
+- Some files are large (e.g., `cta.tsx` landing page is ~300 lines of hardcoded preview UI)
+- `auth.service.ts` has a `duummy()` method (typo) that should be removed
+- Firebase config in `auth.service.ts` duplicates env vars already available via `ConfigService`
+- `user.service.ts` has an artificial 1-second delay (`setTimeout`) in `createUser`
+- `finance.entity.ts` is referenced in the project tree but no longer exists
+- Test coverage is limited (3 backend unit spec files + 3 frontend E2E spec files, 30 total tests) — all existing tests pass
+- No database seed data for development (only a `UserSeederService` placeholder)
+
+---
+
+## 14. Quick Reference: Key Files
+
+| When you need to... | Look at... |
+|---------------------|-----------|
+| Add a new page | `apps/webClient/src/presentation/routes/route-config.tsx` |
+| Add a new route path | `apps/webClient/src/presentation/utils/routes.ts` |
+| Add a new API endpoint | `apps/api/src/infrastructure/dashboard/dashboard.module.ts` |
+| Add a new entity/table | `apps/api/src/domain/` → then add to module's TypeORM `forFeature()` → create migration |
+| Change authentication | `apps/api/src/application/auth/auth.service.ts` |
+| Change JWT behavior | `apps/api/src/infrastructure/config/strategy/jwt.strategy.ts` |
+| Add env vars | Backend: `app.module.ts` ConfigModule validation; Frontend: `vite.config.ts` |
+| Create a migration | `pnpm --filter api migration:create` |
+| Deploy | `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` |
+
+---
+
+## 15. RPI Quick Start
+
+To start a new feature using RPI:
+
+```
+Prompt for AI Agent:
+"I need to work on a new requirement: [DESCRIBE].
+We use the RPI (Research, Plan, Implement) framework. Please read `knowledge.md` and `docs/rpi/README.md` to understand our process.
+Your first task is ONLY the Research phase. Analyze the codebase to clarify scope and map affected code. Generate the artifact at `rpi/[ticket-id]/research.md`. Include the FAR Scale output. Do not write any production code yet."
+```
+
+---
+
+*Last updated: 2026-06-12*
+*Maintainers: Alkiory, Sergio Campbell*

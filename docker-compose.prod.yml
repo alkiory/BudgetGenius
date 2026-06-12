@@ -1,0 +1,58 @@
+services:
+  backend:
+    container_name: bg-backend-prod
+    ports:
+      - "3000:5000"
+    env_file:
+      - ./apps/api/.env.production
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - PGSSLMODE=disable # DESACTIVADO: En Docker, conectando a un contenedor local, SSL debe estar desactivado. Para DB externas se activaría con PGSSLMODE=require o similar.
+      - DB_HOST=database
+      - DB_NAME=budgetgenius_prod
+      - DB_USER=postgres_admin_prod
+      - DB_PASS=${DB_PASSWORD}
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    container_name: bg-frontend-prod
+    build:
+      context: .
+      dockerfile: apps/webClient/dockerfile
+      args:
+        - VITE_API_URL=http://localhost:3000/api # EN PRODUCCIÓN, EL FRONTEND SE CONECTARÁ AL BACKEND A TRAVÉS DE LA RED DE DOCKER, USANDO EL NOMBRE DEL SERVICIO COMO HOST 
+    ports:
+      - "3001:80"
+    env_file:
+      - ./apps/webClient/.env.production
+
+  database:
+    container_name: bg-db-prod
+    environment:
+      - POSTGRES_USER=postgres_admin_prod
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=budgetgenius_prod
+    # SIN PUERTOS EXPUESTOS (Seguridad)
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres_admin_prod -d budgetgenius_prod"]
+
+  redis:
+    container_name: bg-redis-prod
+    volumes:
+      - redisdata_prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata_prod:
+  redisdata_prod:

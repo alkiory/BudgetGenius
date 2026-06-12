@@ -1,0 +1,23 @@
+.turbo
+.qodo
+
+# Tests
+/apps/coverage
+/.nyc_output
+
+/node_modules
+# Build output
+/dist
+/build
+
+/.firebase
+
+# environments
+.env
+.env.local
+.env.prod
+.env.development
+.env.production
+
+# Backup files
+.env.bak

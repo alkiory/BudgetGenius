@@ -1,0 +1,187 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: "system-ui", "Avenir", "Helvetica", "Arial", "sans-serif";
+
+  --background: 255 255 255;
+  --foreground: 74 20 140;
+  --card: 243 229 245;
+  --card-foreground: 74 20 140;
+  --primary: 41, 10, 46;
+  --primary-foreground: 255, 255, 255;
+  --secondary: 206 147 216;
+  --secondary-foreground: 74 20 140;
+  --accent: 234 128 252;
+  --destructive: 190 36 170;
+  --border: 241 190 231;
+  --muted: 241 245 249;
+  --muted-foreground: 100 116 139;
+  --input: 226 232 240;
+  --ring: 156 39 176;
+  --neutral: 248 250 252;
+}
+
+.dark {
+  --background: 15 23 42;
+  --foreground: 234 128 252;
+  --card: 30 41 59;
+  --card-foreground: 234 128 252;
+  --primary: 222, 80, 247;
+  --primary-foreground: 255, 240, 255;
+  --secondary: 15 23 42;
+  --accent: 123 31 162;
+  --destructive: 190 36 170;
+  --muted: 30 41 59;
+  --muted-foreground: 148 163 184;
+  --input: 30 41 59;
+  --ring: 213 0 249;
+  --neutral-50: 30 41 59;
+}
+
+@keyframes loading {
+  0% {
+    left: -33%;
+  }
+
+  100% {
+    left: 100%;
+  }
+}
+
+::-moz-selection {
+  color: rgb(var(--muted));
+  background-color: rgb(var(--muted-foreground));
+}
+
+::selection {
+  color: rgb(var(--muted));
+  background-color: rgb(var(--muted-foreground));
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  background-color: rgb(var(--secondary));
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--primary));
+  border-radius: 4px;
+}
+
+:hover {
+  transition: 0.2s;
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes particle {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(-100vh) translateX(-50vw);
+    opacity: 0;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient 10s ease infinite;
+}
+
+.animate-particle {
+  animation: particle 5s linear infinite;
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    clip-path: inset(45% 20% 45% 20%);
+  }
+
+  to {
+    opacity: 1;
+    clip-path: inset(0% 0% 0% 0%);
+  }
+}
+
+.revealing-image {
+  /* Create View Timeline */
+  view-timeline-name: --revealing-image;
+  view-timeline-axis: block;
+  /* Attach animation, linked to the  View Timeline */
+  animation: linear reveal both;
+  animation-timeline: --revealing-image;
+  /* Tweak range when effect should run*/
+  animation-range: entry 25% cover 50%;
+}
+
+@keyframes scale-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s ease-out forwards;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.progress-shim {
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-shim::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
+  animation: shimmer 2s ease-out infinite;
+}
+
+.progress-shim.is-slow::after {
+    animation-duration: 2.5s;
+}
+
+.progress-shim.is-fast::after {
+    animation-duration: 1.5s;
+}
