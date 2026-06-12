@@ -16,7 +16,7 @@ jobs:
 
       - name: Build
         # Inyectamos la URL de la API durante el build
-        run: pnpm --filter @apps/webClient build
+        run: pnpm --filter frontend-web build
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
 
