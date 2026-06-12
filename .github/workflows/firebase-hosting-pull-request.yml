@@ -21,7 +21,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: pnpm --filter @apps/webClient build
+        run: pnpm --filter frontend-web build
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
 
