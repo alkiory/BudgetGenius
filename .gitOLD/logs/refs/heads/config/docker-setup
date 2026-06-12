@@ -1,0 +1,3 @@
+0000000000000000000000000000000000000000 185b7095f598526ca4c890532a73b8e057974d83 Alkiory Dev <sergiocampbelldev+mipcgaming@gmail.com> 1776598655 +0200	branch: Created from HEAD
+185b7095f598526ca4c890532a73b8e057974d83 b401e6a5b85c578bfe8da482d3dfe562bfeac1b6 Alkiory Dev <sergiocampbelldev+mipcgaming@gmail.com> 1776598672 +0200	commit: feat: Refactor Docker setup and environment configuration for BudgetGenius
+b401e6a5b85c578bfe8da482d3dfe562bfeac1b6 4fd4c1d12bc4af1826359dd5067de20c5771cce9 Alkiory Dev <sergiocampbelldev+mipcgaming@gmail.com> 1776974682 +0200	commit: feat(auth): refactor login and user validation logic, add JWT strategy and cookie service

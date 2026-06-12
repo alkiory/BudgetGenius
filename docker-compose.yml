@@ -1,0 +1,32 @@
+name: BudgetGenius
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/webClient/dockerfile
+    networks:
+      - app-network
+
+  database:
+    image: postgres:15-alpine
+    restart: always
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7.2-alpine
+    restart: always
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

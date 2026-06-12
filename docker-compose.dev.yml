@@ -1,0 +1,62 @@
+services:
+  backend:
+    container_name: bg-backend-dev
+    ports:
+      - "3000:5000"
+    env_file:
+      - ./apps/api/.env.development
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=database
+      - DB_NAME=budgetgenius_dev
+      - DB_USER=postgres_admin_dev
+      - DB_PASS=dev_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    container_name: bg-frontend-dev
+    build:
+      context: .
+      dockerfile: apps/webClient/dockerfile
+      args:
+        - VITE_API_URL=http://localhost:3000/api
+    ports:
+      - "3001:80"
+    env_file:
+      - ./apps/webClient/.env.development
+
+  database:
+    container_name: bg-db-dev
+    environment:
+      - POSTGRES_USER=postgres_admin_dev
+      - POSTGRES_PASSWORD=dev_password
+      - POSTGRES_DB=budgetgenius_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres_admin_dev -d budgetgenius_dev"]
+
+  redis:
+    container_name: bg-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata_dev:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata_dev:
+  redisdata_dev:

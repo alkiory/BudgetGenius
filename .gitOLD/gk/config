@@ -1,0 +1,14 @@
+[branch "main"]
+	gk-last-accessed = 2026-04-19T10:38:08.365Z
+[branch "config/docker-setup"]
+	gk-last-accessed = 2026-04-23T20:07:12.876Z
+	gk-last-modified = 2026-04-23T20:07:12.876Z
+[branch "dev"]
+	gk-last-accessed = 2026-04-23T20:40:17.000Z
+	gk-last-modified = 2026-04-23T20:40:17.000Z
+[branch "config/github-actions"]
+	gk-last-accessed = 2026-06-12T11:24:27.497Z
+	gk-last-modified = 2026-04-23T21:11:29.975Z
+[branch "deploy"]
+	gk-last-accessed = 2026-06-12T20:42:35.417Z
+	gk-last-modified = 2026-06-12T20:42:35.417Z
