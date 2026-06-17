@@ -7,26 +7,24 @@ services:
       dockerfile: apps/api/Dockerfile
     networks:
       - app-network
-
-  frontend:
-    build:
-      context: .
-      dockerfile: apps/webClient/dockerfile
-    networks:
-      - app-network
+      - npm_network   # Conectado a NPM para recibir tráfico web externo
 
   database:
     image: postgres:15-alpine
     restart: always
     networks:
       - app-network
+      - npm_network
 
   redis:
     image: redis:7.2-alpine
     restart: always
     networks:
       - app-network
+      - npm_network
 
 networks:
   app-network:
     driver: bridge
+  npm_network:
+    external: bridge
