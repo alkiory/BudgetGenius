@@ -24,9 +24,9 @@ export class SavingGoalService {
   ) {}
 
   async createSavingGoal(dto: CreateSavingGoalDto, userId: number) {
-    if (dto.current === 0 || dto.target === 0) {
+    if (dto.target === 0) {
       throw new BadRequestException(
-        'Current and target amounts must be greater than 0',
+        'Target amount must be greater than 0',
       );
     }
 

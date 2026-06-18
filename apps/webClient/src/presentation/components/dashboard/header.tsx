@@ -1,6 +1,5 @@
 
 import { useTranslation } from 'react-i18next';
-import { Search } from "lucide-react"
 import { ThemeToggle } from "../themeToogle"
 import { LanguageSwitcher } from "./language-switcher"
 import { Link } from "react-router";
@@ -15,27 +14,8 @@ export function DashboardHeader() {
 
   return (
     <header className="sticky top-0 z-10 flex h-16 flex-shrink-0 border-b bg-white dark:bg-slate-950 dark:border-slate-800">
-      <div className="flex flex-1 justify-between px-4">
-        <div className="flex flex-1">
-          <div className="flex w-full md:ml-0">
-            <label htmlFor="search-field" className="sr-only">
-              {t('common.search')}
-            </label>
-            <div className="relative w-full text-slate-400 focus-within:text-slate-600 dark:focus-within:text-slate-300">
-              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                <Search className="h-5 w-5" aria-hidden="true" />
-              </div>
-              <input
-                id="search-field"
-                className="block h-full w-full border-transparent bg-transparent py-2 pl-10 pr-3 text-slate-900 placeholder-slate-500 focus:border-transparent focus:placeholder-slate-400 focus:outline-none focus:ring-0 sm:text-sm dark:text-white"
-                placeholder={t('dashboard.searchPlaceholder')}
-                type="search"
-                name="search"
-              />
-            </div>
-          </div>
-        </div>
-        <div className="ml-4 flex items-center md:ml-6">
+      <div className="flex flex-1 justify-end px-4">
+        <div className="flex items-center gap-3">
           <AddTransactionModal isHeader />
           <div className="ml-3">
             <ThemeToggle />

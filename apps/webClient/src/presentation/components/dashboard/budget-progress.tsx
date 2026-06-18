@@ -7,6 +7,7 @@ import { RoutePaths } from "@presentation/utils/routes";
 import { RootState } from "@adapters/store/rootStore";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { useSelector } from "react-redux";
+import { OverBudgetIcon } from "@presentation/components/ui/budget-status";
 
 export function BudgetProgress() {
   const { t } = useTranslation();
@@ -15,10 +16,19 @@ export function BudgetProgress() {
 
   const { settings } = userSetting
 
+  const displayedBudgets = budgets?.slice(-1 * 3) || []
+  const hasOverBudget = displayedBudgets.some(b => b.totalSpent > b.totalAllocated)
+
   return (
-    <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
+    <div className={`rounded-lg p-6 shadow-sm transition-colors ${hasOverBudget
+      ? "border border-red-300 bg-red-50/80 dark:border-red-800 dark:bg-red-950/30"
+      : "bg-white dark:bg-slate-800"
+      }`}>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">{t('dashboard.budgetProgress')}</h2>
+        <div className="flex items-center gap-2">
+          <OverBudgetIcon isOverBudget={hasOverBudget} size="md" />
+          <h2 className="text-lg font-semibold">{t('dashboard.budgetProgress')}</h2>
+        </div>
         <Link
           to={RoutePaths.App + "/" + RoutePaths.Budgets}
           className="text-sm text-purple-600 hover:underline dark:text-purple-400">
@@ -37,14 +47,14 @@ export function BudgetProgress() {
 
             const formattedSpent = currencyService.formatCurrency(
               budget.totalSpent,
-              settings?.currency as Currency,
+              'USD' as Currency,
               targetCurrency,
               false
             );
 
             const formattedAllocated = currencyService.formatCurrency(
               budget.totalAllocated,
-              settings?.currency as Currency,
+              'USD' as Currency,
               targetCurrency,
               false
             );

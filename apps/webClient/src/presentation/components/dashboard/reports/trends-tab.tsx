@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { ResponsiveContainer, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line, Bar, LineChart, BarChart } from "recharts";
 import { ChartContainer, InsightBox } from "./inner-componets";
 import Loader from "@presentation/components/loader";
+import { useSelector } from "react-redux";
+import { RootState } from "@adapters/store/rootStore";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
 
 interface TrendsTabProps {
   isLoadingTrend: boolean;
@@ -12,8 +15,11 @@ interface TrendsTabProps {
 }
 export default function TrendsTab({ isLoadingTrend, weeklyTrend, overview, insights }: TrendsTabProps) {
   const { t } = useTranslation();
+  const userSetting = useSelector((state: RootState) => state.userSettings);
+  const { settings } = userSetting;
+  const targetCurrency = (settings?.currency || 'USD') as Currency;
   const formatCurrency = (value: number) =>
-    `$${value?.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    currencyService.formatCurrency(value, 'USD' as Currency, targetCurrency, false).formatted;
 
   return (
     <div className="space-y-6">

@@ -41,6 +41,7 @@ export default function Table({ data }: { data: Transaction[] }) {
     onSuccess: (data: any) => {
       successToast(data.message, 3000, "transaction-delete")
       queryClient.invalidateQueries({ queryKey: ["transactions"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
     },
     onError: (error) => {
       errorToast(error.message, 3000, "transaction-delete")
@@ -64,6 +65,7 @@ export default function Table({ data }: { data: Transaction[] }) {
     onSuccess: (data: any) => {
       successToast(data.message, 3000, "transaction-delete")
       queryClient.invalidateQueries({ queryKey: ["transactions"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
     },
     onError: (error) => {
       errorToast(error.message, 3000, "transaction-delete")

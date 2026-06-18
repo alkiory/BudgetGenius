@@ -7,6 +7,7 @@ import { useState } from 'react';
 import ProfileLoading from './loading-profile';
 import { useSelector } from 'react-redux';
 import { RootState } from '@adapters/store/rootStore';
+import { PageHeader } from '@presentation/components/ui/page-header';
 import { useTranslation } from 'react-i18next';
 
 export default function Profile() {
@@ -20,10 +21,7 @@ export default function Profile() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('profile.title')}</h1>
-        <p className="text-slate-500 dark:text-slate-400">{t('profile.description')}</p>
-      </div>
+      <PageHeader title={t('profile.title')} description={t('profile.description')} />
 
       <Tabs defaultValue="personal-info" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-4 lg:w-auto bg-accent/35 dark:bg-accent/30">

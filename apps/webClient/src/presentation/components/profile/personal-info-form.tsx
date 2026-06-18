@@ -6,9 +6,10 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription }
 import { Input } from "../ui/input"
 import { ProfileAvatar } from "./profile-avatar"
 import { Label } from "../ui/label"
-import { useSelector } from "react-redux"
-import { useMutation } from "@tanstack/react-query"
+import { useSelector, useDispatch } from "react-redux"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { updateUser } from "@application/user/user.service"
+import { updateUserAction } from "@adapters/slices/auth/authSlice"
 import { errorToast, successToast } from "@presentation/utils/toast"
 import { RootState } from "@adapters/store/rootStore"
 
@@ -24,6 +25,8 @@ const userData = {
 
 export function PersonalInfoForm() {
   const { t } = useTranslation();
+  const dispatch = useDispatch()
+  const queryClient = useQueryClient()
   const user = useSelector((state: RootState) => state.auth.user)
   const [formData, setFormData] = useState(user ? user : userData)
   const [isEditing, setIsEditing] = useState(false)
@@ -37,8 +40,10 @@ export function PersonalInfoForm() {
   const { mutate: updateUserMutation } = useMutation({
     mutationKey: ["updateUser"],
     mutationFn: updateUser,
-    onSuccess: () => {
+    onSuccess: (data) => {
       setIsSaving(true)
+      dispatch(updateUserAction(data))
+      queryClient.invalidateQueries({ queryKey: ["user"] })
       successToast(t('profile.updateSuccess'), 3000, "user-update");
       setIsEditing(false)
       setIsSaving(false)

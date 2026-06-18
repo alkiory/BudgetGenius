@@ -53,11 +53,11 @@ export function GoalForm({ goal, onSubmit, onCancel }: GoalFormProps) {
     name: goal?.name || "",
     description: goal?.description || null,
     type: goal?.type || "short-term",
-    targetAmount: goal?.targetAmount || 0,
+    targetAmount: goal?.targetAmount ?? (undefined as unknown as number),
     startDate: goal?.startDate || defaultDates.start,
     dueDate: goal?.dueDate || defaultDates.due,
     contributionFrequency: goal?.contributionFrequency || "monthly",
-    currentAmount: goal?.currentAmount || 0,
+    currentAmount: goal?.currentAmount ?? (undefined as unknown as number),
     notes: goal?.notes || "",
   });
 
@@ -118,15 +118,18 @@ export function GoalForm({ goal, onSubmit, onCancel }: GoalFormProps) {
       return
     }
 
+    const rawTarget = Number(formData.targetAmount) || 0;
+    const rawCurrent = Number(formData.currentAmount) || 0;
+
     onSubmit({
       name: formData.name,
       description: formData.description,
       type: formData.type,
-      targetAmount: Number(formData.targetAmount) || 0,
+      targetAmount: currencyService.normalizeAmount(rawTarget, targetCurrency),
       startDate: formData.startDate,
       dueDate: formData.dueDate,
       contributionFrequency: formData.contributionFrequency as "daily" | "weekly" | "monthly",
-      currentAmount: Number(formData.currentAmount) || 0,
+      currentAmount: currencyService.normalizeAmount(rawCurrent, targetCurrency),
       notes: formData.notes || undefined,
     })
   }
@@ -227,17 +230,20 @@ export function GoalForm({ goal, onSubmit, onCancel }: GoalFormProps) {
             <Label htmlFor="targetAmount">{t('goals.targetAmount')}</Label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">{formattedTarget.symbol}</span>
-              <Input
-                id="targetAmount"
-                name="targetAmount"
-                type="number"
-                min="0"
-                step="0.01"
-                value={formData.targetAmount}
-                onChange={handleChange}
-                className="pl-7"
-                required
-              />
+            <Input
+              id="targetAmount"
+              name="targetAmount"
+              type="number"
+              min="0"
+              step="0.01"
+              value={formData.targetAmount ?? ""}
+              onChange={(e) => {
+                const { value } = e.target
+                setFormData(prev => ({ ...prev, targetAmount: value === "" ? (undefined as unknown as number) : Math.abs(parseFloat(value) || 0) }))
+              }}
+              className="pl-7"
+              required
+            />
             </div>
           </div>
         </div>
@@ -294,8 +300,11 @@ export function GoalForm({ goal, onSubmit, onCancel }: GoalFormProps) {
               type="number"
               min="0"
               step="0.01"
-              value={formData.currentAmount}
-              onChange={handleChange}
+              value={formData.currentAmount ?? ""}
+              onChange={(e) => {
+                const { value } = e.target
+                setFormData(prev => ({ ...prev, currentAmount: value === "" ? (undefined as unknown as number) : Math.abs(parseFloat(value) || 0) }))
+              }}
               className="pl-7"
               placeholder={recommendedContribution > 0 ? recommendedContribution.toString() : "0"}
             />

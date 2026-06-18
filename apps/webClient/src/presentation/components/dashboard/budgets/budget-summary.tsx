@@ -1,6 +1,10 @@
 import { RootState } from "@adapters/store/rootStore";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { useSelector } from "react-redux";
+import {
+  OverBudgetContainer,
+  OverBudgetIcon,
+} from "@presentation/components/ui/budget-status";
 
 export default function BudgetSummary({ totalAllocated, totalSpent, remaining, percentSpent }: {
   totalAllocated: number;
@@ -11,6 +15,8 @@ export default function BudgetSummary({ totalAllocated, totalSpent, remaining, p
   const userSetting = useSelector((state: RootState) => state.userSettings);
 
   const { settings } = userSetting
+
+  const isOverBudget = totalSpent > totalAllocated
 
   const targetCurrency = (settings?.currency || 'USD') as Currency;
   const formattedAllocated = currencyService.formatCurrency(
@@ -28,9 +34,12 @@ export default function BudgetSummary({ totalAllocated, totalSpent, remaining, p
   )
 
   return (
-    <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+    <OverBudgetContainer isOverBudget={isOverBudget}>
       <div className="flex items-center justify-between">
-        <span className="font-medium">Total Budget</span>
+        <div className="flex items-center gap-2">
+          <OverBudgetIcon isOverBudget={isOverBudget} size="sm" />
+          <span className="font-medium">Total Budget</span>
+        </div>
         <span className="text-lg font-bold">${formattedAllocated.formatted}</span>
       </div>
       <div className="mt-2 flex items-center justify-between text-sm">
@@ -51,6 +60,6 @@ export default function BudgetSummary({ totalAllocated, totalSpent, remaining, p
           {remaining >= 0 ? `$${remaining.toFixed(2)} remaining` : `$${Math.abs(remaining).toFixed(2)} over budget`}
         </span>
       </div>
-    </div>
+    </OverBudgetContainer>
   )
 }

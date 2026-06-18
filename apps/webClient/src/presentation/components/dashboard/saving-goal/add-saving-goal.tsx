@@ -21,6 +21,7 @@ export default function AddSavingGoalButton() {
     onSuccess: (data: any) => {
       successToast(data.message, 3000, "saving-goal-create")
       queryClient.invalidateQueries({ queryKey: ["saving-goals"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       setIsOpen(false)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

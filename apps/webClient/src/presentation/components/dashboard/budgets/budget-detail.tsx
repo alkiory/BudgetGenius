@@ -6,9 +6,10 @@ import { Button } from "@presentation/components/ui/button";
 import Loader from "@presentation/components/loader";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { HttpBudgetRepository } from "@adapters/http/budget.repository";
-import { successToast, errorToast } from "@presentation/utils/toast";
+import { successToast, errorToast, warningToast, infoToast } from "@presentation/utils/toast";
 import { useSelector } from "react-redux";
 import { RootState } from "@adapters/store/rootStore";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
 import BudgetHeader from "./budget-header";
 import BudgetSummary from "./budget-summary";
 import BudgetSpendingByCategory from "./budget-spending-ny-cat";
@@ -26,12 +27,13 @@ interface BudgetDetailProps {
 export function BudgetDetail({ onEditBudget, selectedBudget, isRefreshed, refetchBudgets }: BudgetDetailProps) {
   const { t } = useTranslation();
   const user = useSelector((state: RootState) => state.auth.user);
+  const userSettings = useSelector((state: RootState) => state.userSettings);
 
   const queryClient = useQueryClient();
 
   const activeBudget = selectedBudget?.id
 
-  const [newCategory, setNewCategory] = useState<BudgetCategory>({ budgetId: 0, name: "", allocated: 0, spent: 0 });
+  const [newCategory, setNewCategory] = useState<BudgetCategory>({ budgetId: 0, name: "", allocated: undefined as unknown as number, spent: undefined as unknown as number });
   const [isAddingCategory, setIsAddingCategory] = useState(false);
 
   const { data: categoryBudgets, isLoading, refetch: refetchCategories } = useFetchBudgetCategories({ budgetId: Number(activeBudget), name: "" })
@@ -39,26 +41,33 @@ export function BudgetDetail({ onEditBudget, selectedBudget, isRefreshed, refetc
   // Mutations invalidate the above query so list auto‑refreshes
   const invalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["budgetCategories", activeBudget] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
   }, [queryClient, activeBudget]);
 
   // Funciones de mutación optimizadas con useCallback
   const handleAddCategorySuccess = useCallback(() => {
     successToast("Budget category added successfully", 3000, "budget-category-add");
-    setNewCategory({ budgetId: activeBudget ?? 0, name: "", allocated: 0, spent: 0 });
+    setNewCategory({ budgetId: activeBudget ?? 0, name: "", allocated: undefined as unknown as number, spent: undefined as unknown as number });
     invalidate()
     refetchBudgets?.();
     refetchCategories();
   }, [activeBudget, invalidate, refetchBudgets, refetchCategories]);
 
-  const handleMutationError = useCallback((operation: string) => {
-    errorToast(`Failed to ${operation} budget category`, 3000, `budget-category-${operation}`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleMutationErrorDetailed = useCallback((error: any, operation: string) => {
+    const message = error?.response?.data?.message
+      || error?.message
+      || `Failed to ${operation} budget category`;
+    const errorMsg = Array.isArray(message) ? message[0] : message;
+    errorToast(errorMsg, 5000, `budget-category-${operation}`);
   }, []);
 
   const { mutate: addBudgetCategory } = useMutation({
     mutationKey: ["add-budget-category"],
     mutationFn: HttpBudgetRepository.createBudgetCategory,
     onSuccess: handleAddCategorySuccess,
-    onError: () => handleMutationError("add"),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => handleMutationErrorDetailed(error, "add"),
     onSettled: () => {
       refetchBudgets?.();
       refetchCategories();
@@ -68,11 +77,13 @@ export function BudgetDetail({ onEditBudget, selectedBudget, isRefreshed, refetc
   const { mutate: updateBudgetCategory } = useMutation({
     mutationKey: ["update-budget-category"],
     mutationFn: HttpBudgetRepository.updateBudgetCategory,
-    onSuccess: () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onSuccess: (_data: any) => {
       successToast("Budget category updated successfully", 3000, "budget-category-update")
       invalidate()
     },
-    onError: () => handleMutationError("update"),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => handleMutationErrorDetailed(error, "update"),
     onSettled: () => {
       refetchBudgets?.();
       refetchCategories();
@@ -86,7 +97,8 @@ export function BudgetDetail({ onEditBudget, selectedBudget, isRefreshed, refetc
       successToast("Budget category deleted successfully", 3000, "budget-category-delete")
       invalidate()
     },
-    onError: () => handleMutationError("delete"),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => handleMutationErrorDetailed(error, "delete"),
     onSettled: () => {
       refetchBudgets?.();
       refetchCategories();
@@ -108,8 +120,24 @@ export function BudgetDetail({ onEditBudget, selectedBudget, isRefreshed, refetc
 
   // Handlers optimizados con useCallback
   const onUpdateSpent = useCallback((categoryId: number, spent: number) => {
-    updateBudgetCategory({ id: categoryId, spent });
-  }, [updateBudgetCategory]);
+    // Normalize from display currency to USD before saving
+    const targetCurrency = (userSettings?.settings?.currency || 'USD') as Currency;
+    const normalizedSpent = currencyService.normalizeAmount(spent, targetCurrency);
+
+    // Check if new spent exceeds allocated & show friendly warning
+    const category = categoryBudgets?.find(c => c.id === categoryId);
+    if (category && normalizedSpent > category.allocated) {
+      const overAmount = normalizedSpent - category.allocated;
+      warningToast(
+        t('budgets.overBudgetCategory', { category: category.name, amount: overAmount.toFixed(2) }),
+        5000,
+        "budget-over"
+      );
+    } else if (category && normalizedSpent >= 0 && normalizedSpent <= category.allocated) {
+      infoToast(t('budgets.budgetHealthy'), 3000, "budget-healthy");
+    }
+    updateBudgetCategory({ id: categoryId, spent: normalizedSpent });
+  }, [updateBudgetCategory, categoryBudgets, t, userSettings]);
 
   const handleAddCategoryClick = useCallback(() => {
     setIsAddingCategory((prevState) => !prevState);
@@ -119,7 +147,9 @@ export function BudgetDetail({ onEditBudget, selectedBudget, isRefreshed, refetc
     const { name, value } = e.target;
     setNewCategory((prev) => ({
       ...prev,
-      [name]: name === "allocated" || name === "spent" ? Number(value) : value,
+      [name]: name === "allocated" || name === "spent"
+        ? value === "" ? (undefined as unknown as number) : Number(value) || 0
+        : value,
     }));
   }, []);
 
@@ -128,8 +158,15 @@ export function BudgetDetail({ onEditBudget, selectedBudget, isRefreshed, refetc
 
     if (newCategory.name.trim() === "" || !newCategory.allocated) return;
 
-    addBudgetCategory({ ...newCategory, budgetId: activeBudget });
-  }, [user, activeBudget, newCategory, addBudgetCategory]);
+    const targetCurrency = (userSettings?.settings?.currency || 'USD') as Currency;
+
+    addBudgetCategory({
+      ...newCategory,
+      budgetId: activeBudget,
+      allocated: currencyService.normalizeAmount(Number(newCategory.allocated) || 0, targetCurrency),
+      spent: currencyService.normalizeAmount(Number(newCategory.spent) || 0, targetCurrency),
+    });
+  }, [user, activeBudget, newCategory, addBudgetCategory, userSettings]);
 
   const onDeleteCategoryHandler = useCallback((categoryToDelete: BudgetCategory) => {
     deleteBudgetCategory(categoryToDelete.id as number);
@@ -188,8 +225,8 @@ export function BudgetDetail({ onEditBudget, selectedBudget, isRefreshed, refetc
         {isAddingCategory && (
           <AddBudgetCategory
             name={newCategory.name}
-            allocated={String(newCategory.allocated)}
-            spent={String(newCategory.spent)}
+            allocated={newCategory.allocated?.toString() ?? ""}
+            spent={newCategory.spent?.toString() ?? ""}
             handleNewCategoryChange={handleNewCategoryChange}
             handleAddCategorySubmit={handleAddCategorySubmit}
           />

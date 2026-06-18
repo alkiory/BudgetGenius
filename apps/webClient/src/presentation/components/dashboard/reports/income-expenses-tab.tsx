@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { ResponsiveContainer, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Bar, Line, BarChart, LineChart } from "recharts";
 import { ChartContainer, ProgressBar, InsightBox } from "./inner-componets";
 import Loader from "@presentation/components/loader";
+import { useSelector } from "react-redux";
+import { RootState } from "@adapters/store/rootStore";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
 
 interface IncomeExpensesTabProps {
   overview: any;
@@ -23,8 +26,11 @@ export default function IncomeExpensesTab({
   savings
 }: IncomeExpensesTabProps) {
   const { t } = useTranslation();
+  const userSetting = useSelector((state: RootState) => state.userSettings);
+  const { settings } = userSetting;
+  const targetCurrency = (settings?.currency || 'USD') as Currency;
   const formatCurrency = (value: number) =>
-    `$${value?.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    currencyService.formatCurrency(value, 'USD' as Currency, targetCurrency, false).formatted;
 
   return (
     <div className="space-y-6">

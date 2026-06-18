@@ -75,8 +75,11 @@ export class CurrencyService {
 
   public validateAmount(amount: number, currency: Currency): boolean {
     const decimalPlaces = this.getDecimalPrecision(currency);
-    const regex = new RegExp(`^-?\\d+(\\.\\d{1,${decimalPlaces}})?$`);
-    return regex.test(amount.toString());
+    // When decimalPlaces is 0 (e.g., COP, JPY), only allow integers
+    const pattern = decimalPlaces === 0
+      ? /^-?\d+$/
+      : new RegExp(`^-?\\d+(\\.\\d{1,${decimalPlaces}})?$`);
+    return pattern.test(amount.toString());
   }
 
   private getDecimalPrecision(currency: Currency): number {
@@ -87,7 +90,7 @@ export class CurrencyService {
       JPY: 0,
       COP: 0
     };
-    return precisionMap[currency] || 2;
+    return precisionMap[currency] ?? 2;
   }
 
   public convertAmount(options: CurrencyConversionOptions): number {

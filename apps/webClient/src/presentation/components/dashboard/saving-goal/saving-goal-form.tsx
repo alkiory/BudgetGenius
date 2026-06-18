@@ -4,6 +4,9 @@ import { TRANSACTION_CATEGORIES } from "@domain/dashboard/transactions/transacti
 import { Button } from "@presentation/components/ui/button"
 import { Input } from "@presentation/components/ui/input"
 import { Label } from "@presentation/components/ui/label"
+import { useSelector } from "react-redux";
+import { RootState } from "@adapters/store/rootStore";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
 import type React from "react"
 import { useState, useEffect } from "react"
 
@@ -28,10 +31,14 @@ const COLORS = [
 
 export function SavingGoalForm({ goal, onSubmit, onCancel, isLoading }: SavingGoalFormProps) {
   const { t } = useTranslation();
+  const userSetting = useSelector((state: RootState) => state.userSettings);
+  const targetCurrency = (userSetting?.settings?.currency || 'USD') as Currency;
+  const currencySymbol = currencyService.getSymbol(targetCurrency);
+
   const [formData, setFormData] = useState<Omit<SavingGoal, "id">>({
     name: "",
-    target: 0,
-    current: 0,
+    target: undefined as unknown as number,
+    current: undefined as unknown as number,
     targetDate: new Date(new Date().setMonth(new Date().getMonth() + 1)),
     category: "Other",
     color: COLORS[0],
@@ -73,10 +80,13 @@ export function SavingGoalForm({ goal, onSubmit, onCancel, isLoading }: SavingGo
       targetDate = new Date(formData.targetDate!);
     }
 
+    const rawTarget = Number(formData.target) || 0;
+    const rawCurrent = Number(formData.current) || 0;
+
     onSubmit({
       name: formData.name,
-      target: Number(formData.target) || 0,
-      current: Number(formData.current) || 0,
+      target: currencyService.normalizeAmount(rawTarget, targetCurrency),
+      current: currencyService.normalizeAmount(rawCurrent, targetCurrency),
       targetDate,
       category: formData.category,
       color: formData.color,
@@ -103,15 +113,21 @@ export function SavingGoalForm({ goal, onSubmit, onCancel, isLoading }: SavingGo
         <div className="space-y-2">
           <Label htmlFor="target">{t('savings.targetAmount')}</Label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">{currencySymbol}</span>
             <Input
               id="target"
               name="target"
               type="number"
               step="0.01"
               min="0"
-              value={formData.target}
-              onChange={handleChange}
+              value={formData.target ?? ""}
+              onChange={(e) => {
+                const { value } = e.target
+                setFormData(prev => ({
+                  ...prev,
+                  target: value === "" ? undefined as unknown as number : Math.abs(parseFloat(value) || 0)
+                }))
+              }}
               className="pl-7"
               placeholder="0.00"
               required
@@ -122,15 +138,21 @@ export function SavingGoalForm({ goal, onSubmit, onCancel, isLoading }: SavingGo
         <div className="space-y-2">
           <Label htmlFor="current">{t('savings.currentAmount')}</Label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">{currencySymbol}</span>
             <Input
               id="current"
               name="current"
               type="number"
               step="0.01"
               min="0"
-              value={formData.current}
-              onChange={handleChange}
+              value={formData.current ?? ""}
+              onChange={(e) => {
+                const { value } = e.target
+                setFormData(prev => ({
+                  ...prev,
+                  current: value === "" ? undefined as unknown as number : Math.abs(parseFloat(value) || 0)
+                }))
+              }}
               className="pl-7"
               placeholder="0.00"
               required

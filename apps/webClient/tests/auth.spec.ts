@@ -48,11 +48,68 @@ test('should display mocked user data', async ({ page }) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ id: '1', name: 'Mocked User', email: 'mock@example.com', isPremium: true }),
+      body: JSON.stringify({ id: 1, name: 'Mocked', surname: 'User', email: 'mock@example.com', isPremium: true }),
     });
   });
 
-  await page.goto('/app/dashboard');
-  // Now verify that the mocked data is rendered correctly:
-  await expect(page.getByText('Mocked User')).toBeVisible({ timeout: 10000 });
+  // Mock user settings (needed by dashboard page)
+  await page.route('**/api/user-settings**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ id: 1, timezone: 'America/New_York', currency: 'USD', locale: 'en-US' }),
+    });
+  });
+
+  // Mock dashboard overview (needed by dashboard page)
+  await page.route('**/api/dashboard**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ balance: 5000, income: 3000, expenses: 2000, period: new Date().toISOString() }),
+    });
+  });
+
+  // Mock expense categories
+  await page.route('**/api/expense-categories**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ total: 0, byCategory: [], largest: null, period: new Date().toISOString() }),
+    });
+  });
+
+  // Mock transactions (for RecentTransactions component)
+  await page.route('**/api/transactions**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ transactions: [] }),
+    });
+  });
+
+  // Mock budgets (for BudgetProgress component)
+  await page.route('**/api/budgets**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([]),
+    });
+  });
+
+  // Mock saving goals
+  await page.route('**/api/saving-goals**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([]),
+    });
+  });
+
+  await page.goto('/app/dashboard', { waitUntil: 'domcontentloaded' });
+  // Wait for React to hydrate and all mocked API calls to resolve
+  await page.waitForTimeout(3000);
+  // Now verify that the mocked data is rendered correctly
+  // The dashboard shows "Welcome back, Mocked" using the user's name
+  await expect(page.getByText('Mocked')).toBeVisible({ timeout: 10000 });
 });

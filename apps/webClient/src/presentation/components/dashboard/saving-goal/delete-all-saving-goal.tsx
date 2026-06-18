@@ -22,9 +22,11 @@ export function DeleteAllSavingGoalsButton() {
   const { mutate: deleteAllGoals } = useMutation({
     mutationKey: ["delete-all-saving"],
     mutationFn: HttpSavingRepository.deleteAllSavingGoals,
-    onSuccess: () => {
-      successToast(t('savings.deletedSuccess'), 3000, "saving-goal-delete")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onSuccess: (data: any) => {
+      successToast(data?._offline ? data.message : t('savings.deletedSuccess'), 3000, "saving-goal-delete")
       queryClient.invalidateQueries({ queryKey: ["saving-goals"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       setIsOpen(false)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

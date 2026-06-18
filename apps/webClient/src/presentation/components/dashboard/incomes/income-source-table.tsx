@@ -36,6 +36,7 @@ export function IncomeSourcesTable({ incomeTransactions }: IncomeSourcesTablePro
     onSuccess: (data: any) => {
       successToast(data.message, 3000, "income-delete")
       queryClient.invalidateQueries({ queryKey: ["incomes"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
     },
     onError: (error) => {
       errorToast(error.message, 3000, "income-delete")

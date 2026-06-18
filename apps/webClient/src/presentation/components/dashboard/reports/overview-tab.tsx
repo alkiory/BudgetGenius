@@ -5,6 +5,9 @@ import { ResponsiveContainer, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Bar,
 import { ChartContainer } from "./inner-componets";
 import SummaryCard from "./summary-card";
 import Loader from "@presentation/components/loader";
+import { useSelector } from "react-redux";
+import { RootState } from "@adapters/store/rootStore";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
 
 interface OverviewTabProps {
   isLoadingOverview: boolean;
@@ -38,8 +41,11 @@ export default function OverviewTab({
   insights
 }: OverviewTabProps) {
   const { t } = useTranslation();
+  const userSetting = useSelector((state: RootState) => state.userSettings);
+  const { settings } = userSetting;
+  const targetCurrency = (settings?.currency || 'USD') as Currency;
   const formatCurrency = (value: number) =>
-    `$${value?.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    currencyService.formatCurrency(value, 'USD' as Currency, targetCurrency, false).formatted;
 
   return (
     <div className="space-y-6">

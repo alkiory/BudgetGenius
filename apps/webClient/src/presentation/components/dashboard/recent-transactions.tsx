@@ -78,7 +78,7 @@ export function RecentTransactions() {
             const targetCurrency = (settings?.currency || 'USD') as Currency;
             const formatted = currencyService.formatCurrency(
               transaction.amount,
-              transaction.currency as Currency,
+              'USD' as Currency,
               targetCurrency
             );
 

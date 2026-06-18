@@ -3,6 +3,8 @@ import { Income, INCOME_CATEGORIES, IncomeCategory, IncomeRecurrence } from "@do
 import { Button } from "@presentation/components/ui/button"
 import { Input } from "@presentation/components/ui/input"
 import { Label } from "@presentation/components/ui/label"
+import { useSelector } from "react-redux";
+import { RootState } from "@adapters/store/rootStore";
 import { Currency, currencyService } from "@presentation/utils/currencyService"
 import { errorToast } from "@presentation/utils/toast"
 import { useState, useEffect } from "react"
@@ -15,12 +17,16 @@ interface IncomeFormProps {
 
 export function IncomeForm({ income, onSubmit, onCancel }: IncomeFormProps) {
   const { t } = useTranslation();
+  const userSetting = useSelector((state: RootState) => state.userSettings);
+  const targetCurrency = (userSetting?.settings?.currency || 'USD') as Currency;
+  const currencySymbol = currencyService.getSymbol(targetCurrency);
+
   const [formData, setFormData] = useState({
     date: new Date(),
     category: "Other" as IncomeCategory,
     description: "",
-    currency: "USD" as Currency,
-    amount: 0,
+    currency: targetCurrency,
+    amount: undefined as unknown as number,
     recurrence: "One-time" as IncomeRecurrence,
   })
 
@@ -48,7 +54,8 @@ export function IncomeForm({ income, onSubmit, onCancel }: IncomeFormProps) {
 
     const date = income ? income.date : new Date()
 
-    if (formData.amount === 0) {
+    const absAmount = Math.abs(formData.amount)
+    if (Number.isNaN(absAmount) || absAmount === 0) {
       errorToast(t('income.amountCannotBeZero'), 3000, "invalid-amount")
       return
     }
@@ -112,28 +119,22 @@ export function IncomeForm({ income, onSubmit, onCancel }: IncomeFormProps) {
 
       <div className="space-y-2">
         <Label htmlFor="amount">{t('income.amount')}</Label>
-        <div className="flex items-center space-x-2">
-          <select
-            id="currency"
-            name="currency"
-            value={formData.currency}
-            onChange={handleChange}
-            className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-          >
-            {currencyService.getAvailableCurrencies().map(currency => (
-              <option key={currency} value={currency}>
-                {currency} ({currencyService.getSymbol(currency)})
-              </option>
-            ))}
-          </select>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">{currencySymbol}</span>
           <Input
             id="amount"
             name="amount"
             type="number"
             step="0.01"
             min="0"
-            value={formData.amount}
-            onChange={handleChange}
+            value={formData.amount ?? ""}
+            onChange={(e) => {
+              const { value } = e.target
+              setFormData(prev => ({
+                ...prev,
+                amount: value === "" ? undefined as unknown as number : Math.abs(parseFloat(value) || 0)
+              }))
+            }}
             className="pl-7"
             placeholder={t('income.amountPlaceholder')}
             required

@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from 'react-i18next';
-import { Search, Plus, Loader } from "lucide-react"
+import { Plus } from "lucide-react"
 import { SavingGoalCard } from "@presentation/components/dashboard/saving-goal/saving-goal-card"
 import { useFetchSavings } from "@adapters/query/dashboard"
 import { DeleteAllSavingGoalsButton } from "@presentation/components/dashboard/saving-goal/delete-all-saving-goal"
@@ -8,22 +8,18 @@ import AddSavingGoalButton from "@presentation/components/dashboard/saving-goal/
 import { useSelector } from "react-redux"
 import { RootState } from "@adapters/store/rootStore"
 import { Currency, currencyService } from "@presentation/utils/currencyService"
+import { PageHeader } from "@presentation/components/ui/page-header"
+import SavingsLoading from "@presentation/components/dashboard/saving-goal/savings-loading"
 
 function SavingGoalsContent() {
   const { t } = useTranslation();
   const { data: goals, isLoading, isSuccess } = useFetchSavings()
-  const [searchTerm, setSearchTerm] = useState("")
 
   const userSetting = useSelector((state: RootState) => state.userSettings);
 
   const { settings } = userSetting
 
-  // Filter goals based on search term
-  const filteredGoals = isSuccess && goals.filter(
-    (goal) =>
-      goal.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      goal.category?.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+  const filteredGoals = isSuccess && goals
 
   // Calculate total progress
   const totalTarget = isSuccess && goals.reduce((sum, goal) => sum + goal.target, 0)
@@ -49,10 +45,7 @@ function SavingGoalsContent() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('savings.title')}</h1>
-        <p className="text-slate-500 dark:text-slate-400">{t('savings.description')}</p>
-      </div>
+      <PageHeader title={t('savings.title')} description={t('savings.description')} />
 
       {/* Summary Card */}
       {isSuccess && goals.length > 0 && (
@@ -72,19 +65,7 @@ function SavingGoalsContent() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="relative w-full max-w-md">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-            <Search className="h-5 w-5 text-slate-400" />
-          </div>
-          <input
-            type="text"
-            placeholder={t('savings.searchPlaceholder')}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-md border border-slate-200 bg-white py-2 pl-10 pr-3 text-slate-900 placeholder-slate-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-400"
-          />
-        </div>
+      <div className="flex items-center justify-end">
         <div className="flex gap-2">
           <AddSavingGoalButton />
           <DeleteAllSavingGoalsButton />
@@ -92,9 +73,7 @@ function SavingGoalsContent() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-8">
-          <Loader />
-        </div>
+        <SavingsLoading />
       ) : Array.isArray(filteredGoals) && filteredGoals.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredGoals.map((goal) => (

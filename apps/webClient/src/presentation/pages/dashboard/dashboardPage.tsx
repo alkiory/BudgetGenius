@@ -8,7 +8,8 @@ import { ExpenseCategories } from "@presentation/components/dashboard/expense-ca
 import { OverviewCard } from "@presentation/components/dashboard/overview/overview-card";
 import { RecentTransactions } from "@presentation/components/dashboard/recent-transactions";
 import { SavingsGoals } from "@presentation/components/dashboard/saving-goals";
-import { Skeleton } from "@presentation/components/ui/skeleton";
+import DashboardLoading from "@presentation/components/dashboard/dashboard-loading";
+import { PageHeader } from "@presentation/components/ui/page-header";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -56,7 +57,7 @@ export default function DashboardPage() {
     ),
   }));
 
-  const formattedBreackdownLargets = breackdown?.largest.value ? {
+  const formattedBreackdownLargets = breackdown?.largest?.value ? {
     largest: {
       name: breackdown.largest.name,
       value: currencyService.formatCurrency(
@@ -93,42 +94,33 @@ export default function DashboardPage() {
     }
   }, [dispatch, user, userSettings])
 
+  if (isLoading || isloadingExpenseCat) {
+    return <DashboardLoading />;
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('dashboard.title')}</h1>
-        <p className="text-slate-500 dark:text-slate-400">{t('dashboard.welcomeBack', { name: user?.name })}</p>
-      </div>
+      <PageHeader title={t('dashboard.title')} description={t('dashboard.welcomeBack', { name: user?.name })} />
 
-      {isLoading ? (
-        <Skeleton className="h-48 w-full" />
-      ) : (
-        <OverviewCard
-          balance={formattedBalance.formatted}
-          income={formattedIncome.formatted}
-          expenses={formattedExpences.formatted}
-          period={overview?.period ?? new Date()}
-        />
-      )}
+      <OverviewCard
+        balance={formattedBalance.formatted}
+        income={formattedIncome.formatted}
+        expenses={formattedExpences.formatted}
+        period={overview?.period ?? new Date()}
+      />
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {isLoading ? (
-          <Skeleton className="h-48 w-full" />
-        ) : (<div className="md:col-span-2 lg:col-span-2">
+        <div className="md:col-span-2 lg:col-span-2">
           <RecentTransactions />
-        </div>)}
+        </div>
 
         <div className="md:col-span-1 lg:col-span-1">
-          {isLoading ? (
-            <Skeleton className="h-48 w-full" />
-          ) : (
-            <BudgetProgress />
-          )}
+          <BudgetProgress />
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        {isloadingExpenseCat ? <Skeleton className="h-48 w-full" /> : <ExpenseCategories
+        <ExpenseCategories
           total={formattedBreackdown.total.formatted}
           byCategory={formattedBreackdownCategories ?? []}
           largest={{
@@ -137,8 +129,8 @@ export default function DashboardPage() {
           }}
           timezone={userSettings?.timezone ?? 'Europe/Paris'}
           period={breackdown?.period ?? new Date().toLocaleDateString()}
-        />}
-        {isLoading ? <Skeleton className="h-48 w-full" /> : <SavingsGoals />}
+        />
+        <SavingsGoals />
       </div>
     </div>
   )
