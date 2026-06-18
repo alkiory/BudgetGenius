@@ -11,24 +11,42 @@ export type Transaction = {
 };
 
 export interface RootPromise {
-  transactions: Transaction[]
-  meta: Meta
+  transactions: Transaction[];
+  meta: Meta;
 }
 
 export interface Meta {
-  total: number
-  offset: string
-  limit: string
-  nextOffset: unknown
+  total: number;
+  offset: string;
+  limit: string;
+  nextOffset: unknown;
 }
 
 export const TRANSACTION_CATEGORIES = [
-  "All", "Housing", "Food", "Transportation", "Entertainment",
-  "Education", "Medical", "Rent", "Salary", "Dining", "Groceries",
-  "Shopping", "Utilities", "Healthcare", "Income", "Other", "Gifts",
-]
+  "All",
+  "Housing",
+  "Food",
+  "Transportation",
+  "Entertainment",
+  "Education",
+  "Medical",
+  "Rent",
+  "Salary",
+  "Dining",
+  "Groceries",
+  "Shopping",
+  "Utilities",
+  "Healthcare",
+  "Income",
+  "Other",
+  "Gifts",
+];
 
-export const TRANSACTION_STATUSES = ["All", "Pending", "Completed", "Cancelled"];
+export const TRANSACTION_STATUSES = [
+  "All",
+  "Pending",
+  "Completed",
+  "Cancelled",
+];
 
-
-export type Category = typeof TRANSACTION_CATEGORIES[number]
+export type Category = (typeof TRANSACTION_CATEGORIES)[number];

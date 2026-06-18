@@ -18,10 +18,11 @@ export function OverBudgetContainer({
 }: OverBudgetContainerProps) {
   return (
     <div
-      className={`rounded-lg border p-4 transition-colors ${isOverBudget
-        ? "border-red-300 bg-red-50/60 dark:border-red-800 dark:bg-red-950/30"
-        : "border-slate-200 dark:border-slate-700"
-        } ${className}`}
+      className={`rounded-lg border p-4 transition-colors ${
+        isOverBudget
+          ? "border-red-300 bg-red-50/60 dark:border-red-800 dark:bg-red-950/30"
+          : "border-slate-200 dark:border-slate-700"
+      } ${className}`}
     >
       {children}
     </div>

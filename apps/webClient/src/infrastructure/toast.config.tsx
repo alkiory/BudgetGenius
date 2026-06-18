@@ -9,20 +9,20 @@ export default function ToastConfig() {
       containerClassName=""
       containerStyle={{}}
       toastOptions={{
-        className: 'bg-card dark:bg-card dark:text-neutral',
+        className: "bg-card dark:bg-card dark:text-neutral",
         duration: 5000,
         removeDelay: 1000,
         success: {
           duration: 3000,
           iconTheme: {
-            primary: 'green',
-            secondary: 'white',
+            primary: "green",
+            secondary: "white",
           },
         },
         error: {
           iconTheme: {
-            primary: 'red',
-            secondary: 'white',
+            primary: "red",
+            secondary: "white",
           },
         },
       }}

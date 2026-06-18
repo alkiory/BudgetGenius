@@ -27,7 +27,7 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly logger: LoggingService,
-  ) { }
+  ) {}
 
   @Get('admin')
   @Roles(UserRole.ADMIN)

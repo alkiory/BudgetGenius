@@ -1,13 +1,13 @@
-import { Github } from "lucide-react"
-import { Button } from "./ui/button"
-import { useMutation } from "@tanstack/react-query"
 import { loginAction } from "@adapters/slices/auth/authSlice";
 import { googleLogin } from "@application/auth/auth.service";
 import { RoutePaths } from "@presentation/utils/routes";
+import { errorToast, successToast } from "@presentation/utils/toast";
+import { useMutation } from "@tanstack/react-query";
+import { Github } from "lucide-react";
+import { useState } from "react";
 import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router";
-import { errorToast, successToast } from "@presentation/utils/toast";
-import { useState } from "react";
+import { Button } from "./ui/button";
 
 export function SocialLoginButtons() {
   const dispatch = useDispatch();
@@ -25,21 +25,21 @@ export function SocialLoginButtons() {
         successToast("Autenticación exitosa");
         setLoading(true);
         setTimeout(() => {
-          navigate(RoutePaths.App + '/' + RoutePaths.Dashboard)
+          navigate(RoutePaths.App + "/" + RoutePaths.Dashboard);
           setLoading(false);
         }, 1000);
       }
     },
     onError: (error) => {
       errorToast(error.message);
-    }
+    },
   });
 
   const handleLoginWithGoogle = () => {
     try {
       signInWithGoogle();
     } catch (error) {
-      console.error('Google auth error:', error);
+      console.error("Google auth error:", error);
     }
   };
 
@@ -47,9 +47,9 @@ export function SocialLoginButtons() {
     try {
       signInWithGoogle();
     } catch (error) {
-      console.error('Github auth error:', error);
+      console.error("Github auth error:", error);
     }
-  }
+  };
 
   if (loading) {
     return (
@@ -60,7 +60,14 @@ export function SocialLoginButtons() {
           fill="none"
           viewBox="0 0 24 24"
         >
-          <circle className="opacity-25" cx="12" cy="12" r="10" strokeWidth="4" stroke="currentColor"></circle>
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            strokeWidth="4"
+            stroke="currentColor"
+          ></circle>
           <path
             className="opacity-75"
             fill="currentColor"
@@ -76,7 +83,8 @@ export function SocialLoginButtons() {
       <Button
         onClick={handleLoginWithGoogle}
         variant="outline"
-        className="bg-white">
+        className="bg-white"
+      >
         <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
           <path
             d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -101,10 +109,11 @@ export function SocialLoginButtons() {
       <Button
         onClick={handleLoginWithGithub}
         variant="outline"
-        className="bg-white">
+        className="bg-white"
+      >
         <Github className="mr-2 h-4 w-4" />
         GitHub
       </Button>
     </div>
-  )
+  );
 }

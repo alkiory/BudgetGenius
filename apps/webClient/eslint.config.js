@@ -15,7 +15,6 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    includes: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", ".eslintrc.js"],
     ignores: [
       "**/dist/**",
       "**/node_modules/**",
@@ -23,11 +22,20 @@ export default tseslint.config(
       "**/coverage/**",
       "**/*.spec.ts",
       "**/*.test.ts",
-      "**/*.stories.tsx"
+      "**/*.stories.tsx",
+      // Root-level build configs. These are not in any tsconfig project's
+      // include and trigger "file not found in any project" errors when
+      // linting, since they live outside src/. They also produce spurious
+      // react-refresh/only-export-components warnings because the plugin is
+      // not installed.
+      "vite.config.ts",
+      "playwright.config.ts",
+      "postcss.config.ts",
+      "tailwind.config.ts"
     ],
   },
   {
-    files: ["**/*.{ts,tsx}"],
+    files: ["**/*.{ts,tsx,js,jsx}", ".eslintrc.js"],
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",
@@ -36,7 +44,10 @@ export default tseslint.config(
         ...globals.node,
       },
       parserOptions: {
-        project: "./tsconfig.json",
+        // Root tsconfig.json uses project references (files: []) which the
+        // typescript-eslint parser cannot follow. Point at the actual source
+        // tsconfig that declares src/** files.
+        project: "./tsconfig.app.json",
         warnOnUnsupportedTypeScriptVersion: false,
         ecmaFeatures: {
           jsx: true,
@@ -56,6 +67,11 @@ export default tseslint.config(
     rules: {
       ...reactPlugin.configs["recommended"].rules,
       ...reactHooksPlugin.configs.recommended.rules,
+      // React 17+ uses the automatic JSX runtime (tsconfig.app.json: "jsx": "react-jsx")
+      // which does not require React to be in scope. Override the legacy rules brought
+      // in by FlatCompat's plugin:react/recommended.
+      "react/react-in-jsx-scope": "off",
+      "react/jsx-uses-react": "off",
       "import/no-cycle": "error",
       "import/no-duplicates": "error",
       "import/order": [
@@ -65,9 +81,7 @@ export default tseslint.config(
           groups: ["builtin", "external", "parent", "sibling", "index"],
         },
       ],
-      "react/jsx-uses-react": "error",
       "react/jsx-uses-vars": "error",
-      "react/react-in-jsx-scope": "error",
     },
   },
   ...compat.config({
@@ -77,4 +91,18 @@ export default tseslint.config(
       "plugin:prettier/recommended",
     ],
   }),
+  // Final overrides — must come AFTER compat.config so they win the rule merge.
+  // FlatCompat's plugin:react/recommended would otherwise re-enable the legacy
+  // rules brought in by ESLint v8- era configs.
+  {
+    files: ["**/*.{ts,tsx,js,jsx}"],
+    rules: {
+      // React 17+ automatic JSX runtime (tsconfig.app.json: "jsx": "react-jsx")
+      // — no React import needed in scope or in JSX usage.
+      "react/react-in-jsx-scope": "off",
+      "react/jsx-uses-react": "off",
+      // PropTypes are redundant with TypeScript types.
+      "react/prop-types": "off",
+    },
+  },
 );

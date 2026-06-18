@@ -236,7 +236,10 @@ export class BudgetService {
 
   private async recalculateBudgetTotalSpent(budgetId: number): Promise<void> {
     const budget = await this.repo.findById(budgetId);
-    const totalSpent = budget.categories.reduce((sum, cat) => sum + cat.spent, 0);
+    const totalSpent = budget.categories.reduce(
+      (sum, cat) => sum + cat.spent,
+      0,
+    );
     budget.totalSpent = totalSpent;
     await this.repo.updateBudget(budget);
   }

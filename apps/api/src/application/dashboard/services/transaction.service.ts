@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateTransactionDto } from '../dto/create-transaction.dto';
 import { TransactionRepository } from '@adapters/dashboard/persistence/transaction.repository';
 import { UpdateTransactionDto } from '../dto/update-transaction.dto';
@@ -103,8 +100,8 @@ export class TransactionService {
         message: 'All transactions deleted successfully',
       };
     }
-    const transactionsToDelete = user.transactions.filter((transaction) =>
-      transactions?.transactions.includes(transaction.id),
+    const transactionsToDelete = user.transactions.filter(
+      (transaction) => transactions?.transactions.includes(transaction.id),
     );
 
     if (transactionsToDelete.length === 0) {

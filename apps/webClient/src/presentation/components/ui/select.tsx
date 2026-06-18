@@ -1,14 +1,20 @@
 import { Label } from "./label";
 
 export interface SelectProps {
-  label?: string
-  name: string
-  options: { value: string; label: string }[]
-  onChange: (value: string) => void
-  value?: string
+  label?: string;
+  name: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+  value?: string;
 }
 
-export const Select = ({ label, name, options, onChange, value }: SelectProps) => {
+export const Select = ({
+  label,
+  name,
+  options,
+  onChange,
+  value,
+}: SelectProps) => {
   return (
     <div className="space-y-2">
       {label && <Label htmlFor={name}>{name}</Label>}
@@ -25,5 +31,5 @@ export const Select = ({ label, name, options, onChange, value }: SelectProps) =
         ))}
       </select>
     </div>
-  )
-}
+  );
+};

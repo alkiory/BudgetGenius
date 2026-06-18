@@ -1,18 +1,22 @@
-import { DollarSign, Sparkles } from "lucide-react"
+import { DollarSign, Sparkles } from "lucide-react";
 
 interface LogoProps {
-  size?: "sm" | "md" | "lg" | "xl"
-  variant?: "default" | "minimal"
-  className?: string
+  size?: "sm" | "md" | "lg" | "xl";
+  variant?: "default" | "minimal";
+  className?: string;
 }
-export function Logo({ size = "md", variant = "default", className = "" }: LogoProps) {
+export function Logo({
+  size = "md",
+  variant = "default",
+  className = "",
+}: LogoProps) {
   // Size mappings
   const sizeClasses = {
     sm: "h-8",
     md: "h-10",
     lg: "h-12",
     xl: "h-16",
-  }
+  };
 
   // Text size mappings
   const textSizeClasses = {
@@ -20,7 +24,7 @@ export function Logo({ size = "md", variant = "default", className = "" }: LogoP
     md: "text-xl",
     lg: "text-2xl",
     xl: "text-3xl",
-  }
+  };
 
   // Icon size mappings
   const iconSizeClasses = {
@@ -28,7 +32,7 @@ export function Logo({ size = "md", variant = "default", className = "" }: LogoP
     md: "h-6 w-6",
     lg: "h-7 w-7",
     xl: "h-8 w-8",
-  }
+  };
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
@@ -45,12 +49,16 @@ export function Logo({ size = "md", variant = "default", className = "" }: LogoP
 
       {variant === "default" && (
         <div className="flex flex-col">
-          <span className={`font-bold leading-none tracking-tight dark:text-white ${textSizeClasses[size]}`}>
+          <span
+            className={`font-bold leading-none tracking-tight dark:text-white ${textSizeClasses[size]}`}
+          >
             Budget<span className="text-purple-600">Genius</span>
           </span>
-          <span className="text-xs text-slate-500 dark:text-slate-400">AI-Powered Finance</span>
+          <span className="text-xs text-slate-500 dark:text-slate-400">
+            AI-Powered Finance
+          </span>
         </div>
       )}
     </div>
-  )
+  );
 }

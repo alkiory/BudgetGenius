@@ -18,7 +18,6 @@ export class AppController {
       },
     },
   })
-
   getRoot() {
     return {
       status: 'running',

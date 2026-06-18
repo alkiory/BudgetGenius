@@ -1,6 +1,6 @@
-import { Skeleton } from "@presentation/components/ui/skeleton"
-import { PageHeaderSkeleton } from "@presentation/components/ui/page-header"
-import { GoalCardSkeleton } from "@presentation/components/ui/skeletons/card-skeleton"
+import { PageHeaderSkeleton } from "@presentation/components/ui/page-header";
+import { Skeleton } from "@presentation/components/ui/skeleton";
+import { GoalCardSkeleton } from "@presentation/components/ui/skeletons/card-skeleton";
 
 export default function GoalsLoading() {
   return (
@@ -30,5 +30,5 @@ export default function GoalsLoading() {
         ))}
       </div>
     </div>
-  )
+  );
 }

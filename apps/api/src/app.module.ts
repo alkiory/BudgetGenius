@@ -33,7 +33,8 @@ import { TestController } from '@adapters/app.controller';
     ConfigModule.forRoot({
       isGlobal: true,
       ignoreEnvFile: process.env.NODE_ENV === 'production',
-      envFilePath: process.env.NODE_ENV === 'development' ? '.env.development' : '.env',
+      envFilePath:
+        process.env.NODE_ENV === 'development' ? '.env.development' : '.env',
       validate: (config) => {
         if (!config.NODE_ENV) {
           throw new Error('NODE_ENV is required');
@@ -65,7 +66,7 @@ import { TestController } from '@adapters/app.controller';
 
         // IMPORTANTE: Elimina o comenta por completo la propiedad 'tls'
         // El Redis de Docker no usa TLS. Si esta propiedad existe, ioredis fallará.
-        // tls: undefined, 
+        // tls: undefined,
 
         // Elimina también la password para el entorno Docker por defecto
         password: process.env.REDIS_PASSWORD || undefined,
@@ -87,7 +88,9 @@ import { TestController } from '@adapters/app.controller';
         host: configService.get<string>('DB_HOST') || 'localhost',
         port: configService.get<number>('DB_PORT') || 5432,
         username: configService.get<string>('DB_USER'),
-        password: configService.get<string>('DB_PASS') || configService.get<string>('DB_PASSWORD'),
+        password:
+          configService.get<string>('DB_PASS') ||
+          configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_NAME'),
         schema: 'bg_public',
         // FORZADO: En Docker, conectando a un contenedor local, SSL debe estar desactivado.
@@ -98,12 +101,8 @@ import { TestController } from '@adapters/app.controller';
         },
         // En producción (Docker), buscamos los archivos compilados .js
         // En local (ts-node), buscamos los .ts
-        entities: [
-          __dirname + '/../**/*.entity.{js,ts}'
-        ],
-        migrations: [
-          __dirname + '/../migrations/*.{js,ts}'
-        ],
+        entities: [__dirname + '/../**/*.entity.{js,ts}'],
+        migrations: [__dirname + '/../migrations/*.{js,ts}'],
         // -------------------------------------------------------
         autoLoadEntities: true,
         synchronize: false,
@@ -152,7 +151,7 @@ import { TestController } from '@adapters/app.controller';
   exports: [LoggingService],
 })
 export class AppModule {
-  constructor(private configService: ConfigService) { }
+  constructor(private configService: ConfigService) {}
 
   configure(consumer: MiddlewareConsumer) {
     // Ruta específica para Firebase (Google Login)

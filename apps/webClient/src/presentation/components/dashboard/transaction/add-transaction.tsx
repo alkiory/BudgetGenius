@@ -1,26 +1,34 @@
-import { useTranslation } from 'react-i18next';
-import { TRANSACTION_CATEGORIES, Transaction } from "@domain/dashboard/transactions/transaction.entity";
+import { RootState } from "@adapters/store/rootStore";
+import {
+  TRANSACTION_CATEGORIES,
+  Transaction,
+} from "@domain/dashboard/transactions/transaction.entity";
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
-import { useSelector } from "react-redux";
-import { RootState } from "@adapters/store/rootStore";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { errorToast } from "@presentation/utils/toast";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useSelector } from "react-redux";
 
 interface AddTransactionFormProps {
-  onSubmit: (transaction: Omit<Transaction, "id">) => void
-  onCancel: () => void
+  onSubmit: (transaction: Omit<Transaction, "id">) => void;
+  onCancel: () => void;
 }
 
-export default function AddTransactionForm({ onSubmit, onCancel }: AddTransactionFormProps) {
+export default function AddTransactionForm({
+  onSubmit,
+  onCancel,
+}: AddTransactionFormProps) {
   const { t } = useTranslation();
   const userSetting = useSelector((state: RootState) => state.userSettings);
-  const userCurrency = (userSetting?.settings?.currency || 'USD') as Currency;
+  const userCurrency = (userSetting?.settings?.currency || "USD") as Currency;
   const currencySymbol = currencyService.getSymbol(userCurrency);
 
-  const [transactionType, setTransactionType] = useState<"income" | "expense">("expense")
+  const [transactionType, setTransactionType] = useState<"income" | "expense">(
+    "expense",
+  );
   const [formData, setFormData] = useState<Omit<Transaction, "id">>({
     date: new Date(),
     category: "Other",
@@ -28,46 +36,57 @@ export default function AddTransactionForm({ onSubmit, onCancel }: AddTransactio
     amount: undefined as unknown as number,
     currency: userCurrency,
     status: "Pending",
-  })
+  });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    setFormData(prev => ({
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
       ...prev,
-      [name]: name === "amount" ? Math.abs(parseFloat(value) || 0) : value
+      [name]: name === "amount" ? Math.abs(parseFloat(value) || 0) : value,
     }));
-  }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
 
-    const absAmount = Math.abs(formData.amount)
+    const absAmount = Math.abs(formData.amount);
 
     if (Number.isNaN(absAmount) || absAmount === 0) {
-      errorToast(t('transactions.zeroAmountMsg'), 3000, "invalid-amount")
-      return
+      errorToast(t("transactions.zeroAmountMsg"), 3000, "invalid-amount");
+      return;
     }
 
-    if (!currencyService.validateAmount(absAmount, formData.currency as Currency)) {
-      errorToast(t('transactions.invalidCurrencyAmount'), 3000, "invalid-amount");
+    if (
+      !currencyService.validateAmount(absAmount, formData.currency as Currency)
+    ) {
+      errorToast(
+        t("transactions.invalidCurrencyAmount"),
+        3000,
+        "invalid-amount",
+      );
       return;
     }
 
     // Apply sign: expense → negative, income → positive
-    const signedAmount = transactionType === "expense" ? -absAmount : absAmount
+    const signedAmount = transactionType === "expense" ? -absAmount : absAmount;
 
     onSubmit({
       ...formData,
-      amount: currencyService.normalizeAmount(signedAmount, formData.currency as Currency),
+      amount: currencyService.normalizeAmount(
+        signedAmount,
+        formData.currency as Currency,
+      ),
       date: new Date(),
-    })
-  }
+    });
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Income / Expense Toggle */}
       <div className="space-y-2">
-        <Label>{t('transactions.type')}</Label>
+        <Label>{t("transactions.type")}</Label>
         <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
           <button
             type="button"
@@ -78,7 +97,7 @@ export default function AddTransactionForm({ onSubmit, onCancel }: AddTransactio
                 : "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
             }`}
           >
-            {t('transactions.expense')}
+            {t("transactions.expense")}
           </button>
           <button
             type="button"
@@ -89,13 +108,13 @@ export default function AddTransactionForm({ onSubmit, onCancel }: AddTransactio
                 : "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
             }`}
           >
-            {t('transactions.income')}
+            {t("transactions.income")}
           </button>
         </div>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="category">{t('transactions.category')}</Label>
+        <Label htmlFor="category">{t("transactions.category")}</Label>
         <select
           id="category"
           name="category"
@@ -104,10 +123,10 @@ export default function AddTransactionForm({ onSubmit, onCancel }: AddTransactio
           className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
           required
         >
-          <option value="Other">
-            {t('categories.other')}
-          </option>
-          {TRANSACTION_CATEGORIES.filter(category => category !== "All" && category !== "Todos").map((category) => (
+          <option value="Other">{t("categories.other")}</option>
+          {TRANSACTION_CATEGORIES.filter(
+            (category) => category !== "All" && category !== "Todos",
+          ).map((category) => (
             <option key={category} value={category}>
               {t(`categories.${category.toLowerCase()}`)}
             </option>
@@ -116,20 +135,22 @@ export default function AddTransactionForm({ onSubmit, onCancel }: AddTransactio
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="description">{t('transactions.description')}</Label>
+        <Label htmlFor="description">{t("transactions.description")}</Label>
         <Input
           id="description"
           name="description"
           value={formData.description}
           onChange={handleChange}
-          placeholder={t('transactions.enterDescription')}
+          placeholder={t("transactions.enterDescription")}
         />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="amount">{t('transactions.amount')}</Label>
+        <Label htmlFor="amount">{t("transactions.amount")}</Label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">{currencySymbol}</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+            {currencySymbol}
+          </span>
           <Input
             id="amount"
             name="amount"
@@ -138,24 +159,27 @@ export default function AddTransactionForm({ onSubmit, onCancel }: AddTransactio
             min="0"
             value={formData.amount ?? ""}
             onChange={(e) => {
-              const { value } = e.target
-              setFormData(prev => ({
+              const { value } = e.target;
+              setFormData((prev) => ({
                 ...prev,
-                amount: value === "" ? undefined as unknown as number : Math.abs(parseFloat(value) || 0)
-              }))
+                amount:
+                  value === ""
+                    ? (undefined as unknown as number)
+                    : Math.abs(parseFloat(value) || 0),
+              }));
             }}
             className="pl-7"
-            placeholder={t('common.amountPlaceholder')}
+            placeholder={t("common.amountPlaceholder")}
             required
           />
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          {t('transactions.amountHint')}
+          {t("transactions.amountHint")}
         </p>
       </div>
 
       <div className="space-y-2 grid">
-        <Label htmlFor="status">{t('transactions.status')}</Label>
+        <Label htmlFor="status">{t("transactions.status")}</Label>
         <select
           id="status"
           name="status"
@@ -164,18 +188,18 @@ export default function AddTransactionForm({ onSubmit, onCancel }: AddTransactio
           className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
           required
         >
-          <option value="Pending">{t('transactions.statusPending')}</option>
-          <option value="Completed">{t('transactions.statusCompleted')}</option>
-          <option value="Cancelled">{t('transactions.statusCancelled')}</option>
+          <option value="Pending">{t("transactions.statusPending")}</option>
+          <option value="Completed">{t("transactions.statusCompleted")}</option>
+          <option value="Cancelled">{t("transactions.statusCancelled")}</option>
         </select>
       </div>
 
       <div className="mt-6 flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel}>
-          {t('common.cancel')}
+          {t("common.cancel")}
         </Button>
-        <Button type="submit">{t('transactions.addTransaction')}</Button>
+        <Button type="submit">{t("transactions.addTransaction")}</Button>
       </div>
     </form>
-  )
+  );
 }

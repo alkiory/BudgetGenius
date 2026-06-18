@@ -4,19 +4,19 @@ import api from "@infrastructure/api.config";
 
 export const HttpTransactionRepository: TransactionRepository = {
   async getAll(offset: number, limit: number) {
-  const response = await api.get('/transactions', {
-    params: { offset, limit },
-  });
-  return response.data;
-},
-
-  async createTransaction({dto}: {dto: Omit<Transaction, "id">}) {
-    const response = await api.post('/transactions', dto);
+    const response = await api.get("/transactions", {
+      params: { offset, limit },
+    });
     return response.data;
   },
 
-  async updateTransaction({dto}: {dto: Partial<Transaction>}) {
-    const response = await api.put('/transactions', dto);
+  async createTransaction({ dto }: { dto: Omit<Transaction, "id"> }) {
+    const response = await api.post("/transactions", dto);
+    return response.data;
+  },
+
+  async updateTransaction({ dto }: { dto: Partial<Transaction> }) {
+    const response = await api.put("/transactions", dto);
     return response.data;
   },
 
@@ -30,5 +30,5 @@ export const HttpTransactionRepository: TransactionRepository = {
       data: { transactions },
     });
     return response.data;
-  }
-}
+  },
+};

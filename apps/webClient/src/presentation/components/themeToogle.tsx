@@ -1,26 +1,26 @@
-import * as React from "react"
-import { Moon, Sun } from "lucide-react"
-import { useTheme } from "@adapters/hooks/themeContext"
-import { Button } from "./ui/button"
+import { useTheme } from "@adapters/hooks/themeContext";
+import { Moon, Sun } from "lucide-react";
+import * as React from "react";
+import { Button } from "./ui/button";
 
 export function ThemeToggle() {
-  const { theme, toggleTheme } = useTheme()
-  const [isOpen, setIsOpen] = React.useState(false)
-  const menuRef = React.useRef<HTMLDivElement>(null)
+  const { theme, toggleTheme } = useTheme();
+  const [isOpen, setIsOpen] = React.useState(false);
+  const menuRef = React.useRef<HTMLDivElement>(null);
 
   // Close the dropdown when clicking outside
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
+        setIsOpen(false);
       }
-    }
+    };
 
-    document.addEventListener("mousedown", handleClickOutside)
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
-  }, [])
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   return (
     <div className="relative text-primary dark:text-neutral" ref={menuRef}>
@@ -42,21 +42,23 @@ export function ThemeToggle() {
           <div className="py-1">
             <Button
               onClick={() => {
-                toggleTheme()
-                setIsOpen(false)
+                toggleTheme();
+                setIsOpen(false);
               }}
-              className={`w-full px-4 py-2 cursor-pointer text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700 ${theme === "light" ? "bg-slate-100 dark:bg-slate-700" : ""
-                }`}
+              className={`w-full px-4 py-2 cursor-pointer text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700 ${
+                theme === "light" ? "bg-slate-100 dark:bg-slate-700" : ""
+              }`}
             >
               Light
             </Button>
             <Button
               onClick={() => {
-                toggleTheme()
-                setIsOpen(false)
+                toggleTheme();
+                setIsOpen(false);
               }}
-              className={`w-full px-4 py-2 cursor-pointer text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700 ${theme === "dark" ? "bg-slate-100 dark:bg-slate-700" : ""
-                }`}
+              className={`w-full px-4 py-2 cursor-pointer text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700 ${
+                theme === "dark" ? "bg-slate-100 dark:bg-slate-700" : ""
+              }`}
             >
               Dark
             </Button>
@@ -64,6 +66,5 @@ export function ThemeToggle() {
         </div>
       )}
     </div>
-  )
+  );
 }
-

@@ -5,7 +5,11 @@
  * @param {string} value - The value to store in the cookie.
  * @param {number} [daysToExpire] - Optional number of days until the cookie expires. If not provided, the cookie will be a session cookie.
  */
-export const setCookie = (name: string, value: string, daysToExpire?: number): void => {
+export const setCookie = (
+  name: string,
+  value: string,
+  daysToExpire?: number,
+): void => {
   let cookie = `${name}=${encodeURIComponent(value)}`;
 
   if (daysToExpire) {
@@ -13,10 +17,10 @@ export const setCookie = (name: string, value: string, daysToExpire?: number): v
     date.setTime(date.getTime() + daysToExpire * 24 * 60 * 60 * 1000);
     cookie += `; expires=${date.toUTCString()}`;
   } else {
-    cookie += '; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    cookie += "; expires=Thu, 01 Jan 1970 00:00:00 GMT";
   }
 
-  cookie += '; path=/';
+  cookie += "; path=/";
   document.cookie = cookie;
 };
 
@@ -28,7 +32,7 @@ export const setCookie = (name: string, value: string, daysToExpire?: number): v
  */
 export const getCookie = (name: string): string | null => {
   const cookieName = `${name}=`;
-  const cookies = document.cookie.split(';');
+  const cookies = document.cookie.split(";");
 
   for (let i = 0; i < cookies.length; i++) {
     const cookie = cookies[i].trim();

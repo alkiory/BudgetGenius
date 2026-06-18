@@ -1,32 +1,38 @@
-import { useState, useRef, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from '@adapters/store/rootStore';
-import { updateSettingsAction } from '@adapters/slices/user-settings/settingsSlice';
-import { updateUserSettings } from '@application/user/user.service';
-import { Languages } from 'lucide-react';
+import { updateSettingsAction } from "@adapters/slices/user-settings/settingsSlice";
+import { RootState } from "@adapters/store/rootStore";
+import { updateUserSettings } from "@application/user/user.service";
+import { Languages } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 
 const LANGUAGES = [
-  { locale: 'en-US', label: 'English', short: 'EN' },
-  { locale: 'es-CO', label: 'Español', short: 'ES' },
+  { locale: "en-US", label: "English", short: "EN" },
+  { locale: "es-CO", label: "Español", short: "ES" },
 ];
 
 export function LanguageSwitcher() {
   const dispatch = useDispatch();
-  const currentLocale = useSelector((state: RootState) => state.userSettings.settings.locale) || 'en-US';
+  const currentLocale =
+    useSelector((state: RootState) => state.userSettings.settings.locale) ||
+    "en-US";
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const currentLang = LANGUAGES.find(l => l.locale === currentLocale) || LANGUAGES[0];
+  const currentLang =
+    LANGUAGES.find((l) => l.locale === currentLocale) || LANGUAGES[0];
 
   // Close dropdown on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const handleSelect = (locale: string) => {
@@ -40,7 +46,7 @@ export function LanguageSwitcher() {
 
     // Persist to backend
     updateUserSettings({ locale }).catch((err) => {
-      console.error('Failed to persist language preference:', err);
+      console.error("Failed to persist language preference:", err);
     });
 
     setIsOpen(false);
@@ -67,14 +73,18 @@ export function LanguageSwitcher() {
                 onClick={() => handleSelect(lang.locale)}
                 className={`flex w-full items-center px-3 py-2 text-left text-sm transition-colors ${
                   lang.locale === currentLocale
-                    ? 'bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300'
-                    : 'text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
+                    ? "bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300"
+                    : "text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
                 }`}
               >
-                <span className="mr-2 text-xs font-semibold uppercase text-slate-400">{lang.short}</span>
+                <span className="mr-2 text-xs font-semibold uppercase text-slate-400">
+                  {lang.short}
+                </span>
                 <span>{lang.label}</span>
                 {lang.locale === currentLocale && (
-                  <span className="ml-auto text-purple-600 dark:text-purple-400">✓</span>
+                  <span className="ml-auto text-purple-600 dark:text-purple-400">
+                    ✓
+                  </span>
                 )}
               </button>
             ))}

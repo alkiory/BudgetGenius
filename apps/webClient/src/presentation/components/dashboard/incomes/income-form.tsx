@@ -1,24 +1,29 @@
-import { useTranslation } from 'react-i18next';
-import { Income, INCOME_CATEGORIES, IncomeCategory, IncomeRecurrence } from "@domain/dashboard/incomes/income.entity"
-import { Button } from "@presentation/components/ui/button"
-import { Input } from "@presentation/components/ui/input"
-import { Label } from "@presentation/components/ui/label"
-import { useSelector } from "react-redux";
 import { RootState } from "@adapters/store/rootStore";
-import { Currency, currencyService } from "@presentation/utils/currencyService"
-import { errorToast } from "@presentation/utils/toast"
-import { useState, useEffect } from "react"
+import {
+  Income,
+  INCOME_CATEGORIES,
+  IncomeCategory,
+  IncomeRecurrence,
+} from "@domain/dashboard/incomes/income.entity";
+import { Button } from "@presentation/components/ui/button";
+import { Input } from "@presentation/components/ui/input";
+import { Label } from "@presentation/components/ui/label";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
+import { errorToast } from "@presentation/utils/toast";
+import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { useSelector } from "react-redux";
 
 interface IncomeFormProps {
-  income?: Income
-  onSubmit: (income: Partial<Income>) => void
-  onCancel: () => void
+  income?: Income;
+  onSubmit: (income: Partial<Income>) => void;
+  onCancel: () => void;
 }
 
 export function IncomeForm({ income, onSubmit, onCancel }: IncomeFormProps) {
   const { t } = useTranslation();
   const userSetting = useSelector((state: RootState) => state.userSettings);
-  const targetCurrency = (userSetting?.settings?.currency || 'USD') as Currency;
+  const targetCurrency = (userSetting?.settings?.currency || "USD") as Currency;
   const currencySymbol = currencyService.getSymbol(targetCurrency);
 
   const [formData, setFormData] = useState({
@@ -28,7 +33,7 @@ export function IncomeForm({ income, onSubmit, onCancel }: IncomeFormProps) {
     currency: targetCurrency,
     amount: undefined as unknown as number,
     recurrence: "One-time" as IncomeRecurrence,
-  })
+  });
 
   // If editing an existing income, populate the form
   useEffect(() => {
@@ -40,24 +45,26 @@ export function IncomeForm({ income, onSubmit, onCancel }: IncomeFormProps) {
         currency: income.currency as Currency,
         amount: Math.abs(income.amount),
         recurrence: income.recurrence || "One-time",
-      })
+      });
     }
-  }, [income])
+  }, [income]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
 
-    const date = income ? income.date : new Date()
+    const date = income ? income.date : new Date();
 
-    const absAmount = Math.abs(formData.amount)
+    const absAmount = Math.abs(formData.amount);
     if (Number.isNaN(absAmount) || absAmount === 0) {
-      errorToast(t('income.amountCannotBeZero'), 3000, "invalid-amount")
-      return
+      errorToast(t("income.amountCannotBeZero"), 3000, "invalid-amount");
+      return;
     }
 
     onSubmit({
@@ -67,25 +74,28 @@ export function IncomeForm({ income, onSubmit, onCancel }: IncomeFormProps) {
       currency: formData.currency,
       amount: formData.amount,
       recurrence: formData.recurrence as IncomeRecurrence,
-    })
-  }
+    });
+  };
 
-  const isEditing = !!income
+  const isEditing = !!income;
 
-  const recurrenceOptions: { value: IncomeRecurrence | 'Weekly' | 'Annually'; key: string }[] = [
-    { value: 'One-time', key: 'income.recurrenceOneTime' },
-    { value: 'Daily', key: 'income.recurrenceDaily' },
-    { value: 'Weekly', key: 'income.recurrenceWeekly' },
-    { value: 'Bi-weekly', key: 'income.recurrenceBiWeekly' },
-    { value: 'Monthly', key: 'income.recurrenceMonthly' },
-    { value: 'Quarterly', key: 'income.recurrenceQuarterly' },
-    { value: 'Annually', key: 'income.recurrenceAnnually' },
-  ]
+  const recurrenceOptions: {
+    value: IncomeRecurrence | "Weekly" | "Annually";
+    key: string;
+  }[] = [
+    { value: "One-time", key: "income.recurrenceOneTime" },
+    { value: "Daily", key: "income.recurrenceDaily" },
+    { value: "Weekly", key: "income.recurrenceWeekly" },
+    { value: "Bi-weekly", key: "income.recurrenceBiWeekly" },
+    { value: "Monthly", key: "income.recurrenceMonthly" },
+    { value: "Quarterly", key: "income.recurrenceQuarterly" },
+    { value: "Annually", key: "income.recurrenceAnnually" },
+  ];
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="category">{t('income.category')}</Label>
+        <Label htmlFor="category">{t("income.category")}</Label>
         <select
           id="category"
           name="category"
@@ -95,9 +105,11 @@ export function IncomeForm({ income, onSubmit, onCancel }: IncomeFormProps) {
           required
         >
           <option value="" disabled>
-            {t('income.selectCategory')}
+            {t("income.selectCategory")}
           </option>
-          {INCOME_CATEGORIES.filter(category => category !== "All" && category !== "Todos").map((category) => (
+          {INCOME_CATEGORIES.filter(
+            (category) => category !== "All" && category !== "Todos",
+          ).map((category) => (
             <option key={category} value={category}>
               {t(`incomeCategories.${category.toLowerCase()}`)}
             </option>
@@ -106,21 +118,23 @@ export function IncomeForm({ income, onSubmit, onCancel }: IncomeFormProps) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="description">{t('income.descriptionLabel')}</Label>
+        <Label htmlFor="description">{t("income.descriptionLabel")}</Label>
         <Input
           id="description"
           name="description"
           value={formData.description}
           onChange={handleChange}
-          placeholder={t('income.descriptionPlaceholder')}
+          placeholder={t("income.descriptionPlaceholder")}
           required
         />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="amount">{t('income.amount')}</Label>
+        <Label htmlFor="amount">{t("income.amount")}</Label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">{currencySymbol}</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+            {currencySymbol}
+          </span>
           <Input
             id="amount"
             name="amount"
@@ -129,24 +143,26 @@ export function IncomeForm({ income, onSubmit, onCancel }: IncomeFormProps) {
             min="0"
             value={formData.amount ?? ""}
             onChange={(e) => {
-              const { value } = e.target
-              setFormData(prev => ({
+              const { value } = e.target;
+              setFormData((prev) => ({
                 ...prev,
-                amount: value === "" ? undefined as unknown as number : Math.abs(parseFloat(value) || 0)
-              }))
+                amount:
+                  value === ""
+                    ? (undefined as unknown as number)
+                    : Math.abs(parseFloat(value) || 0),
+              }));
             }}
             className="pl-7"
-            placeholder={t('income.amountPlaceholder')}
+            placeholder={t("income.amountPlaceholder")}
             required
           />
         </div>
       </div>
 
-      <div className="space-y-2">
-      </div>
+      <div className="space-y-2"></div>
 
       <div className="space-y-2">
-        <Label htmlFor="recurrence">{t('income.recurrence')}</Label>
+        <Label htmlFor="recurrence">{t("income.recurrence")}</Label>
         <select
           id="recurrence"
           name="recurrence"
@@ -165,10 +181,14 @@ export function IncomeForm({ income, onSubmit, onCancel }: IncomeFormProps) {
 
       <div className="mt-6 flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel}>
-          {t('common.cancel')}
+          {t("common.cancel")}
         </Button>
-        <Button type="submit">{isEditing ? t('income.updateIncomeButton') : t('income.addIncomeButton')}</Button>
+        <Button type="submit">
+          {isEditing
+            ? t("income.updateIncomeButton")
+            : t("income.addIncomeButton")}
+        </Button>
       </div>
     </form>
-  )
+  );
 }

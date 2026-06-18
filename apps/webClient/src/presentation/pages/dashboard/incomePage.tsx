@@ -1,18 +1,24 @@
-import { useState, useMemo } from "react";
-import { useTranslation } from 'react-i18next';
-import { Plus, Filter, ArrowUpRight, Wallet, DollarSign } from "lucide-react";
 import { useFetchIncomes } from "@adapters/query/dashboard";
-import { Button } from "@presentation/components/ui/button";
-import { IncomeModal } from "@presentation/components/dashboard/incomes/income-modal";
-import { IncomeSourcesTable } from "@presentation/components/dashboard/incomes/income-source-table";
+import { RootState } from "@adapters/store/rootStore";
+import {
+  IncomeCategory,
+  IncomeRecurrence,
+} from "@domain/dashboard/incomes/income.entity";
+import {
+  FilterCriteria,
+  FilterModal,
+} from "@presentation/components/dashboard/incomes/filter-income-modal";
 import { IncomeByCategory } from "@presentation/components/dashboard/incomes/income-by-category";
 import { IncomeHistory } from "@presentation/components/dashboard/incomes/income-history";
-import { IncomeCategory, IncomeRecurrence } from "@domain/dashboard/incomes/income.entity";
-import { FilterCriteria, FilterModal } from "@presentation/components/dashboard/incomes/filter-income-modal";
+import { IncomeModal } from "@presentation/components/dashboard/incomes/income-modal";
+import { IncomeSourcesTable } from "@presentation/components/dashboard/incomes/income-source-table";
+import { Button } from "@presentation/components/ui/button";
 import { PageHeader } from "@presentation/components/ui/page-header";
 import IncomesLoading from "@presentation/components/dashboard/incomes/incomes-loading";
-import { RootState } from "@adapters/store/rootStore";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
+import { Plus, Filter, ArrowUpRight, Wallet, DollarSign } from "lucide-react";
+import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 
 export default function IncomePage() {
@@ -33,10 +39,9 @@ export default function IncomePage() {
     recurrences: ["All"],
   });
 
-
   const userSetting = useSelector((state: RootState) => state.userSettings);
 
-  const { settings } = userSetting
+  const { settings } = userSetting;
 
   // Normalizar y filtrar ingresos inicialmente (sin aplicar filtros de recurrence aquí)
   const normalizedIncomes = useMemo(() => {
@@ -52,18 +57,25 @@ export default function IncomePage() {
   const filteredIncomeTransactions = useMemo(() => {
     return normalizedIncomes.filter((income) => {
       const dateMatch =
-        (!filters.dateFrom || new Date(income.date) >= new Date(filters.dateFrom)) &&
+        (!filters.dateFrom ||
+          new Date(income.date) >= new Date(filters.dateFrom)) &&
         (!filters.dateTo || new Date(income.date) <= new Date(filters.dateTo));
 
-      const categoryMatch = filters.categories.includes("All") || filters.categories.includes(income.category as typeof filters.categories[number]);
+      const categoryMatch =
+        filters.categories.includes("All") ||
+        filters.categories.includes(
+          income.category as (typeof filters.categories)[number],
+        );
 
       const minAmount = Number(filters.minAmount) || Number.NEGATIVE_INFINITY;
       const maxAmount = Number(filters.maxAmount) || Number.POSITIVE_INFINITY;
-      const amountMatch = income.amount >= minAmount && income.amount <= maxAmount;
+      const amountMatch =
+        income.amount >= minAmount && income.amount <= maxAmount;
 
       // Recurrence filter
       const recurrenceMatch =
-        filters.recurrences.includes("All") || filters.recurrences.includes(income.recurrence as IncomeRecurrence);
+        filters.recurrences.includes("All") ||
+        filters.recurrences.includes(income.recurrence as IncomeRecurrence);
 
       return dateMatch && categoryMatch && amountMatch && recurrenceMatch;
     });
@@ -71,7 +83,9 @@ export default function IncomePage() {
 
   // Calcular total
   const totalIncome = useMemo(() => {
-    return filteredIncomeTransactions.reduce((sum, income) => sum + income.amount, 0).toFixed(2);
+    return filteredIncomeTransactions
+      .reduce((sum, income) => sum + income.amount, 0)
+      .toFixed(2);
   }, [filteredIncomeTransactions]);
 
   // Calcular por categoría
@@ -99,22 +113,29 @@ export default function IncomePage() {
     let count = 0;
     if (filters.dateFrom) count++;
     if (filters.dateTo) count++;
-    if (!filters.categories.includes("All") && filters.categories.length > 0) count++;
-    if (!filters.recurrences.includes("All") && filters.recurrences.length > 0) count++;
+    if (!filters.categories.includes("All") && filters.categories.length > 0)
+      count++;
+    if (!filters.recurrences.includes("All") && filters.recurrences.length > 0)
+      count++;
     if (filters.minAmount) count++;
     if (filters.maxAmount) count++;
     return count;
   }, [filters]);
 
-  const targetCurrency = (settings?.currency || 'USD') as Currency;
+  const targetCurrency = (settings?.currency || "USD") as Currency;
   const formattedIncome = currencyService.formatCurrency(
     Number(totalIncome),
-    'USD' as Currency,
+    "USD" as Currency,
     targetCurrency,
-    false
+    false,
   );
 
-  const totalIncomeToDisplay = currencyService.formatCurrency(Number(totalIncome) / filteredIncomeTransactions.length, 'USD' as Currency, targetCurrency, false).formatted
+  const totalIncomeToDisplay = currencyService.formatCurrency(
+    Number(totalIncome) / filteredIncomeTransactions.length,
+    "USD" as Currency,
+    targetCurrency,
+    false,
+  ).formatted;
 
   if (isLoading) {
     return <IncomesLoading />;
@@ -122,7 +143,10 @@ export default function IncomePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('income.title')} description={t('income.description')} />
+      <PageHeader
+        title={t("income.title")}
+        description={t("income.description")}
+      />
 
       {/* Cards */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 md:gap-4">
@@ -132,10 +156,16 @@ export default function IncomePage() {
             <div className="rounded-full bg-green-100 p-2 dark:bg-green-900">
               <DollarSign className="h-4 w-4 text-green-600 dark:text-green-400 sm:h-5 sm:w-5" />
             </div>
-            <span className="text-xs font-medium sm:text-sm">{t('income.totalIncome')}</span>
+            <span className="text-xs font-medium sm:text-sm">
+              {t("income.totalIncome")}
+            </span>
           </div>
-          <p className="mt-2 text-xl font-bold sm:text-2xl">{formattedIncome.formatted}</p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('income.fromIncomes', { count: incomes.length })}</p>
+          <p className="mt-2 text-xl font-bold sm:text-2xl">
+            {formattedIncome.formatted}
+          </p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {t("income.fromIncomes", { count: incomes.length })}
+          </p>
         </div>
 
         {/* Primary Income Card */}
@@ -144,15 +174,28 @@ export default function IncomePage() {
             <div className="rounded-full bg-blue-100 p-2 dark:bg-blue-900">
               <Wallet className="h-4 w-4 text-blue-600 dark:text-blue-400 sm:h-5 sm:w-5" />
             </div>
-            <span className="text-xs font-medium sm:text-sm">{t('income.primaryIncome')}</span>
+            <span className="text-xs font-medium sm:text-sm">
+              {t("income.primaryIncome")}
+            </span>
           </div>
           <p className="mt-2 text-xl font-bold sm:text-2xl">
-            {incomeByCategory.length > 0 ?
-              `${currencyService.formatCurrency(incomeByCategory[0].amount, 'USD' as Currency, targetCurrency, false).formatted}
-              ` : "$0.00"}
+            {incomeByCategory.length > 0
+              ? `${
+                  currencyService.formatCurrency(
+                    incomeByCategory[0].amount,
+                    "USD" as Currency,
+                    targetCurrency,
+                    false,
+                  ).formatted
+                }
+              `
+              : "$0.00"}
           </p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {incomeByCategory.length > 0 ? incomeByCategory.sort((a, b) => b.amount - a.amount)[0]?.category || "None" : "No income sources"}
+            {incomeByCategory.length > 0
+              ? incomeByCategory.sort((a, b) => b.amount - a.amount)[0]
+                  ?.category || "None"
+              : "No income sources"}
           </p>
         </div>
 
@@ -162,14 +205,22 @@ export default function IncomePage() {
             <div className="rounded-full bg-purple-100 p-2 dark:bg-purple-900">
               <ArrowUpRight className="h-4 w-4 text-purple-600 dark:text-purple-400 sm:h-5 sm:w-5" />
             </div>
-            <span className="text-xs font-medium sm:text-sm">{t('income.averageIncome')}</span>
+            <span className="text-xs font-medium sm:text-sm">
+              {t("income.averageIncome")}
+            </span>
           </div>
           <p className="mt-2 text-xl font-bold sm:text-2xl">
-            {totalIncome ?
-              `${totalIncomeToDisplay !== "NaN" ? "$0.00" : totalIncomeToDisplay}`
+            {totalIncome
+              ? `${
+                  totalIncomeToDisplay !== "NaN"
+                    ? "$0.00"
+                    : totalIncomeToDisplay
+                }`
               : "$0.00"}
           </p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('income.perIncome')}</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {t("income.perIncome")}
+          </p>
         </div>
       </div>
 
@@ -189,7 +240,7 @@ export default function IncomePage() {
               className="inline-flex h-9 items-center gap-1 px-3 text-xs sm:h-10 sm:px-4 sm:text-sm"
             >
               <Filter className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span>{t('income.filter')}</span>
+              <span>{t("income.filter")}</span>
               {activeFiltersCount > 0 && (
                 <span className="ml-1 rounded-full bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-200 sm:px-2">
                   {activeFiltersCount}
@@ -202,7 +253,7 @@ export default function IncomePage() {
               className="inline-flex h-9 items-center gap-1 px-3 text-xs sm:h-10 sm:px-4 sm:text-sm"
             >
               <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span>{t('income.addIncome')}</span>
+              <span>{t("income.addIncome")}</span>
             </Button>
           </div>
         </div>
@@ -218,7 +269,9 @@ export default function IncomePage() {
           />
         ) : (
           <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-200 p-6 text-center dark:border-slate-700 sm:gap-4 sm:p-8">
-            <p className="text-sm text-slate-500 dark:text-slate-400 sm:text-base">{t('income.noSourcesFound')}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 sm:text-base">
+              {t("income.noSourcesFound")}
+            </p>
             {activeFiltersCount > 0 ? (
               <Button
                 variant="outline"
@@ -234,11 +287,11 @@ export default function IncomePage() {
                   });
                 }}
               >
-                {t('common.clearFilters')}
+                {t("common.clearFilters")}
               </Button>
             ) : (
               <Button size="sm" onClick={() => setIsIncomeModalOpen(true)}>
-                {t('income.addIncomeSource')}
+                {t("income.addIncomeSource")}
               </Button>
             )}
           </div>
@@ -254,7 +307,10 @@ export default function IncomePage() {
           currentFilters={filters}
         />
 
-        <IncomeModal isOpen={isIncomeModalOpen} onClose={() => setIsIncomeModalOpen(false)} />
+        <IncomeModal
+          isOpen={isIncomeModalOpen}
+          onClose={() => setIsIncomeModalOpen(false)}
+        />
       </div>
     </div>
   );

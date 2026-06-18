@@ -1,42 +1,47 @@
-import { useTranslation } from 'react-i18next';
-import { useState } from "react"
-import { warningToast } from "@presentation/utils/toast"
-import { Modal } from "@presentation/components/modal/modal"
-import { Button } from "@presentation/components/ui/button"
-import { Input } from "@presentation/components/ui/input"
-import { Label } from "@presentation/components/ui/label"
-import { Category, INCOME_CATEGORIES, INCOME_RECURRENCES, Recurrence } from "@domain/dashboard/incomes/income.entity"
+import {
+  Category,
+  INCOME_CATEGORIES,
+  INCOME_RECURRENCES,
+  Recurrence,
+} from "@domain/dashboard/incomes/income.entity";
+import { Modal } from "@presentation/components/modal/modal";
+import { Button } from "@presentation/components/ui/button";
+import { Input } from "@presentation/components/ui/input";
+import { Label } from "@presentation/components/ui/label";
+import { warningToast } from "@presentation/utils/toast";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export interface FilterCriteria {
-  dateFrom: string
-  dateTo: string
-  categories: Category[]
-  minAmount: number | null
-  maxAmount: number | null
-  recurrences: Recurrence[]
+  dateFrom: string;
+  dateTo: string;
+  categories: Category[];
+  minAmount: number | null;
+  maxAmount: number | null;
+  recurrences: Recurrence[];
 }
 
 interface FilterModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onApplyFilters: (filters: FilterCriteria) => void
-  currentFilters: FilterCriteria
+  isOpen: boolean;
+  onClose: () => void;
+  onApplyFilters: (filters: FilterCriteria) => void;
+  currentFilters: FilterCriteria;
 }
 
 function toggleOption<T extends string>(
   current: T[],
   option: T,
-  allOption: T
+  allOption: T,
 ): T[] {
   if (option === allOption) {
     // if “All” clicked, either select only All or clear all
-    return current.includes(allOption) ? [] : [allOption]
+    return current.includes(allOption) ? [] : [allOption];
   }
   // toggle individual option; always remove “All” when picking specifics
-  const withoutAll = current.filter(o => o !== allOption)
+  const withoutAll = current.filter((o) => o !== allOption);
   return withoutAll.includes(option)
-    ? withoutAll.filter(o => o !== option)
-    : [...withoutAll, option]
+    ? withoutAll.filter((o) => o !== option)
+    : [...withoutAll, option];
 }
 
 export function FilterModal({
@@ -46,53 +51,64 @@ export function FilterModal({
   currentFilters,
 }: FilterModalProps) {
   const { t } = useTranslation();
-  const [filters, setFilters] = useState<FilterCriteria>(currentFilters)
+  const [filters, setFilters] = useState<FilterCriteria>(currentFilters);
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFilters(f => ({ ...f, [name]: value }))
-  }
+    const { name, value } = e.target;
+    setFilters((f) => ({ ...f, [name]: value }));
+  };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFilters(f => ({ ...f, [name]: value === "" ? null : parseFloat(value) }))
-  }
+    const { name, value } = e.target;
+    setFilters((f) => ({
+      ...f,
+      [name]: value === "" ? null : parseFloat(value),
+    }));
+  };
 
   const handleCategoryClick = (cat: Category) => {
-    setFilters(f => ({
+    setFilters((f) => ({
       ...f,
       categories: toggleOption(f.categories, cat, "All"),
-    }))
-  }
+    }));
+  };
 
   const handleRecurrenceClick = (r: Recurrence) => {
-    setFilters(f => ({
+    setFilters((f) => ({
       ...f,
       recurrences: toggleOption(f.recurrences, r, "All"),
-    }))
-  }
+    }));
+  };
 
   const validate = () => {
-    if (filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo) {
-      warningToast(t('common.warningDateFromBeforeTo'), 3000, "date-range")
-      return false
+    if (
+      filters.dateFrom &&
+      filters.dateTo &&
+      filters.dateFrom > filters.dateTo
+    ) {
+      warningToast(t("common.warningDateFromBeforeTo"), 3000, "date-range");
+      return false;
     }
     if (
       filters.minAmount != null &&
       filters.maxAmount != null &&
       filters.minAmount > filters.maxAmount
     ) {
-      warningToast(t('common.warningMinAmountLessThanMax'), 3000, "amount-range")
-      return false
+      warningToast(
+        t("common.warningMinAmountLessThanMax"),
+        3000,
+        "amount-range",
+      );
+      return false;
     }
-    return true
-  }
+    return true;
+  };
 
   const onApply = () => {
-    if (!validate()) return
-    onApplyFilters(filters)
-    onClose()
-  }
+    if (!validate()) return;
+    onApplyFilters(filters);
+    onClose();
+  };
 
   const onReset = () => {
     const reset: FilterCriteria = {
@@ -102,18 +118,25 @@ export function FilterModal({
       minAmount: null,
       maxAmount: null,
       recurrences: ["All"],
-    }
-    setFilters(reset)
-    onApplyFilters(reset)
-    onClose()
-  }
+    };
+    setFilters(reset);
+    onApplyFilters(reset);
+    onClose();
+  };
 
   const tCategory = (cat: string) => t(`incomeCategories.${cat.toLowerCase()}`);
-  const tRecurrence = (r: string) => r === 'All'
-    ? t('income.recurrenceAll')
-    : r === 'One-time' ? t('income.recurrenceOneTime')
-    : r === 'Bi-weekly' ? t('income.recurrenceBiWeekly')
-    : t(`income.recurrence${r.charAt(0).toUpperCase() + r.slice(1).toLowerCase()}`);
+  const tRecurrence = (r: string) =>
+    r === "All"
+      ? t("income.recurrenceAll")
+      : r === "One-time"
+      ? t("income.recurrenceOneTime")
+      : r === "Bi-weekly"
+      ? t("income.recurrenceBiWeekly")
+      : t(
+          `income.recurrence${
+            r.charAt(0).toUpperCase() + r.slice(1).toLowerCase()
+          }`,
+        );
 
   const OptionButton = <T extends string>({
     option,
@@ -121,30 +144,35 @@ export function FilterModal({
     onClick,
     label,
   }: {
-    option: T
-    selected: T[]
-    onClick: (o: T) => void
-    label: string
+    option: T;
+    selected: T[];
+    onClick: (o: T) => void;
+    label: string;
   }) => (
     <button
       type="button"
       onClick={() => onClick(option)}
-      className={`rounded-full px-3 py-1 text-xs font-medium ${selected.includes(option)
-        ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-        : "bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200"
-        }`}
+      className={`rounded-full px-3 py-1 text-xs font-medium ${
+        selected.includes(option)
+          ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+          : "bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200"
+      }`}
     >
       {label}
     </button>
-  )
+  );
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={t('income.title') + ' (' + t('common.filter').toLowerCase() + ')'}>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={t("income.title") + " (" + t("common.filter").toLowerCase() + ")"}
+    >
       <div className="space-y-6">
         {/* Date range */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="dateFrom">{t('common.fromDate')}</Label>
+            <Label htmlFor="dateFrom">{t("common.fromDate")}</Label>
             <Input
               id="dateFrom"
               name="dateFrom"
@@ -154,7 +182,7 @@ export function FilterModal({
             />
           </div>
           <div>
-            <Label htmlFor="dateTo">{t('common.toDate')}</Label>
+            <Label htmlFor="dateTo">{t("common.toDate")}</Label>
             <Input
               id="dateTo"
               name="dateTo"
@@ -167,9 +195,9 @@ export function FilterModal({
 
         {/* Categories */}
         <div>
-          <Label>{t('transactions.category')}</Label>
+          <Label>{t("transactions.category")}</Label>
           <div className="flex flex-wrap gap-2">
-            {INCOME_CATEGORIES.map(cat => (
+            {INCOME_CATEGORIES.map((cat) => (
               <OptionButton
                 key={cat}
                 option={cat}
@@ -184,7 +212,7 @@ export function FilterModal({
         {/* Amount */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="minAmount">{t('common.minAmount')}</Label>
+            <Label htmlFor="minAmount">{t("common.minAmount")}</Label>
             <Input
               id="minAmount"
               name="minAmount"
@@ -192,11 +220,11 @@ export function FilterModal({
               step="0.01"
               value={filters.minAmount ?? ""}
               onChange={handleAmountChange}
-              placeholder={t('common.amountPlaceholder')}
+              placeholder={t("common.amountPlaceholder")}
             />
           </div>
           <div>
-            <Label htmlFor="maxAmount">{t('common.maxAmount')}</Label>
+            <Label htmlFor="maxAmount">{t("common.maxAmount")}</Label>
             <Input
               id="maxAmount"
               name="maxAmount"
@@ -204,16 +232,16 @@ export function FilterModal({
               step="0.01"
               value={filters.maxAmount ?? ""}
               onChange={handleAmountChange}
-              placeholder={t('common.amountPlaceholder')}
+              placeholder={t("common.amountPlaceholder")}
             />
           </div>
         </div>
 
         {/* Recurrence */}
         <div>
-          <Label>{t('income.recurrence')}</Label>
+          <Label>{t("income.recurrence")}</Label>
           <div className="flex flex-wrap gap-2">
-            {INCOME_RECURRENCES.map(r => (
+            {INCOME_RECURRENCES.map((r) => (
               <OptionButton
                 key={r}
                 option={r}
@@ -228,11 +256,11 @@ export function FilterModal({
         {/* Actions */}
         <div className="flex justify-end space-x-2">
           <Button variant="outline" onClick={onReset}>
-            {t('common.reset')}
+            {t("common.reset")}
           </Button>
-          <Button onClick={onApply}>{t('common.apply')}</Button>
+          <Button onClick={onApply}>{t("common.apply")}</Button>
         </div>
       </div>
     </Modal>
-  )
+  );
 }

@@ -108,7 +108,10 @@ export class TransactionController {
         'POST /transactions => User ID not found in request',
       );
     }
-    const transaction = await this.transactionService.createTransaction(userId, dto);
+    const transaction = await this.transactionService.createTransaction(
+      userId,
+      dto,
+    );
     return {
       message: '📊 Transaction created successfully',
       transaction,

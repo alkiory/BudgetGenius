@@ -1,8 +1,8 @@
-import { SidebarProvider } from '@adapters/hooks/sidebarContext';
-import { DashboardHeader } from '@presentation/components/dashboard/header';
-import { MainContent } from '@presentation/components/dashboard/main-content';
-import { DashboardSidebar } from '@presentation/components/dashboard/sidebar';
-import { Outlet } from 'react-router';
+import { SidebarProvider } from "@adapters/hooks/sidebarContext";
+import { DashboardHeader } from "@presentation/components/dashboard/header";
+import { MainContent } from "@presentation/components/dashboard/main-content";
+import { DashboardSidebar } from "@presentation/components/dashboard/sidebar";
+import { Outlet } from "react-router";
 
 export default function MainLayout() {
   return (
@@ -11,9 +11,11 @@ export default function MainLayout() {
         <DashboardSidebar />
         <MainContent>
           <DashboardHeader />
-          <main className="flex-1 p-4 md:p-6 text-primary dark:text-neutral"><Outlet /></main>
+          <main className="flex-1 p-4 md:p-6 text-primary dark:text-neutral">
+            <Outlet />
+          </main>
         </MainContent>
       </div>
     </SidebarProvider>
-  )
+  );
 }

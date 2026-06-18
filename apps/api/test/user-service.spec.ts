@@ -24,7 +24,6 @@ const user: User = {
   transactions: [],
   budgets: [],
   expenseCategories: [],
-  savingGoals: [],
   overviews: [],
   settings: [],
   incomes: [],

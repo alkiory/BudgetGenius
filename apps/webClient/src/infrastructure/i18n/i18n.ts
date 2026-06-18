@@ -1,15 +1,15 @@
-import i18n from 'i18next';
-import { initReactI18next } from 'react-i18next';
-import en from './locales/en.json';
-import es from './locales/es.json';
+import i18n from "i18next";
+import { initReactI18next } from "react-i18next";
+import en from "./locales/en.json";
+import es from "./locales/es.json";
 
-export const SUPPORTED_LOCALES = ['en-US', 'es-CO'] as const;
+export const SUPPORTED_LOCALES = ["en-US", "es-CO"] as const;
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
 // Map locale codes to the translation key
 const localeToLang: Record<string, string> = {
-  'en-US': 'en',
-  'es-CO': 'es',
+  "en-US": "en",
+  "es-CO": "es",
 };
 
 /**
@@ -17,11 +17,11 @@ const localeToLang: Record<string, string> = {
  * e.g. navigator.language = 'es-ES' → 'es-CO' (Spanish), 'en-GB' → 'en-US' (English)
  */
 export function detectBrowserLocale(): SupportedLocale {
-  if (typeof navigator === 'undefined') return 'en-US';
+  if (typeof navigator === "undefined") return "en-US";
   const browserLang = navigator.language;
   // If browser lang starts with 'es', match to Spanish; everything else defaults to English
-  if (browserLang.startsWith('es')) return 'es-CO';
-  return 'en-US';
+  if (browserLang.startsWith("es")) return "es-CO";
+  return "en-US";
 }
 
 i18n.use(initReactI18next).init({
@@ -29,8 +29,8 @@ i18n.use(initReactI18next).init({
     en: { translation: en },
     es: { translation: es },
   },
-  lng: localeToLang[detectBrowserLocale()] || 'en',
-  fallbackLng: 'en',
+  lng: localeToLang[detectBrowserLocale()] || "en",
+  fallbackLng: "en",
   interpolation: {
     escapeValue: false, // React already escapes values
   },
@@ -43,7 +43,7 @@ i18n.use(initReactI18next).init({
  * e.g. "en-US" → "en", "es-CO" → "es"
  */
 export function switchLanguage(locale: string) {
-  const lang = localeToLang[locale] || 'en';
+  const lang = localeToLang[locale] || "en";
   if (i18n.language !== lang) {
     i18n.changeLanguage(lang);
   }

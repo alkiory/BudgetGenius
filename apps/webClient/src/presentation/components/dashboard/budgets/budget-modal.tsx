@@ -1,39 +1,39 @@
-import { useTranslation } from 'react-i18next';
-import { Modal } from "@presentation/components/modal/modal"
-import { BudgetForm } from "./budget-form"
-import { Budget } from "@domain/dashboard/budgets/budget.entity"
-import { HttpBudgetRepository } from "@adapters/http/budget.repository"
-import { successToast, errorToast } from "@presentation/utils/toast"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import PremiumCard from "@presentation/components/modal/premium-card"
-import { useState } from "react"
+import { HttpBudgetRepository } from "@adapters/http/budget.repository";
+import { Budget } from "@domain/dashboard/budgets/budget.entity";
+import { Modal } from "@presentation/components/modal/modal";
+import { successToast, errorToast } from "@presentation/utils/toast";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import { BudgetForm } from "./budget-form";
 
 interface BudgetModalProps {
-  isOpen: boolean
-  onClose: () => void
-  budget?: Budget
-  refetchBudgets?: () => void
+  isOpen: boolean;
+  onClose: () => void;
+  budget?: Budget;
+  refetchBudgets?: () => void;
 }
 
-export function BudgetModal({ isOpen, onClose, budget, refetchBudgets }: BudgetModalProps) {
+export function BudgetModal({
+  isOpen,
+  onClose,
+  budget,
+  refetchBudgets,
+}: BudgetModalProps) {
   const { t } = useTranslation();
-  const isEditing = !!budget
+  const isEditing = !!budget;
 
-  const queryClient = useQueryClient()
-
-  const [showPremiumCard, setShowPremiumCard] = useState(false);
-
-  const handleClosePremiumCard = () => {
-    setShowPremiumCard(false);
-    onClose();
-  };
+  const queryClient = useQueryClient();
 
   const { mutate: addBudget } = useMutation({
-    mutationKey: ['add-budget'],
+    mutationKey: ["add-budget"],
     mutationFn: HttpBudgetRepository.createBudget,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (data: any) => {
-      successToast(data?._offline ? data.message : t('budgets.createSuccess'), 3000, "budget-create");
+      successToast(
+        data?._offline ? data.message : t("budgets.createSuccess"),
+        3000,
+        "budget-create",
+      );
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       if (!data?._offline) {
@@ -43,69 +43,65 @@ export function BudgetModal({ isOpen, onClose, budget, refetchBudgets }: BudgetM
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      if (error.response && error.response.status === 403) {
-        setShowPremiumCard(true);
-      } else {
-        const message = error?.response?.data?.message || error?.message || t('budgets.createError');
-        const errorMsg = Array.isArray(message) ? message[0] : message;
-        errorToast(errorMsg, 5000, "budget-create");
-        console.error("Budget creation failed:", error);
-      }
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        t("budgets.createError");
+      const errorMsg = Array.isArray(message) ? message[0] : message;
+      errorToast(errorMsg, 5000, "budget-create");
+      console.error("Budget creation failed:", error);
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
-    }
-  })
+    },
+  });
 
   const { mutate: updateBudget } = useMutation({
-    mutationKey: ['update-budget'],
+    mutationKey: ["update-budget"],
     mutationFn: HttpBudgetRepository.updateBudget,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (data: any) => {
-      successToast(data?._offline ? data.message : t('budgets.updateSuccess'), 3000, "budget-update")
-      queryClient.invalidateQueries({ queryKey: ["budgets"] })
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
+      successToast(
+        data?._offline ? data.message : t("budgets.updateSuccess"),
+        3000,
+        "budget-update",
+      );
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       if (!data?._offline) {
-        refetchBudgets?.()
+        refetchBudgets?.();
       }
       onClose();
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      if (error.response && error.response.status === 403) {
-        setShowPremiumCard(true);
-      } else {
-        const message = error?.response?.data?.message || error?.message || t('budgets.updateError');
-        const errorMsg = Array.isArray(message) ? message[0] : message;
-        errorToast(errorMsg, 5000, "budget-update");
-        console.error("Budget update failed:", error);
-      }
-      queryClient.invalidateQueries({ queryKey: ["budgets"] })
-    }
-  })
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        t("budgets.updateError");
+      const errorMsg = Array.isArray(message) ? message[0] : message;
+      errorToast(errorMsg, 5000, "budget-update");
+      console.error("Budget update failed:", error);
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+    },
+  });
 
   const handleSubmit = (budgetData: Partial<Budget>) => {
     if (isEditing && budget) {
       updateBudget({
         ...budgetData,
         id: budget.id,
-      })
+      });
     } else {
-      addBudget(budgetData)
+      addBudget(budgetData);
     }
-  }
+  };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? t('budgets.editBudget') : t('budgets.createBudget')}>
-
-      {!showPremiumCard && (
-        <BudgetForm budget={budget} onSubmit={handleSubmit} onCancel={onClose} />
-      )}
-
-      {showPremiumCard && (
-        <PremiumCard
-          onClose={handleClosePremiumCard}
-          message={t('upgrade.premiumFeature')}
-        />
-      )}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={isEditing ? t("budgets.editBudget") : t("budgets.createBudget")}
+    >
+      <BudgetForm budget={budget} onSubmit={handleSubmit} onCancel={onClose} />
     </Modal>
-  )
+  );
 }

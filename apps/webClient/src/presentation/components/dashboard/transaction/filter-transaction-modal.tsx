@@ -1,15 +1,18 @@
-import { useTranslation } from 'react-i18next';
-import { TRANSACTION_CATEGORIES, TRANSACTION_STATUSES } from "@domain/dashboard/transactions/transaction.entity";
+import {
+  TRANSACTION_CATEGORIES,
+  TRANSACTION_STATUSES,
+} from "@domain/dashboard/transactions/transaction.entity";
 import { Modal } from "@presentation/components/modal/modal";
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
 import { warningToast } from "@presentation/utils/toast";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 // Tipos más estrictos
-type Category = typeof TRANSACTION_CATEGORIES[number];
-type Status = typeof TRANSACTION_STATUSES[number];
+type Category = (typeof TRANSACTION_CATEGORIES)[number];
+type Status = (typeof TRANSACTION_STATUSES)[number];
 
 export interface FilterCriteria {
   dateFrom: string;
@@ -31,61 +34,74 @@ interface FilterModalProps {
 const handleOptionSelection = <T extends string>(
   currentOptions: T[],
   selectedOption: T,
-  allOption: T
+  allOption: T,
 ): T[] => {
   if (selectedOption === allOption) {
     return currentOptions.includes(allOption) ? [] : [allOption];
   }
 
   return currentOptions.includes(selectedOption)
-    ? currentOptions.filter(option => option !== selectedOption)
-    : [...currentOptions.filter(option => option !== allOption), selectedOption];
+    ? currentOptions.filter((option) => option !== selectedOption)
+    : [
+        ...currentOptions.filter((option) => option !== allOption),
+        selectedOption,
+      ];
 };
 
 export function FilterModal({
   isOpen,
   onClose,
   onApplyFilters,
-  currentFilters
+  currentFilters,
 }: FilterModalProps) {
   const { t } = useTranslation();
   const [filters, setFilters] = useState<FilterCriteria>(currentFilters);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFilters(prev => ({ ...prev, [name]: value }));
+    setFilters((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     const numericValue = value === "" ? null : parseFloat(value);
-    setFilters(prev => ({ ...prev, [name]: numericValue }));
+    setFilters((prev) => ({ ...prev, [name]: numericValue }));
   };
 
   const handleCategoryChange = (category: Category) => {
-    setFilters(prev => ({
+    setFilters((prev) => ({
       ...prev,
-      categories: handleOptionSelection(prev.categories, category, "All")
+      categories: handleOptionSelection(prev.categories, category, "All"),
     }));
   };
 
   const handleStatusChange = (status: Status) => {
-    setFilters(prev => ({
+    setFilters((prev) => ({
       ...prev,
-      statuses: handleOptionSelection(prev.statuses, status, "All")
+      statuses: handleOptionSelection(prev.statuses, status, "All"),
     }));
   };
 
   const validateFilters = (): boolean => {
-    if (filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo) {
-      warningToast(t('common.warningDateFromBeforeTo'), 3000, "from-date");
+    if (
+      filters.dateFrom &&
+      filters.dateTo &&
+      filters.dateFrom > filters.dateTo
+    ) {
+      warningToast(t("common.warningDateFromBeforeTo"), 3000, "from-date");
       return false;
     }
 
-    if (filters.minAmount !== null &&
+    if (
+      filters.minAmount !== null &&
       filters.maxAmount !== null &&
-      filters.minAmount > filters.maxAmount) {
-      warningToast(t('common.warningMinAmountLessThanMax'), 3000, "amount-range");
+      filters.minAmount > filters.maxAmount
+    ) {
+      warningToast(
+        t("common.warningMinAmountLessThanMax"),
+        3000,
+        "amount-range",
+      );
       return false;
     }
 
@@ -118,7 +134,7 @@ export function FilterModal({
     option,
     selectedOptions,
     onClick,
-    label
+    label,
   }: {
     option: T;
     selectedOptions: T[];
@@ -128,24 +144,25 @@ export function FilterModal({
     <button
       type="button"
       onClick={() => onClick(option)}
-      className={`rounded-full px-3 py-1 text-xs font-medium ${selectedOptions.includes(option)
-        ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-        : "bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200"
-        }`}
+      className={`rounded-full px-3 py-1 text-xs font-medium ${
+        selectedOptions.includes(option)
+          ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+          : "bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200"
+      }`}
       aria-pressed={selectedOptions.includes(option)}
-      aria-label={`${t('common.filterBy')} ${label}`}
+      aria-label={`${t("common.filterBy")} ${label}`}
     >
       {label}
     </button>
   );
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={t('common.applyFilters')}>
+    <Modal isOpen={isOpen} onClose={onClose} title={t("common.applyFilters")}>
       <div className="space-y-4">
         {/* Sección de fechas */}
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="dateFrom">{t('common.fromDate')}</Label>
+            <Label htmlFor="dateFrom">{t("common.fromDate")}</Label>
             <Input
               id="dateFrom"
               name="dateFrom"
@@ -156,7 +173,7 @@ export function FilterModal({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="dateTo">{t('common.toDate')}</Label>
+            <Label htmlFor="dateTo">{t("common.toDate")}</Label>
             <Input
               id="dateTo"
               name="dateTo"
@@ -170,9 +187,9 @@ export function FilterModal({
 
         {/* Sección de categorías */}
         <div className="space-y-2">
-          <Label>{t('transactions.category')}</Label>
+          <Label>{t("transactions.category")}</Label>
           <div className="flex flex-wrap gap-2">
-            {TRANSACTION_CATEGORIES.map(category => (
+            {TRANSACTION_CATEGORIES.map((category) => (
               <OptionButton
                 key={category}
                 option={category}
@@ -187,9 +204,11 @@ export function FilterModal({
         {/* Sección de montos */}
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="minAmount">{t('common.minAmount')}</Label>
+            <Label htmlFor="minAmount">{t("common.minAmount")}</Label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+                $
+              </span>
               <Input
                 id="minAmount"
                 name="minAmount"
@@ -198,14 +217,16 @@ export function FilterModal({
                 value={filters.minAmount ?? ""}
                 onChange={handleAmountChange}
                 className="pl-7"
-                placeholder={t('common.amountPlaceholder')}
+                placeholder={t("common.amountPlaceholder")}
               />
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="maxAmount">{t('common.maxAmount')}</Label>
+            <Label htmlFor="maxAmount">{t("common.maxAmount")}</Label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+                $
+              </span>
               <Input
                 id="maxAmount"
                 name="maxAmount"
@@ -214,7 +235,7 @@ export function FilterModal({
                 value={filters.maxAmount ?? ""}
                 onChange={handleAmountChange}
                 className="pl-7"
-                placeholder={t('common.amountPlaceholder')}
+                placeholder={t("common.amountPlaceholder")}
                 min="0"
               />
             </div>
@@ -223,15 +244,19 @@ export function FilterModal({
 
         {/* Sección de estados */}
         <div className="space-y-2">
-          <Label>{t('transactions.status')}</Label>
+          <Label>{t("transactions.status")}</Label>
           <div className="flex flex-wrap gap-2">
-            {TRANSACTION_STATUSES.map(status => (
+            {TRANSACTION_STATUSES.map((status) => (
               <OptionButton
                 key={status}
                 option={status}
                 selectedOptions={filters.statuses}
                 onClick={handleStatusChange}
-                label={status === 'All' ? t('statuses.all') : t(`transactions.status${status}`)}
+                label={
+                  status === "All"
+                    ? t("statuses.all")
+                    : t(`transactions.status${status}`)
+                }
               />
             ))}
           </div>
@@ -240,10 +265,10 @@ export function FilterModal({
         {/* Acciones */}
         <div className="mt-6 flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={handleReset}>
-            {t('common.reset')}
+            {t("common.reset")}
           </Button>
           <Button type="button" onClick={handleApply}>
-            {t('common.applyFilters')}
+            {t("common.applyFilters")}
           </Button>
         </div>
       </div>

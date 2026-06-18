@@ -1,5 +1,5 @@
-import { Goal, GoalProgress } from "@domain/dashboard/goals/goal.entity"
-import { useMemo } from "react"
+import { Goal, GoalProgress } from "@domain/dashboard/goals/goal.entity";
+import { useMemo } from "react";
 
 // Custom hook para cálculos de progreso
 export const useGoalProgress = (goals?: Goal[]) => {
@@ -10,8 +10,8 @@ export const useGoalProgress = (goals?: Goal[]) => {
         totalCurrent: 0,
         percentComplete: 0,
         goalsCount: 0,
-        completedCount: 0
-      }
+        completedCount: 0,
+      };
     }
 
     const totals = goals.reduce(
@@ -19,15 +19,17 @@ export const useGoalProgress = (goals?: Goal[]) => {
         totalTarget: acc.totalTarget + goal.targetAmount,
         totalCurrent: acc.totalCurrent + goal.currentAmount,
         goalsCount: acc.goalsCount + 1,
-        completedCount: acc.completedCount + (goal.status === "completed" ? 1 : 0)
+        completedCount:
+          acc.completedCount + (goal.status === "completed" ? 1 : 0),
       }),
-      { totalTarget: 0, totalCurrent: 0, goalsCount: 0, completedCount: 0 }
-    )
+      { totalTarget: 0, totalCurrent: 0, goalsCount: 0, completedCount: 0 },
+    );
 
-    const percentComplete = totals.totalTarget > 0
-      ? (totals.totalCurrent / totals.totalTarget) * 100
-      : 0
+    const percentComplete =
+      totals.totalTarget > 0
+        ? (totals.totalCurrent / totals.totalTarget) * 100
+        : 0;
 
-    return { ...totals, percentComplete }
-  }, [goals])
-}
+    return { ...totals, percentComplete };
+  }, [goals]);
+};

@@ -1,16 +1,20 @@
-import type React from "react"
-import { useState } from "react"
-import { Camera, Loader2 } from "lucide-react"
+import { Camera, Loader2 } from "lucide-react";
+import type React from "react";
+import { useState } from "react";
 
 interface ProfileAvatarProps {
-  imageUrl?: string
-  name: string
-  onImageChange?: (file: File) => Promise<void>
+  imageUrl?: string;
+  name: string;
+  onImageChange?: (file: File) => Promise<void>;
 }
 
-export function ProfileAvatar({ imageUrl, name, onImageChange }: ProfileAvatarProps) {
-  const [isUploading, setIsUploading] = useState(false)
-  const [previewUrl, setPreviewUrl] = useState<string | undefined>(imageUrl)
+export function ProfileAvatar({
+  imageUrl,
+  name,
+  onImageChange,
+}: ProfileAvatarProps) {
+  const [isUploading, setIsUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | undefined>(imageUrl);
 
   // Get initials from name
   const initials = name
@@ -18,37 +22,41 @@ export function ProfileAvatar({ imageUrl, name, onImageChange }: ProfileAvatarPr
     .map((n) => n[0])
     .join("")
     .toUpperCase()
-    .substring(0, 2)
+    .substring(0, 2);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !onImageChange) return
+    const file = e.target.files?.[0];
+    if (!file || !onImageChange) return;
 
     try {
-      setIsUploading(true)
+      setIsUploading(true);
 
       // Create a preview URL
-      const reader = new FileReader()
+      const reader = new FileReader();
       reader.onload = () => {
-        setPreviewUrl(reader.result as string)
-      }
-      reader.readAsDataURL(file)
+        setPreviewUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
 
       // Upload the file
-      await onImageChange(file)
+      await onImageChange(file);
     } catch (error) {
-      console.error("Error uploading image:", error)
+      console.error("Error uploading image:", error);
       // Reset preview on error
-      setPreviewUrl(imageUrl)
+      setPreviewUrl(imageUrl);
     } finally {
-      setIsUploading(false)
+      setIsUploading(false);
     }
-  }
+  };
 
   return (
     <div className="relative h-24 w-24 overflow-hidden rounded-full">
       {previewUrl ? (
-        <img src={previewUrl || "/placeholder.svg"} alt={name} className="h-full w-full object-cover" />
+        <img
+          src={previewUrl || "/placeholder.svg"}
+          alt={name}
+          className="h-full w-full object-cover"
+        />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-purple-100 text-xl font-medium text-purple-600 dark:bg-purple-900 dark:text-purple-400">
           {initials}
@@ -77,5 +85,5 @@ export function ProfileAvatar({ imageUrl, name, onImageChange }: ProfileAvatarPr
         </label>
       )}
     </div>
-  )
+  );
 }

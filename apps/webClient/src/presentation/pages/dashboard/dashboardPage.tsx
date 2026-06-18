@@ -1,17 +1,20 @@
-import { useTranslation } from 'react-i18next';
-import { useFetchDashboard, useFetchExpenseCategories } from "@adapters/query/dashboard";
+import {
+  useFetchDashboard,
+  useFetchExpenseCategories,
+} from "@adapters/query/dashboard";
 import { useGetSettings } from "@adapters/query/userQuery";
 import { setSettingsAction } from "@adapters/slices/user-settings/settingsSlice";
 import { RootState } from "@adapters/store/rootStore";
 import { BudgetProgress } from "@presentation/components/dashboard/budget-progress";
+import DashboardLoading from "@presentation/components/dashboard/dashboard-loading";
 import { ExpenseCategories } from "@presentation/components/dashboard/expense-categories";
 import { OverviewCard } from "@presentation/components/dashboard/overview/overview-card";
 import { RecentTransactions } from "@presentation/components/dashboard/recent-transactions";
 import { SavingsGoals } from "@presentation/components/dashboard/saving-goals";
-import DashboardLoading from "@presentation/components/dashboard/dashboard-loading";
 import { PageHeader } from "@presentation/components/ui/page-header";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 
 export default function DashboardPage() {
@@ -19,80 +22,85 @@ export default function DashboardPage() {
   const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
 
-  const { data: userSettings } = useGetSettings()
+  const { data: userSettings } = useGetSettings();
 
   const { data: overview, isLoading } = useFetchDashboard();
 
-  const { data: breackdown, isLoading: isloadingExpenseCat } = useFetchExpenseCategories();
+  const { data: breackdown, isLoading: isloadingExpenseCat } =
+    useFetchExpenseCategories();
 
-  const targetCurrency = (userSettings?.currency || 'USD') as Currency;
+  const targetCurrency = (userSettings?.currency || "USD") as Currency;
 
   const formattedBalance = currencyService.formatCurrency(
     overview?.balance ?? 0,
-    'USD' as Currency,
-    targetCurrency
+    "USD" as Currency,
+    targetCurrency,
   );
 
   const formattedExpences = currencyService.formatCurrency(
     overview?.expenses ?? 0,
-    'USD' as Currency,
+    "USD" as Currency,
     targetCurrency,
-    false
+    false,
   );
 
   const formattedIncome = currencyService.formatCurrency(
     overview?.income ?? 0,
-    'USD' as Currency,
+    "USD" as Currency,
     targetCurrency,
-    false
+    false,
   );
 
-  const formattedBreackdownCategories = breackdown?.byCategory.flatMap((category) => ({
-    name: category.name,
-    value: currencyService.formatCurrency(
-      category.value,
-      'USD' as Currency,
-      targetCurrency,
-      false
-    ),
-  }));
+  const formattedBreackdownCategories = breackdown?.byCategory.flatMap(
+    (category) => ({
+      name: category.name,
+      value: currencyService.formatCurrency(
+        category.value,
+        "USD" as Currency,
+        targetCurrency,
+        false,
+      ),
+    }),
+  );
 
-  const formattedBreackdownLargets = breackdown?.largest?.value ? {
-    largest: {
-      name: breackdown.largest.name,
-      value: currencyService.formatCurrency(
-        breackdown.largest.value,
-        'USD' as Currency,
-        targetCurrency,
-        false
-      ),
-    }
-  } : {
-    largest: {
-      name: t('common.noData'),
-      value: currencyService.formatCurrency(
-        0,
-        'USD' as Currency,
-        targetCurrency,
-        false
-      ),
-    }
-  };
+  const formattedBreackdownLargets = breackdown?.largest?.value
+    ? {
+        largest: {
+          name: breackdown.largest.name,
+          value: currencyService.formatCurrency(
+            breackdown.largest.value,
+            "USD" as Currency,
+            targetCurrency,
+            false,
+          ),
+        },
+      }
+    : {
+        largest: {
+          name: t("common.noData"),
+          value: currencyService.formatCurrency(
+            0,
+            "USD" as Currency,
+            targetCurrency,
+            false,
+          ),
+        },
+      };
 
   const formattedBreackdown = {
     total: currencyService.formatCurrency(
       breackdown?.total ?? 0,
-      'USD' as Currency,
+      "USD" as Currency,
       targetCurrency,
-      false
-    )
-  }
+      false,
+    ),
+  };
 
   useEffect(() => {
     if (user && userSettings) {
       dispatch(setSettingsAction(userSettings));
     }
-  }, [dispatch, user, userSettings])
+  }, [dispatch, user, userSettings]);
 
   if (isLoading || isloadingExpenseCat) {
     return <DashboardLoading />;
@@ -100,7 +108,10 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('dashboard.title')} description={t('dashboard.welcomeBack', { name: user?.name })} />
+      <PageHeader
+        title={t("dashboard.title")}
+        description={t("dashboard.welcomeBack", { name: user?.name })}
+      />
 
       <OverviewCard
         balance={formattedBalance.formatted}
@@ -125,13 +136,13 @@ export default function DashboardPage() {
           byCategory={formattedBreackdownCategories ?? []}
           largest={{
             name: formattedBreackdownLargets?.largest.name,
-            value: formattedBreackdownLargets?.largest.value.amount
+            value: formattedBreackdownLargets?.largest.value.amount,
           }}
-          timezone={userSettings?.timezone ?? 'Europe/Paris'}
+          timezone={userSettings?.timezone ?? "Europe/Paris"}
           period={breackdown?.period ?? new Date().toLocaleDateString()}
         />
         <SavingsGoals />
       </div>
     </div>
-  )
+  );
 }

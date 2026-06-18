@@ -1,30 +1,36 @@
-import { useEffect, useState } from "react"
-import { X } from "lucide-react"
+import { X } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface ModalProps {
-  isOpen: boolean
-  onClose: () => void
-  title: string
-  children: React.ReactNode
-  className?: string
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+  className?: string;
 }
 
-export function Modal({ isOpen, onClose, title, children, className }: ModalProps) {
-  const [isShowing, setIsShowing] = useState(false)
+export function Modal({
+  isOpen,
+  onClose,
+  title,
+  children,
+  className,
+}: ModalProps) {
+  const [isShowing, setIsShowing] = useState(false);
 
   useEffect(() => {
     // Add a small delay when opening to allow for animation
     if (isOpen) {
-      setIsShowing(true)
+      setIsShowing(true);
     } else {
       const timer = setTimeout(() => {
-        setIsShowing(false)
-      }, 300)
-      return () => clearTimeout(timer)
+        setIsShowing(false);
+      }, 300);
+      return () => clearTimeout(timer);
     }
-  }, [isOpen])
+  }, [isOpen]);
 
-  if (!isOpen && !isShowing) return null
+  if (!isOpen && !isShowing) return null;
 
   return (
     <div
@@ -34,8 +40,9 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
     >
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
       <div
-        className={`relative z-50 w-full max-w-md rounded-lg p-6 shadow-lg bg-slate-50 dark:bg-slate-800 ${isOpen ? "animate-in zoom-in-95" : "animate-out zoom-out-95"
-          }`}
+        className={`relative z-50 w-full max-w-md rounded-lg p-6 shadow-lg bg-slate-50 dark:bg-slate-800 ${
+          isOpen ? "animate-in zoom-in-95" : "animate-out zoom-out-95"
+        }`}
       >
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -53,5 +60,5 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
         </div>
       </div>
     </div>
-  )
+  );
 }

@@ -1,11 +1,15 @@
-import { Controller, Get, UseGuards, Res } from "@nestjs/common";
-import { AuthGuard } from "@nestjs/passport";
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from "@nestjs/swagger";
+import { Controller, Get, UseGuards, Res } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 
 @ApiTags('Test')
 @Controller('test')
 export class TestController {
-
   @Get()
   @UseGuards(AuthGuard('jwt'))
   @ApiBearerAuth()

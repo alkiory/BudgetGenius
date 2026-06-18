@@ -3,21 +3,17 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { TransactionController } from '@adapters/dashboard/http/transaction.controller';
 import { TransactionService } from '@application/dashboard/services/transaction.service';
-import { SavingGoalService } from '@application/dashboard/services/saving-goal.service';
 import { BudgetService } from '@application/dashboard/services/budget.service';
 import { TransactionRepository } from '@adapters/dashboard/persistence/transaction.repository';
-import { SavingGoalRepository } from '@adapters/dashboard/persistence/saving-goal.repository';
 import { ExpenseCategoryService } from '@application/dashboard/services/expense-category.service';
 import { ExpenseCategory } from '@domain/dashboard/expense-category.entity';
 import { Budget } from '@domain/dashboard/budget.entity';
 import { BudgetRepository } from '@adapters/dashboard/persistence/budget.repository';
 import { Overview } from '@domain/dashboard/overview.entity';
-import { SavingGoal } from '@domain/dashboard/saving-goal.entity';
 import { Transaction } from '@domain/dashboard/transaction.entity';
 import { ExpenseCategoryRepository } from '@adapters/dashboard/persistence/expense-category.repository';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { User } from '@domain/user/user.entity';
-import { SavingGoalController } from '@adapters/dashboard/http/saving-goal.controller';
 import { BudgetController } from '@adapters/dashboard/http/budget.controller';
 import { Income } from '@domain/dashboard/income.entity';
 import { IncomeController } from '@adapters/dashboard/http/income.controller';
@@ -42,7 +38,6 @@ import { OverviewRepository } from '@adapters/dashboard/persistence/overview.rep
       Budget,
       BudgetCategory,
       Transaction,
-      SavingGoal,
       Overview,
       User,
       Income,
@@ -51,7 +46,6 @@ import { OverviewRepository } from '@adapters/dashboard/persistence/overview.rep
   ],
   controllers: [
     TransactionController,
-    SavingGoalController,
     BudgetController,
     IncomeController,
     OverviewController,
@@ -61,11 +55,8 @@ import { OverviewRepository } from '@adapters/dashboard/persistence/overview.rep
   providers: [
     LoggingService,
     TransactionService,
-    SavingGoalService,
     BudgetService,
     TransactionRepository,
-    SavingGoalRepository,
-    SavingGoalService,
     ExpenseCategoryService,
     BudgetRepository,
     ExpenseCategoryRepository,
@@ -79,6 +70,6 @@ import { OverviewRepository } from '@adapters/dashboard/persistence/overview.rep
     ReportRepository,
     OverviewRepository,
   ],
-  exports: [TransactionService, SavingGoalService, BudgetService],
+  exports: [TransactionService, BudgetService],
 })
 export class DashboardModule {}

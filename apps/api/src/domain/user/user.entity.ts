@@ -12,7 +12,6 @@ import * as bcrypt from 'bcryptjs';
 import { Budget } from '@domain/dashboard/budget.entity';
 import { ExpenseCategory } from '@domain/dashboard/expense-category.entity';
 import { Overview } from '@domain/dashboard/overview.entity';
-import { SavingGoal } from '@domain/dashboard/saving-goal.entity';
 import { Transaction } from '@domain/dashboard/transaction.entity';
 import { UserSettings } from './user-settings.entity';
 import { Income } from '@domain/dashboard/income.entity';
@@ -74,9 +73,6 @@ export class User {
 
   @OneToMany(() => ExpenseCategory, (ec) => ec.user)
   expenseCategories: ExpenseCategory[];
-
-  @OneToMany(() => SavingGoal, (sg) => sg.user)
-  savingGoals: SavingGoal[];
 
   @OneToMany(() => Overview, (overview) => overview.user)
   overviews: Overview[];

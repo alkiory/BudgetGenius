@@ -6,13 +6,13 @@ export type DashboardOverview = {
 };
 
 export interface ExpenseBreakdown {
-  total: number
-  byCategory: any[]
-  largest: Largest
-  period: string
+  total: number;
+  byCategory: any[];
+  largest: Largest;
+  period: string;
 }
 
 interface Largest {
-  name: string
-  value: number
+  name: string;
+  value: number;
 }

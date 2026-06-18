@@ -1,4 +1,10 @@
-import { useState } from "react"
+import { HttpIncomeRepository } from "@adapters/http/income.repository";
+import { RootState } from "@adapters/store/rootStore";
+import { Income } from "@domain/dashboard/incomes/income.entity";
+import { Button } from "@presentation/components/ui/button";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
+import { successToast, errorToast } from "@presentation/utils/toast";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   useReactTable,
   getCoreRowModel,
@@ -7,47 +13,45 @@ import {
   flexRender,
   createColumnHelper,
   type SortingState,
-} from "@tanstack/react-table"
-import { Trash2, Pencil, ArrowDown, ArrowUp } from "lucide-react"
-import { IncomeModal } from "./income-modal"
-import { Income } from "@domain/dashboard/incomes/income.entity"
-import { Button } from "@presentation/components/ui/button"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { HttpIncomeRepository } from "@adapters/http/income.repository"
-import { successToast, errorToast } from "@presentation/utils/toast"
-import { RootState } from "@adapters/store/rootStore"
-import { Currency, currencyService } from "@presentation/utils/currencyService"
-import { useSelector } from "react-redux"
+} from "@tanstack/react-table";
+import { Trash2, Pencil, ArrowDown, ArrowUp } from "lucide-react";
+import { useState } from "react";
+import { useSelector } from "react-redux";
+import { IncomeModal } from "./income-modal";
 
 interface IncomeSourcesTableProps {
-  incomeTransactions: Income[]
+  incomeTransactions: Income[];
 }
 
-export function IncomeSourcesTable({ incomeTransactions }: IncomeSourcesTableProps) {
-  const queryClient = useQueryClient()
+export function IncomeSourcesTable({
+  incomeTransactions,
+}: IncomeSourcesTableProps) {
+  const queryClient = useQueryClient();
   const userSetting = useSelector((state: RootState) => state.userSettings);
 
-  const { settings } = userSetting
+  const { settings } = userSetting;
 
   const { mutate: deleteTransaction } = useMutation({
     mutationKey: ["delete-transaction"],
     mutationFn: HttpIncomeRepository.deleteIfOwned,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (data: any) => {
-      successToast(data.message, 3000, "income-delete")
-      queryClient.invalidateQueries({ queryKey: ["incomes"] })
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
+      successToast(data.message, 3000, "income-delete");
+      queryClient.invalidateQueries({ queryKey: ["incomes"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error) => {
-      errorToast(error.message, 3000, "income-delete")
-      queryClient.invalidateQueries({ queryKey: ["incomes"] })
+      errorToast(error.message, 3000, "income-delete");
+      queryClient.invalidateQueries({ queryKey: ["incomes"] });
     },
-  })
-  const [sorting, setSorting] = useState<SortingState>([])
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 })
-  const [editingTransaction, setEditingTransaction] = useState<Income | null>(null)
+  });
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
+  const [editingTransaction, setEditingTransaction] = useState<Income | null>(
+    null,
+  );
 
-  const columnHelper = createColumnHelper<Income>()
+  const columnHelper = createColumnHelper<Income>();
 
   const columns = [
     columnHelper.accessor("date", {
@@ -65,17 +69,21 @@ export function IncomeSourcesTable({ incomeTransactions }: IncomeSourcesTablePro
     columnHelper.accessor("amount", {
       header: "Amount",
       cell: (info) => {
-        const amount = info.getValue()
+        const amount = info.getValue();
 
-        const targetCurrency = (settings?.currency || 'USD') as Currency;
+        const targetCurrency = (settings?.currency || "USD") as Currency;
         const formattedAmount = currencyService.formatCurrency(
           amount,
           targetCurrency as Currency,
           targetCurrency,
-          false
+          false,
         );
 
-        return <span className="text-green-600 dark:text-green-400">{formattedAmount.formatted}</span>
+        return (
+          <span className="text-green-600 dark:text-green-400">
+            {formattedAmount.formatted}
+          </span>
+        );
       },
     }),
     columnHelper.accessor("recurrence", {
@@ -111,7 +119,7 @@ export function IncomeSourcesTable({ incomeTransactions }: IncomeSourcesTablePro
       id: "actions",
       header: "Actions",
       cell: ({ row }) => {
-        const transaction = row.original
+        const transaction = row.original;
         return (
           <div className="space-x-2">
             <Button
@@ -131,10 +139,10 @@ export function IncomeSourcesTable({ incomeTransactions }: IncomeSourcesTablePro
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
-        )
+        );
       },
     }),
-  ]
+  ];
 
   const table = useReactTable({
     data: incomeTransactions,
@@ -148,7 +156,7 @@ export function IncomeSourcesTable({ incomeTransactions }: IncomeSourcesTablePro
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-  })
+  });
 
   return (
     <>
@@ -157,7 +165,7 @@ export function IncomeSourcesTable({ incomeTransactions }: IncomeSourcesTablePro
           <table className="w-full divide-y divide-slate-200 dark:divide-slate-700">
             <thead className="bg-slate-50 dark:bg-slate-700">
               {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id} >
+                <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
                     <th
                       key={header.id}
@@ -167,7 +175,10 @@ export function IncomeSourcesTable({ incomeTransactions }: IncomeSourcesTablePro
                     >
                       {header.isPlaceholder ? null : (
                         <div className="flex items-center">
-                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {flexRender(
+                            header.column.columnDef.header,
+                            header.getContext(),
+                          )}
                           {{
                             asc: <ArrowUp className="ml-1 h-3 w-3" />,
                             desc: <ArrowDown className="ml-1 h-3 w-3" />,
@@ -181,10 +192,19 @@ export function IncomeSourcesTable({ incomeTransactions }: IncomeSourcesTablePro
             </thead>
             <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-800">
               {table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-700">
+                <tr
+                  key={row.id}
+                  className="hover:bg-slate-50 dark:hover:bg-slate-700"
+                >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="whitespace-nowrap px-6 py-4 text-sm">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    <td
+                      key={cell.id}
+                      className="whitespace-nowrap px-6 py-4 text-sm"
+                    >
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
                     </td>
                   ))}
                 </tr>
@@ -203,7 +223,12 @@ export function IncomeSourcesTable({ incomeTransactions }: IncomeSourcesTablePro
             >
               Previous
             </Button>
-            <Button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} variant="outline" size="sm">
+            <Button
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              variant="outline"
+              size="sm"
+            >
               Next
             </Button>
           </div>
@@ -213,20 +238,28 @@ export function IncomeSourcesTable({ incomeTransactions }: IncomeSourcesTablePro
               <p className="text-sm text-slate-700 dark:text-slate-300">
                 Showing{" "}
                 <span className="font-medium">
-                  {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}
+                  {table.getState().pagination.pageIndex *
+                    table.getState().pagination.pageSize +
+                    1}
                 </span>{" "}
                 to{" "}
                 <span className="font-medium">
                   {Math.min(
-                    (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
+                    (table.getState().pagination.pageIndex + 1) *
+                      table.getState().pagination.pageSize,
                     incomeTransactions.length,
                   )}
                 </span>{" "}
-                of <span className="font-medium">{incomeTransactions.length}</span> results
+                of{" "}
+                <span className="font-medium">{incomeTransactions.length}</span>{" "}
+                results
               </p>
             </div>
             <div className="flex items-center space-x-2">
-              <label htmlFor="pageSize" className="text-sm text-slate-700 dark:text-slate-300">
+              <label
+                htmlFor="pageSize"
+                className="text-sm text-slate-700 dark:text-slate-300"
+              >
                 Show
               </label>
               <select
@@ -254,5 +287,5 @@ export function IncomeSourcesTable({ incomeTransactions }: IncomeSourcesTablePro
         />
       )}
     </>
-  )
+  );
 }

@@ -1,8 +1,8 @@
-import { Skeleton } from "@presentation/components/ui/skeleton"
-import { DataTableSkeleton } from "@presentation/components/ui/data-table-skeleton"
-import { PageHeaderSkeleton } from "@presentation/components/ui/page-header"
-import { StatCardSkeleton } from "@presentation/components/ui/skeletons/stat-card-skeleton"
-import { CardSkeleton } from "@presentation/components/ui/skeletons/card-skeleton"
+import { DataTableSkeleton } from "@presentation/components/ui/data-table-skeleton";
+import { PageHeaderSkeleton } from "@presentation/components/ui/page-header";
+import { Skeleton } from "@presentation/components/ui/skeleton";
+import { CardSkeleton } from "@presentation/components/ui/skeletons/card-skeleton";
+import { StatCardSkeleton } from "@presentation/components/ui/skeletons/stat-card-skeleton";
 
 export default function IncomesLoading() {
   return (
@@ -63,5 +63,5 @@ export default function IncomesLoading() {
         rows={4}
       />
     </div>
-  )
+  );
 }

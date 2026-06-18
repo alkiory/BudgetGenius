@@ -7,7 +7,7 @@ export class OverviewService {
   constructor(
     private dataSource: DataSource,
     private readonly repo: OverviewRepository,
-  ) { }
+  ) {}
 
   async getOverview(userId: number): Promise<{
     income: number;

@@ -12,7 +12,11 @@ export interface BudgetRepository {
   createBudget: (budget: Partial<Budget>) => Promise<Budget>;
   updateBudget: (budget: Partial<Budget>) => Promise<Budget>;
   deleteBudget: (budgetId: number) => Promise<void>;
-  createBudgetCategory: (category: Partial<BudgetCategory>) => Promise<BudgetCategory>;
-  updateBudgetCategory: (category: Partial<BudgetCategory>) => Promise<BudgetCategory>;
+  createBudgetCategory: (
+    category: Partial<BudgetCategory>,
+  ) => Promise<BudgetCategory>;
+  updateBudgetCategory: (
+    category: Partial<BudgetCategory>,
+  ) => Promise<BudgetCategory>;
   deleteBudgetCategory: (categoryId: number) => Promise<void>;
 }

@@ -1,6 +1,6 @@
 // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
+import { initializeApp } from "firebase/app";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -13,7 +13,7 @@ const firebaseConfig = {
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASURENT_ID
+  measurementId: import.meta.env.VITE_FIREBASE_MEASURENT_ID,
 };
 
 // Initialize Firebase
@@ -23,13 +23,12 @@ const app = initializeApp(firebaseConfig);
 // Esto es una buena práctica para entornos de desarrollo y testing,
 // y para evitar errores si Analytics está bloqueado por el navegador (ej. por extensiones)
 let analytics: any;
-if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+if (typeof window !== "undefined" && typeof document !== "undefined") {
   try {
     analytics = getAnalytics(app);
   } catch (e) {
     console.error("Firebase Analytics could not be initialized.", e);
   }
 }
-
 
 export { app, analytics };

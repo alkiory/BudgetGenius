@@ -1,22 +1,29 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { SocialLoginButtons } from '@presentation/components/social-buttons-login';
-import { Button } from '@presentation/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@presentation/components/ui/card';
-import { Input } from '@presentation/components/ui/input';
-import { Label } from '@presentation/components/ui/label';
-import { Separator } from '@presentation/components/ui/separator';
-import { Link, useNavigate } from 'react-router';
-import { useMutation } from '@tanstack/react-query';
-import { login } from '@application/auth/auth.service';
-import { useDispatch } from 'react-redux';
-import { loginAction } from '@adapters/slices/auth/authSlice';
-import { RoutePaths } from '@presentation/utils/routes';
+import { loginAction } from "@adapters/slices/auth/authSlice";
+import { login } from "@application/auth/auth.service";
+import { SocialLoginButtons } from "@presentation/components/social-buttons-login";
+import { Button } from "@presentation/components/ui/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@presentation/components/ui/card";
+import { Input } from "@presentation/components/ui/input";
+import { Label } from "@presentation/components/ui/label";
+import { Separator } from "@presentation/components/ui/separator";
+import { RoutePaths } from "@presentation/utils/routes";
+import { useMutation } from "@tanstack/react-query";
+import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useDispatch } from "react-redux";
+import { Link, useNavigate } from "react-router";
 
 export default function LoginPage() {
   const { t } = useTranslation();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -24,30 +31,30 @@ export default function LoginPage() {
   const navigate = useNavigate();
 
   const { mutate: loginMutation } = useMutation({
-    mutationKey: ['login'],
+    mutationKey: ["login"],
     mutationFn: login,
     onSuccess: () => {
       dispatch(loginAction());
       setLoading(true);
       setTimeout(() => {
-        navigate(RoutePaths.App + '/' + RoutePaths.Dashboard)
+        navigate(RoutePaths.App + "/" + RoutePaths.Dashboard);
         setLoading(false);
       }, 1000);
     },
     onError: (error: any) => {
-      console.error('Login error:', error);
+      console.error("Login error:", error);
       const serverMessage = error.response?.data?.message;
       const status = error.response?.status;
 
       if (status === 401) {
-        setError(serverMessage || 'Credenciales incorrectas');
+        setError(serverMessage || "Credenciales incorrectas");
       } else {
         setError(JSON.stringify(error));
       }
 
       setLoading(false);
     },
-  })
+  });
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -64,7 +71,14 @@ export default function LoginPage() {
           fill="none"
           viewBox="0 0 24 24"
         >
-          <circle className="opacity-25" cx="12" cy="12" r="10" strokeWidth="4" stroke="currentColor"></circle>
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            strokeWidth="4"
+            stroke="currentColor"
+          ></circle>
           <path
             className="opacity-75"
             fill="currentColor"
@@ -82,7 +96,7 @@ export default function LoginPage() {
         className="absolute left-4 top-4 md:left-8 md:top-8 animate-shake"
         onClick={() => navigate(RoutePaths.Home)}
       >
-        {t('auth.goBack')}
+        {t("auth.goBack")}
       </Button>
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
@@ -105,36 +119,43 @@ export default function LoginPage() {
               </svg>
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">{t('auth.welcomeBack')}</CardTitle>
-          <CardDescription>{t('auth.signInToAccount')}</CardDescription>
+          <CardTitle className="text-2xl font-bold">
+            {t("auth.welcomeBack")}
+          </CardTitle>
+          <CardDescription>{t("auth.signInToAccount")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">{t('auth.email')}</Label>
+              <Label htmlFor="email">{t("auth.email")}</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder={t('auth.emailPlaceholder')}
+                placeholder={t("auth.emailPlaceholder")}
                 onChange={(e) => setEmail(e.target.value)}
-                required />
+                required
+              />
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password">{t('auth.password')}</Label>
-                <Link to="/auth/forgot-password" className="text-xs text-primary hover:underline">
-                  {t('auth.forgotPassword')}
+                <Label htmlFor="password">{t("auth.password")}</Label>
+                <Link
+                  to="/auth/forgot-password"
+                  className="text-xs text-primary hover:underline"
+                >
+                  {t("auth.forgotPassword")}
                 </Link>
               </div>
               <Input
                 id="password"
                 type="password"
                 onChange={(e) => setPassword(e.target.value)}
-                required />
+                required
+              />
             </div>
             {error && <p className="text-red-500">{error}</p>}
             <Button variant="default" type="submit" className="w-full">
-              {t('auth.signIn')}
+              {t("auth.signIn")}
             </Button>
           </form>
 
@@ -143,7 +164,9 @@ export default function LoginPage() {
               <Separator className="w-full" />
             </div>
             <div className="relative flex justify-center">
-              <span className="bg-white px-2 text-xs text-slate-500">{t('auth.orContinueWith')}</span>
+              <span className="bg-white px-2 text-xs text-slate-500">
+                {t("auth.orContinueWith")}
+              </span>
             </div>
           </div>
 
@@ -151,13 +174,16 @@ export default function LoginPage() {
         </CardContent>
         <CardFooter className="flex justify-center">
           <p className="text-sm text-slate-500">
-            {t('auth.dontHaveAccount')}{" "}
-            <Link to={RoutePaths.Auth + '/' + RoutePaths.Signup} className="text-primary hover:underline">
-              {t('auth.signUp')}
+            {t("auth.dontHaveAccount")}{" "}
+            <Link
+              to={RoutePaths.Auth + "/" + RoutePaths.Signup}
+              className="text-primary hover:underline"
+            >
+              {t("auth.signUp")}
             </Link>
           </p>
         </CardFooter>
       </Card>
     </div>
-  )
+  );
 }

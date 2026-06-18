@@ -1,6 +1,11 @@
-import { PageHeaderSkeleton } from "@presentation/components/ui/page-header"
-import { StatCardSkeleton } from "@presentation/components/ui/skeletons/stat-card-skeleton"
-import { CardSkeleton, ListItemSkeleton, ProgressBarSkeleton, PieChartCardSkeleton } from "@presentation/components/ui/skeletons/card-skeleton"
+import { PageHeaderSkeleton } from "@presentation/components/ui/page-header";
+import {
+  CardSkeleton,
+  ListItemSkeleton,
+  ProgressBarSkeleton,
+  PieChartCardSkeleton,
+} from "@presentation/components/ui/skeletons/card-skeleton";
+import { StatCardSkeleton } from "@presentation/components/ui/skeletons/stat-card-skeleton";
 
 export default function DashboardLoading() {
   return (
@@ -58,5 +63,5 @@ export default function DashboardLoading() {
         </CardSkeleton>
       </div>
     </div>
-  )
+  );
 }

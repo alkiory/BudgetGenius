@@ -1,42 +1,42 @@
 import { Currency } from "firebase/analytics";
 
 export type IncomeCategory =
-  | 'Salary'
-  | 'Freelance'
-  | 'Investments'
-  | 'Rental'
-  | 'Business'
-  | 'Gifts'
-  | 'Refunds'
-  | 'Other';
+  | "Salary"
+  | "Freelance"
+  | "Investments"
+  | "Rental"
+  | "Business"
+  | "Gifts"
+  | "Refunds"
+  | "Other";
 
 export const INCOME_CATEGORIES = [
-  'All',
-  'Salary',
-  'Freelance',
-  'Investments',
-  'Rental',
-  'Business',
-  'Gifts',
-  'Refunds',
-  'Other',
+  "All",
+  "Salary",
+  "Freelance",
+  "Investments",
+  "Rental",
+  "Business",
+  "Gifts",
+  "Refunds",
+  "Other",
 ];
 
 export type IncomeRecurrence =
-  | 'One-time'
-  | 'Daily'
-  | 'Bi‑weekly'
-  | 'Monthly'
-  | 'Quarterly'
-  | 'Annually';
+  | "One-time"
+  | "Daily"
+  | "Bi‑weekly"
+  | "Monthly"
+  | "Quarterly"
+  | "Annually";
 
 export const INCOME_RECURRENCES = [
-  'One-time',
-  'Daily',
-  'Bi-weekly',
-  'Monthly',
-  'Quarterly',
-  'Annually',
+  "One-time",
+  "Daily",
+  "Bi-weekly",
+  "Monthly",
+  "Quarterly",
+  "Annually",
 ];
 
 export type Income = {
@@ -51,17 +51,17 @@ export type Income = {
   updatedAt: Date;
 };
 
-export type Category = typeof INCOME_CATEGORIES[number]
-export type Recurrence = typeof INCOME_RECURRENCES[number]
+export type Category = (typeof INCOME_CATEGORIES)[number];
+export type Recurrence = (typeof INCOME_RECURRENCES)[number];
 
 export interface RootPromise {
-  incomes: Income[]
-  meta: Meta
+  incomes: Income[];
+  meta: Meta;
 }
 
 export interface Meta {
-  total: number
-  offset: string
-  limit: string
-  nextOffset: unknown
+  total: number;
+  offset: string;
+  limit: string;
+  nextOffset: unknown;
 }

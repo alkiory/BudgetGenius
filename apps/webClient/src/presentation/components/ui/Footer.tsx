@@ -1,6 +1,6 @@
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { Logo } from "../logo";
-import { useTranslation } from 'react-i18next';
 
 export default function FooterComponent() {
   const { t } = useTranslation();
@@ -11,12 +11,15 @@ export default function FooterComponent() {
           <Logo size="md" variant="default" />
         </div>
         <p className="mt-2 text-sm text-muted-foreground">
-          {t('common.needHelp')}{" "}
-          <Link to="#" className="text-purple-600 hover:underline dark:text-purple-400">
-            {t('contact.support')}
+          {t("common.needHelp")}{" "}
+          <Link
+            to="#"
+            className="text-purple-600 hover:underline dark:text-purple-400"
+          >
+            {t("contact.support")}
           </Link>
         </p>
       </div>
     </footer>
-  )
+  );
 }
