@@ -1,4 +1,7 @@
 import { useTranslation } from 'react-i18next';
+import { useSelector } from "react-redux";
+import { RootState } from "@adapters/store/rootStore";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { TRANSACTION_CATEGORIES } from "@domain/dashboard/transactions/transaction.entity";
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
@@ -18,6 +21,10 @@ export default function AddBudgetCategory({
   handleAddCategorySubmit: () => void
 }) {
   const { t } = useTranslation();
+  const userSetting = useSelector((state: RootState) => state.userSettings);
+  const targetCurrency = (userSetting?.settings?.currency || 'USD') as Currency;
+  const currencySymbol = currencyService.getSymbol(targetCurrency);
+
   return (
     <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
       <div className="flex items-end gap-2">
@@ -42,7 +49,7 @@ export default function AddBudgetCategory({
         <div className="flex-1 space-y-2">
           <Label htmlFor="new-category-allocated">{t('budgets.allocatedAmount')}</Label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">{currencySymbol}</span>
             <Input
               id="new-category-allocated"
               type="number"
@@ -59,7 +66,7 @@ export default function AddBudgetCategory({
         <div className="flex-1 space-y-2">
           <Label htmlFor="new-category-spent">{t('budgets.spentAmount')}</Label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">{currencySymbol}</span>
             <Input
               id="new-category-spent"
               type="number"

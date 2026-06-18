@@ -43,12 +43,6 @@ export class BudgetService {
 
     const totalSpent = dto.totalSpent ?? 0;
 
-    if (totalSpent > dto.totalAllocated) {
-      throw new BadRequestException(
-        `Total spent ${totalSpent} cannot be greater than total allocated ${dto.totalAllocated}`,
-      );
-    }
-
     if (user.budgets.find((b) => b.name === dto.name)) {
       throw new BadRequestException(`Budget ${dto.name} already exists`);
     }
@@ -121,16 +115,7 @@ export class BudgetService {
       return [];
     }
 
-    // check spent category values are not greater than total allocated
-    for (const budget of budgets) {
-      if (budget.totalSpent > budget.totalAllocated) {
-        throw new BadRequestException(
-          `Total spent ${budget.totalSpent} cannot be greater than total allocated ${budget.totalAllocated}`,
-        );
-      }
-    }
-
-    // calculate total spent and total allocated
+    // calculate total spent and total allocated from categories
     for (const budget of budgets) {
       let totalSpent = 0;
       let totalAllocated = 0;
@@ -203,26 +188,9 @@ export class BudgetService {
       throw new NotFoundException(`This budget does not exist`);
     }
 
-    // check spent category values are not greater than total allocated
-    if (
-      dto.categories?.some(
-        (category) => category.allocated < category.spent || category.spent < 0,
-      )
-    ) {
-      throw new BadRequestException(
-        `Total spent cannot be greater than total allocated`,
-      );
-    }
-
     if (dto.endDate < dto.startDate) {
       throw new BadRequestException(
         `End date ${dto.endDate} cannot be less than start date ${dto.startDate}`,
-      );
-    }
-
-    if (budget.totalAllocated < dto.totalSpent) {
-      throw new BadRequestException(
-        `Total spent ${dto.totalSpent} cannot be greater than total allocated ${budget.totalAllocated}`,
       );
     }
 
@@ -232,16 +200,6 @@ export class BudgetService {
       allocated: category.allocated,
       spent: category.spent,
     })) as BudgetCategory[];
-
-    if (
-      updatedCategories.some(
-        (category) => category.allocated < category.spent || category.spent < 0,
-      )
-    ) {
-      throw new BadRequestException(
-        `Total spent cannot be greater than total allocated`,
-      );
-    }
 
     return this.repo.updateBudget({
       ...dto,
@@ -254,7 +212,7 @@ export class BudgetService {
     userId: number,
     dto: UpdateBudgetCategoryDto,
   ): Promise<BudgetCategory> {
-    const category = await this.categoryRepo.findByBudgetId(dto.id);
+    const category = await this.categoryRepo.getBudgetCategory(dto.id);
     const user = await this.userRepo.findById(userId);
 
     if (!category) {
@@ -265,10 +223,22 @@ export class BudgetService {
       throw new NotFoundException('User not found');
     }
 
-    return this.repo.updateBudgetCategory({
+    const updatedCategory = await this.repo.updateBudgetCategory({
       ...dto,
       updatedAt: new Date(),
     });
+
+    // Recalculate the parent budget's totalSpent after category update
+    await this.recalculateBudgetTotalSpent(category.budget.id);
+
+    return updatedCategory;
+  }
+
+  private async recalculateBudgetTotalSpent(budgetId: number): Promise<void> {
+    const budget = await this.repo.findById(budgetId);
+    const totalSpent = budget.categories.reduce((sum, cat) => sum + cat.spent, 0);
+    budget.totalSpent = totalSpent;
+    await this.repo.updateBudget(budget);
   }
 
   async deleteBudgetCategory(userId: number, id: number) {

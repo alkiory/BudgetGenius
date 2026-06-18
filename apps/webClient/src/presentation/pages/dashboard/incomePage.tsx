@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from 'react-i18next';
-import { Plus, Filter, Search, ArrowUpRight, Wallet, DollarSign } from "lucide-react";
+import { Plus, Filter, ArrowUpRight, Wallet, DollarSign } from "lucide-react";
 import { useFetchIncomes } from "@adapters/query/dashboard";
 import { Button } from "@presentation/components/ui/button";
 import { IncomeModal } from "@presentation/components/dashboard/incomes/income-modal";
@@ -8,8 +8,9 @@ import { IncomeSourcesTable } from "@presentation/components/dashboard/incomes/i
 import { IncomeByCategory } from "@presentation/components/dashboard/incomes/income-by-category";
 import { IncomeHistory } from "@presentation/components/dashboard/incomes/income-history";
 import { IncomeCategory, IncomeRecurrence } from "@domain/dashboard/incomes/income.entity";
-import Loader from "@presentation/components/loader";
 import { FilterCriteria, FilterModal } from "@presentation/components/dashboard/incomes/filter-income-modal";
+import { PageHeader } from "@presentation/components/ui/page-header";
+import IncomesLoading from "@presentation/components/dashboard/incomes/incomes-loading";
 import { RootState } from "@adapters/store/rootStore";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { useSelector } from "react-redux";
@@ -21,7 +22,6 @@ export default function IncomePage() {
 
   const { data, isLoading } = useFetchIncomes(offset, limit);
   const incomes = useMemo(() => data?.incomes || [], [data]);
-  const [searchTerm, setSearchTerm] = useState("");
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
   const [filters, setFilters] = useState<Omit<FilterCriteria, "statuses">>({
@@ -51,11 +51,6 @@ export default function IncomePage() {
   // Filtrar transacciones
   const filteredIncomeTransactions = useMemo(() => {
     return normalizedIncomes.filter((income) => {
-      const searchMatch =
-        !searchTerm ||
-        income.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        income.category.toLowerCase().includes(searchTerm.toLowerCase());
-
       const dateMatch =
         (!filters.dateFrom || new Date(income.date) >= new Date(filters.dateFrom)) &&
         (!filters.dateTo || new Date(income.date) <= new Date(filters.dateTo));
@@ -70,9 +65,9 @@ export default function IncomePage() {
       const recurrenceMatch =
         filters.recurrences.includes("All") || filters.recurrences.includes(income.recurrence as IncomeRecurrence);
 
-      return searchMatch && dateMatch && categoryMatch && amountMatch && recurrenceMatch;
+      return dateMatch && categoryMatch && amountMatch && recurrenceMatch;
     });
-  }, [normalizedIncomes, searchTerm, filters]);
+  }, [normalizedIncomes, filters]);
 
   // Calcular total
   const totalIncome = useMemo(() => {
@@ -119,14 +114,16 @@ export default function IncomePage() {
     false
   );
 
-  const totalIncomeToDisplay = currencyService.formatCurrency(Number(totalIncome) / filteredIncomeTransactions.length, targetCurrency, targetCurrency, false).formatted
+  const totalIncomeToDisplay = currencyService.formatCurrency(Number(totalIncome) / filteredIncomeTransactions.length, 'USD' as Currency, targetCurrency, false).formatted
 
   if (isLoading) {
-    return <Loader />;
+    return <IncomesLoading />;
   }
 
   return (
     <div className="space-y-6">
+      <PageHeader title={t('income.title')} description={t('income.description')} />
+
       {/* Cards */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 md:gap-4">
         {/* Total Income Card */}
@@ -151,7 +148,7 @@ export default function IncomePage() {
           </div>
           <p className="mt-2 text-xl font-bold sm:text-2xl">
             {incomeByCategory.length > 0 ?
-              `${currencyService.formatCurrency(incomeByCategory[0].amount, targetCurrency, targetCurrency, false).formatted}
+              `${currencyService.formatCurrency(incomeByCategory[0].amount, 'USD' as Currency, targetCurrency, false).formatted}
               ` : "$0.00"}
           </p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -183,24 +180,9 @@ export default function IncomePage() {
       </div>
 
       {/* Income Sources Table Section */}
-      <div className=" px-2 md:px-0">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          {/* Search Input - Responsive */}
-          <div className="relative w-full sm:max-w-md">
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-              <Search className="h-4 w-4 text-slate-400 sm:h-5 sm:w-5" />
-            </div>
-            <input
-              type="text"
-              placeholder={t('income.searchPlaceholder')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-md border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder-slate-400 sm:pl-10 sm:text-base"
-            />
-          </div>
-
-          {/* Action Buttons - Responsive Stack */}
-          <div className="flex w-full gap-2 sm:w-auto">
+      <div className="px-2 md:px-0">
+        <div className="mb-4 flex items-center justify-end">
+          <div className="flex gap-2">
             <Button
               onClick={() => setIsFilterModalOpen(true)}
               variant="outline"
@@ -237,12 +219,11 @@ export default function IncomePage() {
         ) : (
           <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-200 p-6 text-center dark:border-slate-700 sm:gap-4 sm:p-8">
             <p className="text-sm text-slate-500 dark:text-slate-400 sm:text-base">{t('income.noSourcesFound')}</p>
-            {searchTerm || activeFiltersCount > 0 ? (
+            {activeFiltersCount > 0 ? (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setSearchTerm("");
                   setFilters({
                     dateFrom: "",
                     dateTo: "",

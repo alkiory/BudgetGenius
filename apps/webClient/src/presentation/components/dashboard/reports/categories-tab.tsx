@@ -2,6 +2,9 @@ import { useTranslation } from 'react-i18next';
 import { ResponsiveContainer, Pie, Cell, Tooltip, Legend, PieChart } from "recharts";
 import { ChartContainer, ProgressBar, InsightBox } from "./inner-componets";
 import Loader from "@presentation/components/loader";
+import { useSelector } from "react-redux";
+import { RootState } from "@adapters/store/rootStore";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface TrendsTabProps {
@@ -14,8 +17,11 @@ interface TrendsTabProps {
 
 export default function CategoryTab({ isLoadingInsights, categories, insights, totalExpenses }: TrendsTabProps) {
   const { t } = useTranslation();
+  const userSetting = useSelector((state: RootState) => state.userSettings);
+  const { settings } = userSetting;
+  const targetCurrency = (settings?.currency || 'USD') as Currency;
   const formatCurrency = (value: number) =>
-    `$${value?.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    currencyService.formatCurrency(value, 'USD' as Currency, targetCurrency, false).formatted;
   return (
     <div className="space-y-6">
       {isLoadingInsights && <Loader />}

@@ -6,10 +6,12 @@ import { BudgetDetail } from "@presentation/components/dashboard/budgets/budget-
 import { BudgetList } from "@presentation/components/dashboard/budgets/budget-list"
 import { BudgetModal } from "@presentation/components/dashboard/budgets/budget-modal"
 import { Button } from "@presentation/components/ui/button"
+import { PageHeader } from "@presentation/components/ui/page-header"
 import { confirmToast, errorToast, successToast } from "@presentation/utils/toast"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Plus } from "lucide-react"
 import { useEffect, useState } from "react"
+import BudgetsLoading from "@presentation/components/dashboard/budgets/budgets-loading"
 
 export default function BudgetsPage() {
   const { t } = useTranslation();
@@ -26,6 +28,10 @@ export default function BudgetsPage() {
     isRefetching,
     refetch: refetchBudgets
   } = useFetchBudgets()
+
+  if (isLoading) {
+    return <BudgetsLoading />;
+  }
 
   useEffect(() => {
     if (selectedBudget && budgets) {
@@ -62,6 +68,7 @@ export default function BudgetsPage() {
       }
       successToast("Budget deleted successfully", 3000, "budget-delete")
       queryClient.invalidateQueries({ queryKey: ["budgets"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       setIsModalOpen(false)
     },
     onError: () => {
@@ -81,16 +88,12 @@ export default function BudgetsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('budgets.title')}</h1>
-          <p className="text-slate-500 dark:text-slate-400">{t('budgets.description')}</p>
-        </div>
+      <PageHeader title={t('budgets.title')} description={t('budgets.description')}>
         <Button variant="primary" onClick={handleCreateBudget} className="gap-1">
           <Plus className="h-4 w-4" />
           {t('budgets.createBudget')}
         </Button>
-      </div>
+      </PageHeader>
 
       <div className="grid gap-6 md:grid-cols-3">
         {budgetsFetched && (
