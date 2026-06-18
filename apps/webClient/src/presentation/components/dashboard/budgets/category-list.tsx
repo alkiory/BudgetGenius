@@ -3,6 +3,11 @@ import { EditableBudgetCategory } from "./budget-category";
 import { useSelector } from "react-redux";
 import { RootState } from "@adapters/store/rootStore";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
+import {
+  OverBudgetContainer,
+  OverBudgetIcon,
+  OverBudgetBadge,
+} from "@presentation/components/ui/budget-status";
 
 export default function BudgetCategoryList({
   categoryBudgets,
@@ -29,30 +34,41 @@ export default function BudgetCategoryList({
         const targetCurrency = (settings?.currency || 'USD') as Currency;
         const formattedRemaining = currencyService.formatCurrency(
           remaining,
-          targetCurrency as Currency,
+          'USD' as Currency,
           targetCurrency,
           false
         );
 
         const formattedAllocated = currencyService.formatCurrency(
           category.allocated,
-          targetCurrency as Currency,
+          'USD' as Currency,
           targetCurrency,
           false
         )
 
         const formattedSpent = currencyService.formatCurrency(
           category.spent,
-          targetCurrency as Currency,
+          'USD' as Currency,
           targetCurrency,
           false
         )
 
+        const isOverBudget = percentUsed > 100;
+
         return (
-          <div key={category.id} className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+          <OverBudgetContainer key={category.id} isOverBudget={isOverBudget}>
             <div className="flex items-center justify-between">
-              <h4 className="font-medium">{category.name}</h4>
-              <span className="text-sm font-medium">{Math.round(percentUsed)}%</span>
+              <div className="flex items-center gap-2">
+                <OverBudgetIcon isOverBudget={isOverBudget} size="sm" />
+                <h4 className="font-medium">{category.name}</h4>
+              </div>
+              <div className="flex items-center gap-2">
+                <OverBudgetBadge
+                  isOverBudget={isOverBudget}
+                  text={`${Math.round(percentUsed - 100)}% over`}
+                />
+                <span className="text-sm font-medium">{Math.round(percentUsed)}%</span>
+              </div>
             </div>
 
             <div className="mt-1 h-2 w-full rounded-full bg-slate-100 dark:bg-slate-700">
@@ -77,7 +93,7 @@ export default function BudgetCategoryList({
               onUpdateSpent={onUpdateSpent}
               onDeleteCategory={onDeleteCategoryHandler}
             />
-          </div>
+          </OverBudgetContainer>
         );
       })}
     </div>

@@ -29,6 +29,7 @@ export function EditTransaction({ transaction, variant = "ghost", children }: Ed
       successToast(data.message, 3000, "transaction-create")
       setIsOpen(false)
       queryClient.invalidateQueries({ queryKey: ["transactions"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
     },
     onError: (error) => {
       errorToast(error.message, 3000, "transaction-create")

@@ -9,7 +9,6 @@
 # Build output
 /dist
 /build
-
 /.firebase
 
 # environments
@@ -21,3 +20,6 @@
 
 # Backup files
 .env.bak
+
+# old files
+/.gitOLD

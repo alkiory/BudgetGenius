@@ -17,14 +17,14 @@ export function SavingGoalCardMini({ goal }: SavingGoalCardProps) {
   const targetCurrency = (settings?.currency || 'USD') as Currency;
   const formattedCurrent = currencyService.formatCurrency(
     goal.current,
-    targetCurrency as Currency,
+    'USD' as Currency,
     targetCurrency,
     false
   );
 
   const formattedTarget = currencyService.formatCurrency(
     goal.target,
-    targetCurrency as Currency,
+    'USD' as Currency,
     targetCurrency,
     false
   );

@@ -9,12 +9,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { updateUserSettings } from "@application/user/user.service"
 import { errorToast, successToast } from "@presentation/utils/toast"
 import { Select } from "../ui/select"
-import { useSelector } from "react-redux"
+import { useSelector, useDispatch } from "react-redux"
 import { RootState } from "@adapters/store/rootStore"
+import { updateSettingsAction } from "@adapters/slices/user-settings/settingsSlice"
 import { Currency } from "@presentation/utils/currencyService"
 
 export function AccountSettings() {
   const { t } = useTranslation();
+  const dispatch = useDispatch()
   const userSetting = useSelector((state: RootState) => state.userSettings);
 
   const { settings } = userSetting
@@ -33,9 +35,10 @@ export function AccountSettings() {
 
   const { mutate: updateSettings, isSuccess } = useMutation({
     mutationFn: updateUserSettings,
-    onSuccess: () => {
+    onSuccess: (data) => {
       successToast(t('profile.settingsSavedSuccessfully'), 3000, "settings-update")
-      queryClient.invalidateQueries({ queryKey: ["userSettings"] })
+      queryClient.invalidateQueries({ queryKey: ["user-settings"] })
+      dispatch(updateSettingsAction(data ?? settingsToUpdate))
     },
     onError: (error) => {
       errorToast(error.message || t('profile.failedToUpdateSettings'), 3000, "settings-update")

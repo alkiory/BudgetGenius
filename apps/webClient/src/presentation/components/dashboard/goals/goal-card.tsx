@@ -4,7 +4,7 @@ import { Edit2, Trash2, Plus, AlertCircle, TrendingUp, CreditCard, Wallet, Dolla
 import { GoalModal } from "./goal-modal"
 import { Goal } from "@domain/dashboard/goals/goal.entity"
 import { Button } from "@presentation/components/ui/button"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { HttpGoalRepository } from "@adapters/http/goal.repository"
 import { successToast, errorToast } from "@presentation/utils/toast"
 import { RootState } from "@adapters/store/rootStore"
@@ -18,6 +18,7 @@ interface GoalCardProps {
 
 export function GoalCard({ goal, refetchParent }: GoalCardProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient()
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isAddingProgress, setIsAddingProgress] = useState(false)
   const [progressAmount, setProgressAmount] = useState("")
@@ -68,6 +69,7 @@ export function GoalCard({ goal, refetchParent }: GoalCardProps) {
     mutationFn: HttpGoalRepository.updateGoalProgress,
     onSuccess: () => {
       successToast("Goal updated successfully", 3000, "goal-update")
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       refetchParent();
     },
     onError: () => {
@@ -80,6 +82,7 @@ export function GoalCard({ goal, refetchParent }: GoalCardProps) {
     mutationFn: HttpGoalRepository.deleteGoal,
     onSuccess: () => {
       successToast("Goal deleted successfully", 3000, "goal-delete")
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       refetchParent();
     },
     onError: () => {
@@ -108,7 +111,9 @@ export function GoalCard({ goal, refetchParent }: GoalCardProps) {
   const handleAddProgress = () => {
     const amount = Number(progressAmount)
     if (amount > 0) {
-      updateGoalProgress({ goalId: goal.id as number, amount })
+      // Normalize from display currency to USD before sending to API
+      const normalizedAmount = currencyService.normalizeAmount(amount, targetCurrency);
+      updateGoalProgress({ goalId: goal.id as number, amount: normalizedAmount })
       setProgressAmount("")
       setIsAddingProgress(false)
     }
@@ -209,7 +214,7 @@ export function GoalCard({ goal, refetchParent }: GoalCardProps) {
             {isAddingProgress ? (
               <div className="flex gap-2">
                 <div className="relative flex-1">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">{currencyService.getSymbol(targetCurrency)}</span>
                   <input
                     type="number"
                     min="0"

@@ -29,6 +29,7 @@ export default function EditSavingGoalButton({ goal, variant = "ghost", size = "
     onSuccess: (data: any) => {
       successToast(data.message, 3000, "saving-goal-update")
       queryClient.invalidateQueries({ queryKey: ["saving-goals"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       setIsOpen(false)
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

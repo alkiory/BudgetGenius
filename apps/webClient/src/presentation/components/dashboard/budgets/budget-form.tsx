@@ -1,4 +1,7 @@
 import { useTranslation } from 'react-i18next';
+import { useSelector } from "react-redux";
+import { RootState } from "@adapters/store/rootStore";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { useState, useEffect, useRef } from "react";
 import { Trash2 } from "lucide-react";
 import { Budget, BudgetCategory, PERIOD_OPTIONS } from "@domain/dashboard/budgets/budget.entity";
@@ -22,6 +25,10 @@ type CategoryInputRefs = {
 
 export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
   const { t } = useTranslation();
+  const userSetting = useSelector((state: RootState) => state.userSettings);
+  const targetCurrency = (userSetting?.settings?.currency || 'USD') as Currency;
+  const currencySymbol = currencyService.getSymbol(targetCurrency);
+
   const [formData, setFormData] = useState<Partial<Budget>>({
     name: "",
     period: "Monthly",
@@ -46,7 +53,7 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
       const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
       const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
       setFormData({ name: "Monthly Budget", period: PERIOD_OPTIONS[0], startDate: firstDay, endDate: lastDay, totalAllocated: 0, totalSpent: 0 });
-      setCategories([{ budgetId: 0, name: "", allocated: 0, spent: 0 }]);
+      setCategories([{ budgetId: 0, name: "", allocated: undefined as unknown as number, spent: undefined as unknown as number }]);
     }
   }, [budget]);
 
@@ -59,7 +66,7 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
     setCategories((prev) => {
       const updated = [...prev];
       const currentValue = typeof value === 'string' && (field === "allocated" || field === "spent")
-        ? Number(value) || 0
+        ? value === "" ? (undefined as unknown as number) : Number(value) || 0
         : value;
       updated[index] = { ...updated[index], [field]: currentValue };
       return updated;
@@ -67,7 +74,7 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
   };
 
   const addCategory = () => {
-    setCategories((prev) => [...prev, { budgetId: budget?.id ?? 0, name: "", allocated: 0, spent: 0 }]);
+    setCategories((prev) => [...prev, { budgetId: budget?.id ?? 0, name: "", allocated: undefined as unknown as number, spent: undefined as unknown as number }]);
   };
 
   const removeCategory = (index: number) => {
@@ -76,7 +83,12 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ ...formData, categories });
+    const normalizedCategories = categories.map((cat) => ({
+      ...cat,
+      allocated: currencyService.normalizeAmount(Number(cat.allocated) || 0, targetCurrency),
+      spent: currencyService.normalizeAmount(Number(cat.spent) || 0, targetCurrency),
+    }));
+    onSubmit({ ...formData, categories: normalizedCategories });
   };
 
   return (
@@ -223,13 +235,13 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
               <div className="flex-1 space-y-2">
                 <Label htmlFor={`category-allocated-${index}`}>{t('budgets.allocatedAmount')}</Label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">{currencySymbol}</span>
                   <Input
                     id={`category-allocated-${index}`}
                     type="number"
                     min="0"
                     step="0.01"
-                    value={category.allocated}
+                    value={category.allocated ?? ""}
                     onChange={(e) => handleCategoryInputChange(index, "allocated", e.target.value)}
                     className="pl-7"
                     ref={(el) => {
@@ -246,13 +258,13 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
               <div className="flex-1 space-y-2">
                 <Label htmlFor={`category-spent-${index}`}>{t('budgets.spentAmount')}</Label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">{currencySymbol}</span>
                   <Input
                     id={`category-spent-${index}`}
                     type="number"
                     min="0"
                     step="0.01"
-                    value={category.spent}
+                    value={category.spent ?? ""}
                     onChange={(e) => handleCategoryInputChange(index, "spent", e.target.value)}
                     className="pl-7"
                     ref={(el) => {
@@ -282,7 +294,7 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
         <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
           <div className="flex items-center justify-between">
             <span className="font-medium">{t('budgets.totalBudget')}</span>
-            <span className="text-lg font-bold">${(totalAllocated - totalSpent).toFixed(2)}</span>
+            <span className="text-lg font-bold">{currencySymbol}{(totalAllocated - totalSpent).toFixed(2)}</span>
           </div>
         </div>
       </div>

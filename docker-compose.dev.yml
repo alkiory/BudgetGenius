@@ -20,18 +20,6 @@ services:
       redis:
         condition: service_healthy
 
-  frontend:
-    container_name: bg-frontend-dev
-    build:
-      context: .
-      dockerfile: apps/webClient/dockerfile
-      args:
-        - VITE_API_URL=http://localhost:3000/api
-    ports:
-      - "3001:80"
-    env_file:
-      - ./apps/webClient/.env.development
-
   database:
     container_name: bg-db-dev
     environment:

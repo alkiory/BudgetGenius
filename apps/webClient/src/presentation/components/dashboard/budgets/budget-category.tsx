@@ -45,7 +45,7 @@ export const EditableBudgetCategory: React.FC<Props> = ({ category, onUpdateSpen
 
   const formattedSpent = currencyService.formatCurrency(
     category.spent,
-    targetCurrency as Currency,
+    'USD' as Currency,
     targetCurrency,
     false
   )

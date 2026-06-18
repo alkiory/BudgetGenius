@@ -34,6 +34,7 @@ export default function DeleteSavingGoalButton({
     onSuccess: (data: any) => {
       successToast(data.message, 3000, "saving-goal-delete")
       queryClient.invalidateQueries({ queryKey: ["saving-goals"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       setIsOpen(false)
     },
     onError: (error) => {

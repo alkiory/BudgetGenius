@@ -31,10 +31,14 @@ export function BudgetModal({ isOpen, onClose, budget, refetchBudgets }: BudgetM
   const { mutate: addBudget } = useMutation({
     mutationKey: ['add-budget'],
     mutationFn: HttpBudgetRepository.createBudget,
-    onSuccess: () => {
-      successToast(t('budgets.createSuccess'), 3000, "budget-create");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onSuccess: (data: any) => {
+      successToast(data?._offline ? data.message : t('budgets.createSuccess'), 3000, "budget-create");
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
-      refetchBudgets?.();
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      if (!data?._offline) {
+        refetchBudgets?.();
+      }
       onClose();
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,7 +46,9 @@ export function BudgetModal({ isOpen, onClose, budget, refetchBudgets }: BudgetM
       if (error.response && error.response.status === 403) {
         setShowPremiumCard(true);
       } else {
-        errorToast(t('budgets.createError'), 3000, "budget-create");
+        const message = error?.response?.data?.message || error?.message || t('budgets.createError');
+        const errorMsg = Array.isArray(message) ? message[0] : message;
+        errorToast(errorMsg, 5000, "budget-create");
         console.error("Budget creation failed:", error);
       }
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
@@ -52,10 +58,14 @@ export function BudgetModal({ isOpen, onClose, budget, refetchBudgets }: BudgetM
   const { mutate: updateBudget } = useMutation({
     mutationKey: ['update-budget'],
     mutationFn: HttpBudgetRepository.updateBudget,
-    onSuccess: () => {
-      successToast(t('budgets.updateSuccess'), 3000, "budget-update")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onSuccess: (data: any) => {
+      successToast(data?._offline ? data.message : t('budgets.updateSuccess'), 3000, "budget-update")
       queryClient.invalidateQueries({ queryKey: ["budgets"] })
-      refetchBudgets?.()
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
+      if (!data?._offline) {
+        refetchBudgets?.()
+      }
       onClose();
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -63,7 +73,9 @@ export function BudgetModal({ isOpen, onClose, budget, refetchBudgets }: BudgetM
       if (error.response && error.response.status === 403) {
         setShowPremiumCard(true);
       } else {
-        errorToast(t('budgets.updateError'), 3000, "budget-update");
+        const message = error?.response?.data?.message || error?.message || t('budgets.updateError');
+        const errorMsg = Array.isArray(message) ? message[0] : message;
+        errorToast(errorMsg, 5000, "budget-update");
         console.error("Budget update failed:", error);
       }
       queryClient.invalidateQueries({ queryKey: ["budgets"] })

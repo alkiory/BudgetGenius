@@ -20,11 +20,10 @@ export function AddTransactionModal({ isHeader }: { isHeader?: boolean }) {
     mutationFn: HttpTransactionRepository.createTransaction,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (data: any) => {
-      successToast(data.message, 3000, "transaction-create")
-      queryClient.invalidateQueries({ queryKey: ["transactions", "dashboard"] })
+      successToast(data.message, 3000, 'transaction-create');
+      queryClient.invalidateQueries({ queryKey: ["transactions"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       setIsOpen(false)
-      queryClient.refetchQueries({ queryKey: ["transactions", "dashboard"] })
-      window.location.reload();
     },
     onError: (error) => {
       errorToast(error.message, 3000, "transaction-create")
@@ -51,8 +50,9 @@ export function AddTransactionModal({ isHeader }: { isHeader?: boolean }) {
           <Button
             variant="primary"
             onClick={() => setIsOpen(true)}
-            className="inline-flex items-center gap-1">
-            <Plus className="h-4 w-4" />
+            size="lg"
+            className="inline-flex items-center gap-2 px-6 py-2.5 text-base font-semibold shadow-md hover:shadow-lg transition-all">
+            <Plus className="h-5 w-5" />
             {t('transactions.addTransaction')}
           </Button>
 

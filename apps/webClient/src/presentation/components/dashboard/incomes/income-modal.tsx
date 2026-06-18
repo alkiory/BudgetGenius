@@ -24,6 +24,7 @@ export function IncomeModal({ isOpen, onClose, income }: IncomeModalProps) {
     onSuccess: (data: any) => {
       successToast(data.message, 3000, "income-create")
       queryClient.invalidateQueries({ queryKey: ["incomes"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
     },
     onError: (error) => {
       errorToast(error.message, 3000, "income-create")
@@ -37,6 +38,7 @@ export function IncomeModal({ isOpen, onClose, income }: IncomeModalProps) {
     onSuccess: (data: any) => {
       successToast(data.message, 3000, "income-create")
       queryClient.invalidateQueries({ queryKey: ["incomes"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
     },
     onError: (error) => {
       errorToast(error.message, 3000, "income-create")

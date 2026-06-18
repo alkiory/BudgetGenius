@@ -8,6 +8,8 @@ import {
   useSavingsGrowth,
   useInsights
 } from "@adapters/query/reports/reportsQuery";
+import ReportsLoading from "@presentation/components/dashboard/reports/reports-loading";
+import { PageHeader } from "@presentation/components/ui/page-header";
 import TrendsTab from "@presentation/components/dashboard/reports/trends-tab";
 import IncomeExpensesTab from "@presentation/components/dashboard/reports/income-expenses-tab";
 import OverviewTab from "@presentation/components/dashboard/reports/overview-tab";
@@ -21,13 +23,17 @@ export default function ReportsPage() {
 
   // Consultas de datos
   const { data: overview, isLoading: isLoadingOverview } = useOverview({ year: String(currentYear) });
-  const { data: categories } = useCategoryBreakdown({
+  const { data: categories, isLoading: isLoadingCategories } = useCategoryBreakdown({
     start: `${currentYear}-01-01`,
     end: `${currentYear}-12-31`
   });
   const { data: weeklyTrend, isLoading: isLoadingTrend } = useWeeklyTrend();
   const { data: savings } = useSavingsGrowth({ year: String(currentYear) });
   const { data: insights, isLoading: isLoadingInsights } = useInsights({ year: String(currentYear) });
+
+  if (isLoadingOverview || isLoadingCategories) {
+    return <ReportsLoading />;
+  }
 
   // Datos procesados
   const totalIncome = overview?.totalIncome || 0;
@@ -47,15 +53,7 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('reports.title')}</h1>
-          <p className="text-slate-500 dark:text-slate-400">
-            {t('reports.description')}
-          </p>
-        </div>
-
+      <PageHeader title={t('reports.title')} description={t('reports.description')}>
         <div className="flex gap-2">
           {/* Selector de timeframe */}
           <div className="relative">
@@ -83,7 +81,7 @@ export default function ReportsPage() {
             {t('reports.export')}
           </button>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Tabs */}
       <div className="border-b border-slate-200 dark:border-slate-700">

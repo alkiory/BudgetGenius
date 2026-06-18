@@ -1,13 +1,11 @@
-import { Skeleton } from "@presentation/components/ui/skeleton";
+import { Skeleton } from "@presentation/components/ui/skeleton"
+import { PageHeaderSkeleton } from "@presentation/components/ui/page-header"
 
 export default function BudgetsLoading() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
-        <div>
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="mt-2 h-4 w-64" />
-        </div>
+        <PageHeaderSkeleton />
         <Skeleton className="h-10 w-32" />
       </div>
 

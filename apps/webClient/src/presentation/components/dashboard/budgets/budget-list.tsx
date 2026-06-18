@@ -7,6 +7,7 @@ import { Currency, currencyService } from "@presentation/utils/currencyService"
 import { CalendarIcon, Pencil, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { useSelector } from "react-redux"
+import { OverBudgetIcon } from "@presentation/components/ui/budget-status"
 
 interface BudgetListProps {
   budgets: Budget[]
@@ -69,17 +70,31 @@ export function BudgetList({ onBudgetSelect, onEditBudget, onDeleteBudget, budge
               progressColor = "bg-yellow-500"
             }
 
+            const isOverBudget = budget.totalSpent > budget.totalAllocated
+            const isActiveBudget = activeBudget?.id === budget.id
+
+            let borderClasses = "border-slate-200 bg-white hover:border-purple-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-purple-700"
+            if (isActiveBudget) {
+              borderClasses = "border-purple-500 bg-purple-50 dark:border-purple-500 dark:bg-purple-900/20"
+            }
+            if (isOverBudget) {
+              borderClasses = "border-red-300 bg-red-50/80 dark:border-red-800 dark:bg-red-950/40"
+              if (isActiveBudget) {
+                borderClasses = "border-red-400 bg-red-50 dark:border-red-500 dark:bg-red-950/60 ring-1 ring-red-400/50"
+              }
+            }
+
             return (
               <div
                 key={budget.id}
-                className={`rounded-lg border p-4 transition-colors ${isActive
-                  ? "border-purple-500 bg-purple-50 dark:border-purple-500 dark:bg-purple-900/20"
-                  : "border-slate-200 bg-white hover:border-purple-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-purple-700"
-                  }`}
+                className={`rounded-lg border p-4 transition-colors cursor-pointer ${borderClasses}`}
                 onClick={() => handleSelectBudget(budget)}
               >
                 <div className="flex items-center justify-between">
-                  <h3 className="font-medium">{budget.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <OverBudgetIcon isOverBudget={isOverBudget} size="sm" />
+                    <h3 className="font-medium">{budget.name}</h3>
+                  </div>
                   <div className="flex items-center gap-1">
                     <Button
                       variant="ghost"
