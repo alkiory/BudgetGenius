@@ -6,20 +6,20 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    # ELIMINADO: block ports. NPM enrutará el tráfico internamente.
+    # ELIMINADO: El bloque "ports" para obligar al tráfico a pasar por NPM
     env_file:
       - ./apps/api/.env.production
     environment:
       - PORT=5000
       - NODE_ENV=production
-      - PGSSLMODE=disable 
+      - PGSSLMODE=disable
       - DB_HOST=database
       - DB_NAME=budgetgenius_prod
       - DB_USER=postgres_admin_prod
       - DB_PASS=${DB_PASSWORD}
     networks:
       - app-network
-      - npm_network   # <-- Vital: Conecta con NPM para recibir peticiones
+      - npm_network
     depends_on:
       database:
         condition: service_healthy
@@ -34,7 +34,7 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=budgetgenius_prod
     networks:
-      - app-network   # <-- Aislado: NPM no puede tocar la base de datos
+      - app-network
     volumes:
       - pgdata_prod:/var/lib/postgresql/data
     healthcheck:
@@ -44,7 +44,7 @@ services:
     image: redis:7.2-alpine
     container_name: bg-redis-prod
     networks:
-      - app-network   # <-- Aislado: NPM no puede tocar Redis
+      - app-network
     volumes:
       - redisdata_prod:/data
     healthcheck:
@@ -53,6 +53,7 @@ services:
       timeout: 3s
       retries: 5
 
+# DECLARACIÓN CRÍTICA: Registro de las redes a utilizar
 networks:
   app-network:
     driver: bridge
