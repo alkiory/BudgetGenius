@@ -1,3 +1,4 @@
+import { HttpReportRepository } from "@adapters/http/reports.repository";
 import {
   useOverview,
   useCategoryBreakdown,
@@ -5,7 +6,6 @@ import {
   useSavingsGrowth,
   useInsights,
 } from "@adapters/query/reports/reportsQuery";
-import { HttpReportRepository } from "@adapters/http/reports.repository";
 import type {
   ExportFormat,
   ExportLocale,
@@ -32,8 +32,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { useState } from "react";
-import { useTranslation } from "react-i18next";
 import toast from "react-hot-toast";
+import { useTranslation } from "react-i18next";
 
 const FILENAME_BY_FORMAT: Record<ExportFormat, string> = {
   pdf: "budget-report-{year}.pdf",
@@ -88,12 +88,12 @@ export default function ReportsPage() {
     income: number | string;
     expenses: number | string;
   }[] = Array.isArray(overview.monthly)
-    ? (overview.monthly as {
+      ? (overview.monthly as {
         month: string;
         income: number | string;
         expenses: number | string;
       }[])
-    : [];
+      : [];
   const totalIncome = safeMonthly.reduce(
     (acc, row) => acc + (Number(row?.income) || 0),
     0,
@@ -115,8 +115,8 @@ export default function ReportsPage() {
   const highestSpendingMonth =
     safeMonthly.length > 0
       ? [...safeMonthly].sort(
-          (a, b) => (Number(b?.expenses) || 0) - (Number(a?.expenses) || 0),
-        )[0]
+        (a, b) => (Number(b?.expenses) || 0) - (Number(a?.expenses) || 0),
+      )[0]
       : undefined;
 
   const timeframeText: Record<string, string> = {
@@ -224,19 +224,18 @@ export default function ReportsPage() {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`py-4 text-sm font-medium border-b-2 capitalize ${
-                  activeTab === tab
-                    ? "border-purple-500 text-purple-600 dark:text-purple-400"
-                    : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-300"
-                }`}
+                className={`py-4 text-sm font-medium border-b-2 capitalize ${activeTab === tab
+                  ? "border-purple-500 text-purple-600 dark:text-purple-400"
+                  : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-300"
+                  }`}
               >
                 {tab === "overview"
                   ? t("reports.overviewTab")
                   : tab === "income-expenses"
-                  ? t("reports.incomeExpensesTab")
-                  : tab === "categories"
-                  ? t("reports.categoriesTab")
-                  : t("reports.trendsTab")}
+                    ? t("reports.incomeExpensesTab")
+                    : tab === "categories"
+                      ? t("reports.categoriesTab")
+                      : t("reports.trendsTab")}
               </button>
             ),
           )}
