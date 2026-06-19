@@ -1,5 +1,5 @@
 export function isValidProvider(provider: string): boolean {
-  return ['google', 'email'].includes(provider);
+  return ["google", "email"].includes(provider);
 }
 
 export function UserAuthProviderNotValidError(provider: string): Error {

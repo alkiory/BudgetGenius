@@ -3,7 +3,11 @@ export const PASSWORD_MAX_LENGTH = 20;
 export const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,20}$/; // 1 uppercase, 1 number, 1 special character
 
 export function isValidPassword(password: string): boolean {
-  return password.length >= PASSWORD_MIN_LENGTH && password.length <= PASSWORD_MAX_LENGTH && PASSWORD_REGEX.test(password);
+  return (
+    password.length >= PASSWORD_MIN_LENGTH &&
+    password.length <= PASSWORD_MAX_LENGTH &&
+    PASSWORD_REGEX.test(password)
+  );
 }
 
 export function UserPasswordNotValidError(): Error {
@@ -13,5 +17,5 @@ export function UserPasswordNotValidError(): Error {
 }
 
 export function UserPasswordNotMatchError(): Error {
-  return new Error('🛑 Passwords do not match');
+  return new Error("🛑 Passwords do not match");
 }

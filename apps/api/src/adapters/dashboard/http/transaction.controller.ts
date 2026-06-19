@@ -59,11 +59,12 @@ export class TransactionController {
     example: 50,
   })
   @ApiParam({
-    name: 'status',
-    description: 'Status of the transaction',
+    name: 'recurrence',
+    description:
+      'Optional recurrence label (e.g. "Monthly", "Bi-weekly"). Only meaningful for rows that represent recurring income — nullable.',
     required: false,
     type: String,
-    example: 'Completed',
+    example: 'Monthly',
   })
   @ApiResponse({
     status: 201,
@@ -76,7 +77,7 @@ export class TransactionController {
           description: 'Groceries',
           category: 'Food',
           amount: 50,
-          status: 'completed',
+          recurrence: 'Monthly',
           userId: 1,
         },
       },
@@ -93,7 +94,7 @@ export class TransactionController {
           category: 'Food',
           description: 'Groceries',
           amount: 50,
-          status: 'completed',
+          recurrence: 'Monthly',
         },
       },
     },
@@ -108,7 +109,10 @@ export class TransactionController {
         'POST /transactions => User ID not found in request',
       );
     }
-    const transaction = await this.transactionService.createTransaction(userId, dto);
+    const transaction = await this.transactionService.createTransaction(
+      userId,
+      dto,
+    );
     return {
       message: '📊 Transaction created successfully',
       transaction,
@@ -130,6 +134,15 @@ export class TransactionController {
     description: 'Limit of the transactions',
     type: Number,
     example: 10,
+  })
+  @ApiQuery({
+    name: 'type',
+    description:
+      'Optional sign-convention filter. "income" returns transactions with amount > 0 (Phase 3 strangler facade for the legacy /incomes endpoint); "expense" returns amount < 0; omitted returns all transactions (default).',
+    required: false,
+    type: String,
+    enum: ['income', 'expense'],
+    example: 'income',
   })
   @ApiResponse({
     status: 200,
@@ -161,12 +174,14 @@ export class TransactionController {
     @Req() req,
     @Query('offset') offset = 0,
     @Query('limit') limit = 50,
+    @Query('type') type?: 'income' | 'expense',
   ) {
     const userId = req.user.userId;
     return this.transactionService.getTransactionsByUser({
       userId,
       offset,
       limit,
+      type,
     });
   }
   // #endregion Get Transactions
@@ -203,11 +218,12 @@ export class TransactionController {
     example: 50,
   })
   @ApiParam({
-    name: 'status',
-    description: 'Status of the transaction',
+    name: 'recurrence',
+    description:
+      'Optional recurrence label for the transaction (e.g. "Monthly"). Nullable; absent in payload preserves the existing value.',
     required: false,
     type: String,
-    example: 'Completed',
+    example: 'Monthly',
   })
   @ApiBody({
     description: 'Transaction data',
@@ -221,7 +237,7 @@ export class TransactionController {
           category: 'Food',
           description: 'Groceries',
           amount: 50,
-          status: 'completed',
+          recurrence: 'Monthly',
         },
       },
     },
@@ -237,7 +253,7 @@ export class TransactionController {
           description: 'Groceries',
           category: 'Food',
           amount: 50,
-          status: 'completed',
+          recurrence: 'Monthly',
           userId: 1,
         },
       },

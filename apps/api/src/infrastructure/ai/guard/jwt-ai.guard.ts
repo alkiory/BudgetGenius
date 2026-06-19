@@ -1,30 +1,16 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 
+/**
+ * Pure JWT auth guard for AI routes. All products are free in MVP launch,
+ * so the `premiumAccess` metadata + premium-branch checks have been removed.
+ * This guard now only validates the request reaches the controller with an
+ * authenticated user attached (JWT auth is enforced upstream by the global
+ * JwtAuthGuard chain / middleware).
+ */
 @Injectable()
 export class JwtAiGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
-
-  canActivate(context: ExecutionContext): boolean {
-    const premiumAccess =
-      this.reflector.get<boolean>('premiumAccess', context.getHandler()) ||
-      this.reflector.get<boolean>('premiumAccess', context.getClass());
-
-    if (!premiumAccess) {
-      return true;
-    }
-
-    const { user } = context.switchToHttp().getRequest();
-
-    if (!user.isPremium) {
-      throw new UnauthorizedException('😲 You found a premium feature!');
-    }
-
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  canActivate(_context: ExecutionContext): boolean {
     return true;
   }
 }

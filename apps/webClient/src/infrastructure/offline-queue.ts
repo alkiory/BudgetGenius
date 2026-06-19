@@ -1,13 +1,13 @@
 export interface QueuedRequest {
   id: string;
-  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  method: "POST" | "PUT" | "PATCH" | "DELETE";
   url: string;
   data?: unknown;
   timestamp: number;
   retryCount: number;
 }
 
-const STORAGE_KEY = 'offline_queue';
+const STORAGE_KEY = "offline_queue";
 const MAX_RETRIES = 5;
 
 function getQueue(): QueuedRequest[] {
@@ -28,11 +28,15 @@ let flushInProgress = false;
 /**
  * Add a failed request to the offline queue.
  */
-export function enqueueRequest(method: string, url: string, data?: unknown): void {
+export function enqueueRequest(
+  method: string,
+  url: string,
+  data?: unknown,
+): void {
   const queue = getQueue();
   queue.push({
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-    method: method as QueuedRequest['method'],
+    method: method as QueuedRequest["method"],
     url,
     data,
     timestamp: Date.now(),
@@ -64,16 +68,16 @@ export async function flushQueue(apiInstance: {
   for (const req of queue) {
     try {
       switch (req.method) {
-        case 'POST':
+        case "POST":
           await apiInstance.post(req.url, req.data);
           break;
-        case 'PUT':
+        case "PUT":
           await apiInstance.put(req.url, req.data);
           break;
-        case 'PATCH':
+        case "PATCH":
           await apiInstance.patch(req.url, req.data);
           break;
-        case 'DELETE':
+        case "DELETE":
           await apiInstance.delete(req.url);
           break;
       }
@@ -115,7 +119,7 @@ export function registerOnlineListener(apiInstance: {
   patch: (url: string, data?: unknown) => Promise<unknown>;
   delete: (url: string) => Promise<unknown>;
 }): void {
-  window.addEventListener('online', () => {
+  window.addEventListener("online", () => {
     flushQueue(apiInstance);
   });
   // Also flush immediately in case we came online while the page was open

@@ -1,5 +1,5 @@
-import { Skeleton } from "@presentation/components/ui/skeleton"
-import { PageHeaderSkeleton } from "@presentation/components/ui/page-header"
+import { PageHeaderSkeleton } from "@presentation/components/ui/page-header";
+import { Skeleton } from "@presentation/components/ui/skeleton";
 
 export default function BudgetsLoading() {
   return (
@@ -29,5 +29,5 @@ export default function BudgetsLoading() {
         </div>
       </div>
     </div>
-  )
+  );
 }

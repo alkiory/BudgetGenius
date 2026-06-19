@@ -1,11 +1,11 @@
-import { RootState } from '@adapters/store/rootStore';
-import { BudgetCategory } from '@domain/dashboard/budgets/budget.entity';
-import { Button } from '@presentation/components/ui/button';
-import { Input } from '@presentation/components/ui/input';
-import { Label } from '@presentation/components/ui/label';
-import { Currency, currencyService } from '@presentation/utils/currencyService';
-import { useState } from 'react';
-import { useSelector } from 'react-redux';
+import { RootState } from "@adapters/store/rootStore";
+import { BudgetCategory } from "@domain/dashboard/budgets/budget.entity";
+import { Button } from "@presentation/components/ui/button";
+import { Input } from "@presentation/components/ui/input";
+import { Label } from "@presentation/components/ui/label";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
+import { useState } from "react";
+import { useSelector } from "react-redux";
 
 interface Props {
   category: BudgetCategory;
@@ -13,13 +13,17 @@ interface Props {
   onDeleteCategory: (category: BudgetCategory) => void;
 }
 
-export const EditableBudgetCategory: React.FC<Props> = ({ category, onUpdateSpent, onDeleteCategory }) => {
+export const EditableBudgetCategory: React.FC<Props> = ({
+  category,
+  onUpdateSpent,
+  onDeleteCategory,
+}) => {
   const [isEditing, setIsEditing] = useState(false);
   const [localSpent, setLocalSpent] = useState(category.spent);
 
   const userSetting = useSelector((state: RootState) => state.userSettings);
 
-  const { settings } = userSetting
+  const { settings } = userSetting;
 
   const handleEditClick = () => {
     setIsEditing(true);
@@ -41,23 +45,25 @@ export const EditableBudgetCategory: React.FC<Props> = ({ category, onUpdateSpen
     setLocalSpent(spent);
   };
 
-  const targetCurrency = (settings?.currency || 'USD') as Currency;
+  const targetCurrency = (settings?.currency || "USD") as Currency;
 
   const formattedSpent = currencyService.formatCurrency(
     category.spent,
-    'USD' as Currency,
+    "USD" as Currency,
     targetCurrency,
-    false
-  )
+    false,
+  );
 
   return (
     <div className="mt-3 flex items-center justify-between">
       <div className="flex-1">
         <Label htmlFor={`category-spent-${category.id}`} className="text-xs">
-          {isEditing ? 'Update Spent Amount' : 'Spent'}
+          {isEditing ? "Update Spent Amount" : "Spent"}
         </Label>
         <div className="relative mt-1">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">{formattedSpent.symbol}</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+            {formattedSpent.symbol}
+          </span>
           {isEditing ? (
             <Input
               id={`category-spent-${category.id}`}
@@ -75,15 +81,30 @@ export const EditableBudgetCategory: React.FC<Props> = ({ category, onUpdateSpen
       </div>
       <div className="flex items-center">
         {!isEditing ? (
-          <Button variant="default" size="sm" className="ml-2" onClick={handleEditClick}>
+          <Button
+            variant="default"
+            size="sm"
+            className="ml-2"
+            onClick={handleEditClick}
+          >
             Edit
           </Button>
         ) : (
           <>
-            <Button variant="outline" size="sm" className="ml-2" onClick={handleSaveClick}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-2"
+              onClick={handleSaveClick}
+            >
               Save
             </Button>
-            <Button variant="ghost" size="sm" className="ml-2" onClick={handleCancelClick}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-2"
+              onClick={handleCancelClick}
+            >
               Cancel
             </Button>
           </>

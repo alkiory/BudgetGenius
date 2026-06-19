@@ -1,10 +1,4 @@
-import {
-  IsNotEmpty,
-  IsString,
-  IsEmail,
-  MinLength,
-  IsBoolean,
-} from 'class-validator';
+import { IsNotEmpty, IsString, IsEmail, MinLength } from 'class-validator';
 import { CreateDateColumn } from 'typeorm';
 
 export class CreateUserDto {
@@ -29,9 +23,6 @@ export class CreateUserDto {
 
   @IsString()
   role: string;
-
-  @IsBoolean()
-  isPremium: boolean;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;

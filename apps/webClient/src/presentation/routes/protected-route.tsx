@@ -1,9 +1,9 @@
-import { Navigate, useLocation } from 'react-router';
-import { useSelector } from 'react-redux';
-import MainLayout from '@presentation/layouts/main';
-import { RootState } from '@adapters/store/rootStore';
-import { RoutePaths } from '@presentation/utils/routes';
-import { useState, useEffect } from 'react';
+import { RootState } from "@adapters/store/rootStore";
+import MainLayout from "@presentation/layouts/main";
+import { RoutePaths } from "@presentation/utils/routes";
+import { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
+import { Navigate, useLocation } from "react-router";
 
 /**
  * A component that acts as a protected route, ensuring that only authenticated users
@@ -15,10 +15,12 @@ import { useState, useEffect } from 'react';
  * @returns {JSX.Element} - The main layout if authenticated, or a redirect to the login page.
  */
 const ProtectedRoute = () => {
-  const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
+  const isAuthenticated = useSelector(
+    (state: RootState) => state.auth.isAuthenticated,
+  );
   const user = useSelector((state: RootState) => state.auth.user);
   const [loading, setLoading] = useState(true);
-  const token = localStorage.getItem('accessToken');
+  const token = localStorage.getItem("accessToken");
   const location = useLocation();
 
   useEffect(() => {
@@ -32,7 +34,7 @@ const ProtectedRoute = () => {
   if (!location.pathname.includes(RoutePaths.Auth || RoutePaths.App)) {
     return <MainLayout />;
   }
-  if (!!token) {
+  if (token) {
     console.debug("No token found, redirecting to login");
     return <Navigate to={RoutePaths.Auth + "/" + RoutePaths.Login} replace />;
   }

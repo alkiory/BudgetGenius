@@ -41,4 +41,4 @@ import { CookieService } from '@infrastructure/config/cookie.service';
   ],
   controllers: [AuthController],
 })
-export class AuthModule { }
+export class AuthModule {}

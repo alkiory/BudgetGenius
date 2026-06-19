@@ -22,7 +22,6 @@ export class UserService {
     password: string,
     rol: string,
     authProvider: 'email' | 'google',
-    isPremium: boolean,
   ) {
     const existingUser = await this.userRepository.findByEmail(email);
     if (existingUser) {
@@ -38,7 +37,6 @@ export class UserService {
       role: rol,
       authProvider,
       refreshToken: null,
-      isPremium,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -57,7 +55,6 @@ export class UserService {
       role: userDto.role,
       authProvider: userDto.authProvider,
       refreshToken: null,
-      isPremium: userDto.isPremium,
       createdAt: userDto.createdAt,
       updatedAt: userDto.updatedAt,
     });
@@ -66,7 +63,10 @@ export class UserService {
       throw new UnprocessableEntityException('User already exists');
     }
 
-    // Create the user object to save in the database
+    // Create the user object to save in the database.
+    // isPremium now defaults to `true` at the DB column level (see migration
+    // IspremiumDefaultTrue). We use a defensive fallback because the in-memory
+    // User entity has not yet been rehydrated right after .save().
     const userDtoResult: UserDto = {
       id: user.id,
       name: user.name,
@@ -76,7 +76,7 @@ export class UserService {
       role: user.role,
       refreshToken: user.refreshToken,
       authProvider: user.authProvider,
-      isPremium: user.isPremium,
+      isPremium: user.isPremium ?? true,
     };
 
     this.logger.log(`User ${userDto.email} created successfully`);

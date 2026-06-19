@@ -1,11 +1,22 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useTranslation } from 'react-i18next';
-import { ResponsiveContainer, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Bar, Line, BarChart, LineChart } from "recharts";
-import { ChartContainer, ProgressBar, InsightBox } from "./inner-componets";
-import Loader from "@presentation/components/loader";
-import { useSelector } from "react-redux";
 import { RootState } from "@adapters/store/rootStore";
+import Loader from "@presentation/components/loader";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
+import { useTranslation } from "react-i18next";
+import { useSelector } from "react-redux";
+import {
+  ResponsiveContainer,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  Bar,
+  Line,
+  BarChart,
+  LineChart,
+} from "recharts";
+import { ChartContainer, ProgressBar, InsightBox } from "./inner-componets";
 
 interface IncomeExpensesTabProps {
   overview: any;
@@ -23,27 +34,42 @@ export default function IncomeExpensesTab({
   totalIncome,
   totalExpenses,
   savingsRate,
-  savings
+  savings,
 }: IncomeExpensesTabProps) {
   const { t } = useTranslation();
   const userSetting = useSelector((state: RootState) => state.userSettings);
   const { settings } = userSetting;
-  const targetCurrency = (settings?.currency || 'USD') as Currency;
+  const targetCurrency = (settings?.currency || "USD") as Currency;
   const formatCurrency = (value: number) =>
-    currencyService.formatCurrency(value, 'USD' as Currency, targetCurrency, false).formatted;
+    currencyService.formatCurrency(
+      value,
+      "USD" as Currency,
+      targetCurrency,
+      false,
+    ).formatted;
 
   return (
     <div className="space-y-6">
-      <ChartContainer title={t('reports.monthlyIncomeVsExpenses')}>
+      <ChartContainer title={t("reports.monthlyIncomeVsExpenses")}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={overview?.monthly || []}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="month" />
             <YAxis />
-            <Tooltip formatter={(value) => [formatCurrency(Number(value)), '']} />
+            <Tooltip
+              formatter={(value) => [formatCurrency(Number(value)), ""]}
+            />
             <Legend />
-            <Bar dataKey="income" name={t('reports.totalIncome')} fill="#10b981" />
-            <Bar dataKey="expenses" name={t('reports.totalExpenses')} fill="#ef4444" />
+            <Bar
+              dataKey="income"
+              name={t("reports.totalIncome")}
+              fill="#10b981"
+            />
+            <Bar
+              dataKey="expenses"
+              name={t("reports.totalExpenses")}
+              fill="#ef4444"
+            />
           </BarChart>
         </ResponsiveContainer>
       </ChartContainer>
@@ -53,7 +79,9 @@ export default function IncomeExpensesTab({
       {overview && (
         <div className="grid gap-6 md:grid-cols-2">
           <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
-            <h3 className="mb-4 text-lg font-medium">{t('reports.incomeBreakdown')}</h3>
+            <h3 className="mb-4 text-lg font-medium">
+              {t("reports.incomeBreakdown")}
+            </h3>
             <div className="space-y-4">
               {overview?.incomeSources?.map((source: any) => (
                 <div key={source.category}>
@@ -70,16 +98,21 @@ export default function IncomeExpensesTab({
             </div>
           </div>
 
-          <ChartContainer title={t('reports.savingsGrowth')}>
+          <ChartContainer title={t("reports.savingsGrowth")}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={savings?.monthly || []}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis />
-                <Tooltip formatter={(value) => [formatCurrency(Number(value)), t('transactions.amount')]} />
+                <Tooltip
+                  formatter={(value) => [
+                    formatCurrency(Number(value)),
+                    t("transactions.amount"),
+                  ]}
+                />
                 <Line
                   type="monotone"
-                  dataKey="amount"
+                  dataKey="savings"
                   stroke="#10b981"
                   activeDot={{ r: 8 }}
                 />
@@ -91,22 +124,28 @@ export default function IncomeExpensesTab({
 
       {insights && (
         <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
-          <h3 className="mb-4 text-lg font-medium">{t('reports.financialRatios')}</h3>
+          <h3 className="mb-4 text-lg font-medium">
+            {t("reports.financialRatios")}
+          </h3>
           <div className="grid gap-6 md:grid-cols-3">
             <InsightBox
-              title={t('reports.incomeRatio')}
-              value={`${Math.round((totalIncome / (totalIncome + totalExpenses) * 100))}%`}
-              description={t('reports.percentageOfCashFlow')}
+              title={t("reports.incomeRatio")}
+              value={`${Math.round(
+                (totalIncome / (totalIncome + totalExpenses)) * 100,
+              )}%`}
+              description={t("reports.percentageOfCashFlow")}
             />
             <InsightBox
-              title={t('reports.expensesRatio')}
-              value={`${Math.round((totalExpenses / (totalIncome + totalExpenses) * 100))}%`}
-              description={t('reports.percentageOfCashFlow')}
+              title={t("reports.expensesRatio")}
+              value={`${Math.round(
+                (totalExpenses / (totalIncome + totalExpenses)) * 100,
+              )}%`}
+              description={t("reports.percentageOfCashFlow")}
             />
             <InsightBox
-              title={t('reports.savingsRate')}
+              title={t("reports.savingsRate")}
               value={`${savingsRate}%`}
-              description={t('reports.ofIncomeSavedShort')}
+              description={t("reports.ofIncomeSavedShort")}
             />
           </div>
         </div>

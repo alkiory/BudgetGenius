@@ -5,7 +5,7 @@ import { AppModule } from 'src/app.module';
 
 @Injectable()
 export class CookieService {
-  constructor(private configService: ConfigService) { }
+  constructor(private configService: ConfigService) {}
 
   setCookie(res: Response, name: string, value: string, options?: any) {
     const defaultOptions = AppModule.cookieOptions(this.configService);

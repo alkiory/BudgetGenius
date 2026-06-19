@@ -13,13 +13,14 @@ if (!process.env.DB_HOST) {
 
 console.log(`--- DB CONFIG ---`);
 console.log(`Ambiente: ${nodeEnv}`);
-console.log(`Variables de entorno cargadas: ${JSON.stringify({
-  DB_HOST: process.env.DB_HOST,
-  DB_USER: process.env.DB_USER,
-  DB_NAME: process.env.DB_NAME,
-})}`);
+console.log(
+  `Variables de entorno cargadas: ${JSON.stringify({
+    DB_HOST: process.env.DB_HOST,
+    DB_USER: process.env.DB_USER,
+    DB_NAME: process.env.DB_NAME,
+  })}`,
+);
 console.log(`-----------------`);
-
 
 export const AppDataSource = new DataSource({
   type: 'postgres',

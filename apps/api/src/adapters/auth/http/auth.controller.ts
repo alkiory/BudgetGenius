@@ -39,33 +39,40 @@ export class AuthController {
     private readonly jwtService: JwtService,
     private readonly logger: LoggingService,
     private readonly cookieService: CookieService,
-  ) { }
+  ) {}
 
   @Post('firebase-login')
   @ApiOperation({ summary: 'Autenticar con Firebase' })
-  @ApiResponse({ status: 200, description: 'Token verificado y cookies seteadas' })
+  @ApiResponse({
+    status: 200,
+    description: 'Token verificado y cookies seteadas',
+  })
   async firebaseLogin(
     @Body() body: { idToken: string },
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
   ) {
     try {
       const decodedToken = await admin.auth().verifyIdToken(body.idToken);
 
       const firebaseUser = {
-        email: decodedToken.email || decodedToken.firebase?.identities?.email?.[0],
+        email:
+          decodedToken.email || decodedToken.firebase?.identities?.email?.[0],
         name: decodedToken.name || 'Username no proporcionado',
       };
 
-      const { accessToken, refreshToken, userEntity } = await this.authService.oauthLogin(firebaseUser);
+      const { accessToken, refreshToken, userEntity } =
+        await this.authService.oauthLogin(firebaseUser);
 
       this.cookieService.setCookie(res, 'accessToken', accessToken);
       this.cookieService.setCookie(res, 'refreshToken', refreshToken);
 
-      this.logger.log(`🔓 Login con Firebase exitoso para: ${firebaseUser.email}`);
+      this.logger.log(
+        `🔓 Login con Firebase exitoso para: ${firebaseUser.email}`,
+      );
 
       return {
         message: '🔓 Login successful',
-        userEntity
+        userEntity,
       };
     } catch (error) {
       this.logger.error(`🚨 Falló el login con Firebase: ${error.message}`);
@@ -101,7 +108,6 @@ export class AuthController {
       password: signupDTO.password,
       authProvider: 'email',
       role: 'user',
-      isPremium: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -138,7 +144,7 @@ export class AuthController {
         surname: 'Doe',
         email: 'john.doe@example.com',
         role: 'user',
-        isPremium: false,
+        isPremium: true,
       },
     },
   })
@@ -150,15 +156,17 @@ export class AuthController {
   @Post('login')
   @ApiOperation({ summary: 'Autenticar un usuario' })
   @ApiBody({
-    type: LoginDto, description: 'Credenciales de inicio de sesión', examples: {
+    type: LoginDto,
+    description: 'Credenciales de inicio de sesión',
+    examples: {
       valid: {
         summary: 'Credenciales válidas',
         value: {
           email: 'john.doe@example.com',
-          password: 'password123'
-        }
-      }
-    }
+          password: 'password123',
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 200,
@@ -173,7 +181,7 @@ export class AuthController {
   @Post('login')
   async login(
     @Body() body: LoginDto,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.authService.login(body.email, body.password);
 
@@ -182,7 +190,7 @@ export class AuthController {
 
     return {
       user: result.user,
-      message: '🔓 Login successful'
+      message: '🔓 Login successful',
     };
   }
 
@@ -195,7 +203,9 @@ export class AuthController {
       try {
         await this.authService.addTokenToBlacklist(token);
       } catch (error) {
-        this.logger.error(`Error al añadir token a la blacklist: ${error.message}`);
+        this.logger.error(
+          `Error al añadir token a la blacklist: ${error.message}`,
+        );
       }
     }
 
@@ -204,7 +214,7 @@ export class AuthController {
 
     return {
       success: true,
-      message: '👋 Successfully logged out'
+      message: '👋 Successfully logged out',
     };
   }
 
@@ -221,7 +231,7 @@ export class AuthController {
   @Post('refresh')
   async refreshToken(
     @Req() req: Request,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
   ) {
     // Intentar leer de la cookie en lugar del @Body
     const token = req.cookies?.refreshToken;
@@ -231,7 +241,10 @@ export class AuthController {
     try {
       const payload = this.jwtService.verify(token);
       // ... generar nuevo accessToken y setearlo en cookie
-      const newAccessToken = this.jwtService.sign({ ...payload }, { expiresIn: '1h' });
+      const newAccessToken = this.jwtService.sign(
+        { ...payload },
+        { expiresIn: '1h' },
+      );
 
       this.cookieService.setCookie(res, 'accessToken', newAccessToken);
       this.cookieService.setCookie(res, 'refreshToken', token);

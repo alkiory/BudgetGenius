@@ -1,9 +1,9 @@
 import useRestoreSession from "@adapters/hooks/useLoadUser";
-import ErrorBoundary from "@infrastructure/errorBoundary"
-import ToastConfig from "@infrastructure/toast.config"
-import RouteConfig from "@presentation/routes/route-config"
-import { LocaleProvider } from "@infrastructure/i18n/LocaleProvider"
-import { OfflineIndicator } from "@presentation/components/offline-indicator"
+import ErrorBoundary from "@infrastructure/errorBoundary";
+import { LocaleProvider } from "@infrastructure/i18n/LocaleProvider";
+import ToastConfig from "@infrastructure/toast.config";
+import { OfflineIndicator } from "@presentation/components/offline-indicator";
+import RouteConfig from "@presentation/routes/route-config";
 
 function App() {
   useRestoreSession();
@@ -17,7 +17,7 @@ function App() {
       </ErrorBoundary>
       <ToastConfig />
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

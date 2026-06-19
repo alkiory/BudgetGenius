@@ -1,21 +1,21 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { UserSettings } from '@domain/user/userSettings';
+import { UserSettings } from "@domain/user/userSettings";
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 interface UserSettingsState {
-  settings: UserSettings
+  settings: UserSettings;
 }
 
 const initialState: UserSettingsState = {
   settings: {
     id: 0,
-    timezone: '',
-    currency: 'USD',
-    locale: '',
-  }
+    timezone: "",
+    currency: "USD",
+    locale: "",
+  },
 };
 
 export const settingsSlice = createSlice({
-  name: 'user-settings',
+  name: "user-settings",
   initialState,
   reducers: {
     // Se actualiza el estado tras un login exitoso
@@ -23,7 +23,10 @@ export const settingsSlice = createSlice({
       state.settings = action.payload;
     },
     // Se usa cuando el usuario edita su perfil
-    updateSettingsAction: (state, action: PayloadAction<Partial<UserSettings>>) => {
+    updateSettingsAction: (
+      state,
+      action: PayloadAction<Partial<UserSettings>>,
+    ) => {
       if (state.settings) {
         state.settings = { ...state.settings, ...action.payload };
       }
@@ -31,5 +34,6 @@ export const settingsSlice = createSlice({
   },
 });
 
-export const { setSettingsAction, updateSettingsAction } = settingsSlice.actions;
+export const { setSettingsAction, updateSettingsAction } =
+  settingsSlice.actions;
 export default settingsSlice.reducer;

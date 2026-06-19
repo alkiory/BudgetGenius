@@ -29,7 +29,7 @@ export class AuthService {
     private readonly passwordResetRepository: PasswordResetRepository,
     private readonly dataSource: DataSource,
     private readonly configService: ConfigService,
-  ) { }
+  ) {}
 
   findOne(email: string) {
     return this.userRepository.findByEmail(email);
@@ -40,7 +40,9 @@ export class AuthService {
 
     // Si no hay usuario o el usuario no tiene password (login social)
     if (!user || !user.password) {
-      this.logger.warn(`Intentando validar con password un usuario sin ella: ${email}`);
+      this.logger.warn(
+        `Intentando validar con password un usuario sin ella: ${email}`,
+      );
       return null; // En lugar de throw, retorna null para que el controller decida
     }
 
@@ -61,15 +63,18 @@ export class AuthService {
       const user = await this.userRepository.findByEmail(email);
 
       if (!user) {
-        throw new UnauthorizedException('⚠️ Usuario no encontrado en la base de datos');
+        throw new UnauthorizedException(
+          '⚠️ Usuario no encontrado en la base de datos',
+        );
       }
 
       // 2. VALIDACIÓN DE CONTRASEÑA (MODO LOCAL)
-      // Si no usas Firebase, debes comparar el hash. 
+      // Si no usas Firebase, debes comparar el hash.
       // Si usas Firebase siempre, este paso falla porque el usuario no existe en la nube.
 
       // --- Lógica para saltar Firebase en desarrollo ---
-      const useFirebase = this.configService.get<string>('NODE_ENV') === 'production';
+      const useFirebase =
+        this.configService.get<string>('NODE_ENV') === 'production';
 
       if (useFirebase) {
         if (!getApps().length) {
@@ -77,10 +82,16 @@ export class AuthService {
             apiKey: this.configService.get<string>('FIREBASE_API_KEY'),
             authDomain: this.configService.get<string>('FIREBASE_AUTH_DOMAIN'),
             projectId: this.configService.get<string>('FIREBASE_PROJECT_ID'),
-            storageBucket: this.configService.get<string>('FIREBASE_STORAGE_BUCKET'),
-            messagingSenderId: this.configService.get<string>('FIREBASE_MESSAGING_SENDER_ID'),
+            storageBucket: this.configService.get<string>(
+              'FIREBASE_STORAGE_BUCKET',
+            ),
+            messagingSenderId: this.configService.get<string>(
+              'FIREBASE_MESSAGING_SENDER_ID',
+            ),
             appId: this.configService.get<string>('FIREBASE_APP_ID'),
-            measurementId: this.configService.get<string>('FIREBASE_MEASURENT_ID'),
+            measurementId: this.configService.get<string>(
+              'FIREBASE_MEASURENT_ID',
+            ),
           });
         }
         const auth = getAuth();
@@ -90,7 +101,9 @@ export class AuthService {
         // const isMatch = await bcrypt.compare(password, user.password);
         // if (!isMatch) throw new UnauthorizedException('🔒 Contraseña incorrecta');
 
-        this.logger.log(`Modo local: Saltando validación de Firebase para ${email}`);
+        this.logger.log(
+          `Modo local: Saltando validación de Firebase para ${email}`,
+        );
       }
 
       // 3. Generar tokens (JWT)
@@ -99,16 +112,21 @@ export class AuthService {
       const refreshToken = this.jwtService.sign(userData, { expiresIn: '7d' });
 
       // 4. Guardar en Redis
-      await this.redisService.set(`refreshToken:${user.id}`, refreshToken, 604800);
+      await this.redisService.set(
+        `refreshToken:${user.id}`,
+        refreshToken,
+        604800,
+      );
 
       return { accessToken, refreshToken, user };
-
     } catch (error) {
       if (error instanceof UnauthorizedException) throw error;
 
       // Errores de Firebase
       if (error.code?.includes('auth/')) {
-        throw new UnauthorizedException('🔒 Credenciales inválidas en Firebase');
+        throw new UnauthorizedException(
+          '🔒 Credenciales inválidas en Firebase',
+        );
       }
 
       this.logger.error(`Error login: ${error.message}`);
@@ -170,7 +188,6 @@ export class AuthService {
         authProvider: 'google',
         role: UserRole.USER,
         password: null,
-        isPremium: false,
       });
 
       await queryRunner.manager.save(newUser);
@@ -242,7 +259,9 @@ export class AuthService {
 
     // Aquí enviarías el correo con el enlace para restablecer la contraseña.
     this.logger.log(
-      `🔗 Link to reset password: ${this.configService.get<string>('FRONTEND_URL')}/auth/reset-password?token=${token}`,
+      `🔗 Link to reset password: ${this.configService.get<string>(
+        'FRONTEND_URL',
+      )}/auth/reset-password?token=${token}`,
     );
 
     return {

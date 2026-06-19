@@ -1,15 +1,15 @@
-import { Skeleton } from "../skeleton"
-import type { ReactNode } from "react"
+import type { ReactNode } from "react";
+import { Skeleton } from "../skeleton";
 
 interface CardSkeletonProps {
   /** If true, renders a title bar at the top */
-  hasTitle?: boolean
+  hasTitle?: boolean;
   /** Width of the title skeleton */
-  titleWidth?: string
+  titleWidth?: string;
   /** Content rendered inside the card body */
-  children: ReactNode
+  children: ReactNode;
   /** Optional additional classes */
-  className?: string
+  className?: string;
 }
 
 /**
@@ -22,7 +22,9 @@ export function CardSkeleton({
   className = "",
 }: CardSkeletonProps) {
   return (
-    <div className={`rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800 ${className}`}>
+    <div
+      className={`rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800 ${className}`}
+    >
       {hasTitle && (
         <div className="flex items-center justify-between mb-4">
           <Skeleton className={`h-5 ${titleWidth}`} />
@@ -31,20 +33,24 @@ export function CardSkeleton({
       )}
       {children}
     </div>
-  )
+  );
 }
 
 /**
  * A simple pie chart skeleton (circle) inside a card with optional title.
  */
-export function PieChartCardSkeleton({ hasTitle = true }: { hasTitle?: boolean }) {
+export function PieChartCardSkeleton({
+  hasTitle = true,
+}: {
+  hasTitle?: boolean;
+}) {
   return (
     <CardSkeleton hasTitle={hasTitle} titleWidth="w-36">
       <div className="flex items-center justify-center h-64">
         <Skeleton className="h-40 w-40 rounded-full" />
       </div>
     </CardSkeleton>
-  )
+  );
 }
 
 /**
@@ -63,7 +69,7 @@ export function ProgressBarSkeleton() {
         <Skeleton className="h-3 w-16" />
       </div>
     </div>
-  )
+  );
 }
 
 /**
@@ -111,7 +117,7 @@ export function GoalCardSkeleton() {
       {/* Add Progress button */}
       <Skeleton className="mt-4 h-9 w-full rounded-md" />
     </div>
-  )
+  );
 }
 
 /**
@@ -123,10 +129,10 @@ export function ListItemSkeleton({
   subTextWidth = "w-24",
   amountWidth = "w-20",
 }: {
-  iconSize?: string
-  textWidth?: string
-  subTextWidth?: string
-  amountWidth?: string
+  iconSize?: string;
+  textWidth?: string;
+  subTextWidth?: string;
+  amountWidth?: string;
 }) {
   return (
     <div className="flex items-center justify-between rounded-lg border border-slate-100 p-3 dark:border-slate-700">
@@ -139,5 +145,5 @@ export function ListItemSkeleton({
       </div>
       <Skeleton className={`h-4 ${amountWidth} shrink-0`} />
     </div>
-  )
+  );
 }

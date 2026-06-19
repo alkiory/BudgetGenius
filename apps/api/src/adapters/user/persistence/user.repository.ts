@@ -20,8 +20,7 @@ export class UserRepositoryImpl implements UserRepositoryPort {
     password,
     role,
     authProvider,
-    isPremium,
-  }: Omit<UserDto, 'id'>): Promise<User> {
+  }: Omit<UserDto, 'id' | 'isPremium'>): Promise<User> {
     const user = new User();
 
     user.name = name;
@@ -30,7 +29,7 @@ export class UserRepositoryImpl implements UserRepositoryPort {
     user.password = password;
     user.role = role;
     user.authProvider = authProvider;
-    user.isPremium = isPremium;
+    // isPremium now defaults at the DB column level (see migration IspremiumDefaultTrue).
 
     return this.save(user);
   }
@@ -54,13 +53,12 @@ export class UserRepositoryImpl implements UserRepositoryPort {
     try {
       const user = await this.repo.findOne({
         where: { id },
-        relations: [
-          'budgets',
-          'transactions',
-          'savingGoals',
-          'incomes',
-          'goals',
-        ],
+        // Phase 6.8 (Bug B): the `incomes` relation was removed in
+        // Phase 4 (T4.1-T4.6). Eagerly loading it on `findById` throws
+        // `EntityPropertyNotFoundError: Property "incomes" was not
+        // found in "User"` whenever incomePage (or any page that calls
+        // /api/auth/verify → loadUser → findById) mounts.
+        relations: ['budgets', 'transactions'],
       });
       return user;
     } catch (error) {

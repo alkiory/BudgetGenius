@@ -18,7 +18,11 @@ export class AiService {
     this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   }
 
-  async analyzeFinancialData(userId: number, userQuery: string, contextData?: any): Promise<string> {
+  async analyzeFinancialData(
+    userId: number,
+    userQuery: string,
+    contextData?: any,
+  ): Promise<string> {
     const user = await this.userService.getById(userId);
 
     // 1. Recuperar historial de Redis
@@ -75,7 +79,11 @@ export class AiService {
     return data ? JSON.parse(data) : [];
   }
 
-  private async saveToHistory(userId: number, userQuery: string, aiResponse: string) {
+  private async saveToHistory(
+    userId: number,
+    userQuery: string,
+    aiResponse: string,
+  ) {
     const history = await this.getHistory(userId);
     history.push({ role: 'user', content: userQuery });
     history.push({ role: 'assistant', content: aiResponse });
@@ -85,7 +93,7 @@ export class AiService {
     await this.redis.set(
       `${this.HISTORY_PREFIX}${userId}`,
       JSON.stringify(trimmedHistory),
-      3600 // Expira en 1 hora de inactividad
+      3600, // Expira en 1 hora de inactividad
     );
   }
 
@@ -98,5 +106,4 @@ export class AiService {
     });
     return response.choices[0].message?.content || '';
   }
-
 }

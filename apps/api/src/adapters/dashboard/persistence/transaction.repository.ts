@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { LessThan, MoreThan, Repository } from 'typeorm';
 
 @Injectable()
 export class TransactionRepository {
@@ -15,7 +15,12 @@ export class TransactionRepository {
     private readonly repo: Repository<Transaction>,
   ) {}
 
-  async create(transaction: Omit<Transaction, 'id'>): Promise<Transaction> {
+  async create(
+    transaction: Partial<Omit<Transaction, 'id'>>,
+  ): Promise<Transaction> {
+    // Match the service's spread-shape builder, which may carry `recurrence`
+    // as either a value, null, or absent. Defaults still land via the
+    // nullable column at the DB layer.
     const newTransaction = this.repo.create(transaction);
     return this.repo.save(newTransaction);
   }
@@ -43,18 +48,20 @@ export class TransactionRepository {
     return transaction;
   }
 
-  async update({
-    id,
-    description,
-    category,
-    amount,
-    status,
-  }: Transaction): Promise<Transaction> {
+  async update(
+    data: Partial<Transaction> & { id: number },
+  ): Promise<Transaction> {
+    const { id, description, category, amount, recurrence } = data;
     const transaction = await this.repo.findOneOrFail({ where: { id } });
     transaction.description = description;
     transaction.category = category;
     transaction.amount = amount;
-    transaction.status = status;
+    // Partial-update contract: omitted = preserve, explicit value = overwrite.
+    // The `undefined` check is critical — a default parameter (e.g. `= null`)
+    // would coerce it to null and silently wipe an existing recurrence.
+    if (recurrence !== undefined) {
+      transaction.recurrence = recurrence;
+    }
     await this.repo.save(transaction);
     return transaction;
   }
@@ -88,13 +95,27 @@ export class TransactionRepository {
     offset,
     limit,
     userId,
+    type,
   }: {
     offset: number;
     limit: number;
     userId: number;
+    type?: 'income' | 'expense';
   }) {
+    // Phase 3 (T3.3): apply a sign-convention where-clause only when the
+    // controller forwarded an explicit `type` filter. Omitting the key
+    // when `type` is undefined preserves every existing caller's
+    // behavior (transactionPage passes no `type` and expects the full
+    // unfiltered list).
+    const where: Record<string, unknown> = { user: { id: userId } };
+    if (type === 'income') {
+      where.amount = MoreThan(0);
+    } else if (type === 'expense') {
+      where.amount = LessThan(0);
+    }
+
     const [transactions, total] = await this.repo.findAndCount({
-      where: { user: { id: userId } },
+      where,
       skip: offset,
       take: limit,
       order: {

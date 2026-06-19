@@ -24,8 +24,8 @@ async function setup() {
     console.log('✅ Schema bg_public verificado/creado');
     await client.end();
   } catch (err) {
-    // @ts-ignore
-    console.error('❌ Error en premigration:', err.message);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('❌ Error en premigration:', message);
     process.exit(1);
   }
 }

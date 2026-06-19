@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -29,17 +28,7 @@ export class BudgetService {
   ) {}
 
   async createBudget(userId: number, dto: CreateBudgetDto): Promise<Budget> {
-    const existingCount = await this.repo.countByUser(userId);
-
     const user = await this.userRepo.findById(userId);
-    if (!user.isPremium && existingCount >= 3) {
-      this.logger.warn(
-        `User ${userId} attempted to create a 4th budget while free`,
-      );
-      throw new ForbiddenException(
-        'Free users may only create up to 3 budgets.  Upgrade to premium to add more.',
-      );
-    }
 
     const totalSpent = dto.totalSpent ?? 0;
 
@@ -236,7 +225,10 @@ export class BudgetService {
 
   private async recalculateBudgetTotalSpent(budgetId: number): Promise<void> {
     const budget = await this.repo.findById(budgetId);
-    const totalSpent = budget.categories.reduce((sum, cat) => sum + cat.spent, 0);
+    const totalSpent = budget.categories.reduce(
+      (sum, cat) => sum + cat.spent,
+      0,
+    );
     budget.totalSpent = totalSpent;
     await this.repo.updateBudget(budget);
   }

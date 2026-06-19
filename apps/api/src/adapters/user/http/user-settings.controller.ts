@@ -15,7 +15,7 @@ import {
 @Controller('user-settings')
 @UseGuards(JwtAuthGuard)
 export class UserSettingsController {
-  constructor(private userService: UserSettingsService) { }
+  constructor(private userService: UserSettingsService) {}
 
   @Get()
   @ApiOperation({

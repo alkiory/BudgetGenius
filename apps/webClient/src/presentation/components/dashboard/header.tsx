@@ -1,11 +1,10 @@
-
-import { useTranslation } from 'react-i18next';
-import { ThemeToggle } from "../themeToogle"
-import { LanguageSwitcher } from "./language-switcher"
-import { Link } from "react-router";
-import { RoutePaths } from "@presentation/utils/routes";
-import { useSelector } from "react-redux";
 import { RootState } from "@adapters/store/rootStore";
+import { RoutePaths } from "@presentation/utils/routes";
+import { useTranslation } from "react-i18next";
+import { useSelector } from "react-redux";
+import { Link } from "react-router";
+import { ThemeToggle } from "../themeToogle";
+import { LanguageSwitcher } from "./language-switcher";
 import { AddTransactionModal } from "./transaction/add-transaction-modal";
 
 export function DashboardHeader() {
@@ -28,9 +27,13 @@ export function DashboardHeader() {
                 className="flex max-w-xs items-center rounded-full bg-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:bg-slate-950"
                 id="user-menu-button"
               >
-                <span className="sr-only">{t('dashboard.openUserMenu')}</span>
-                <Link to={RoutePaths.App + "/" + RoutePaths.Profile} className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 dark:bg-purple-900 dark:text-purple-400 font-medium">
-                  {(user?.name?.charAt(0)?.toUpperCase() || '') + (user?.surname?.charAt(0)?.toUpperCase() || '')}
+                <span className="sr-only">{t("dashboard.openUserMenu")}</span>
+                <Link
+                  to={RoutePaths.App + "/" + RoutePaths.Profile}
+                  className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 dark:bg-purple-900 dark:text-purple-400 font-medium"
+                >
+                  {(user?.name?.charAt(0)?.toUpperCase() || "") +
+                    (user?.surname?.charAt(0)?.toUpperCase() || "")}
                 </Link>
               </button>
             </div>
@@ -38,5 +41,5 @@ export function DashboardHeader() {
         </div>
       </div>
     </header>
-  )
+  );
 }

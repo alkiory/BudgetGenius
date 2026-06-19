@@ -1,2 +1,8 @@
 packages:
   - 'apps/*'
+
+# Workspace-level overrides. pnpm 10+ stopped reading the `pnpm` field from
+# the root package.json — these belong here. See
+# https://pnpm.io/settings#workspace-overrides for the new home.
+overrides:
+  '@firebasegen/default-connector': link:dataconnect-generated/js/default-connector

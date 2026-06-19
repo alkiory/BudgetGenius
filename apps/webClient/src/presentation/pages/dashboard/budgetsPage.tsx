@@ -1,33 +1,41 @@
-import { useTranslation } from 'react-i18next';
-import { HttpBudgetRepository } from "@adapters/http/budget.repository"
-import { useFetchBudgets } from "@adapters/query/dashboard"
-import { Budget } from "@domain/dashboard/budgets/budget.entity"
-import { BudgetDetail } from "@presentation/components/dashboard/budgets/budget-detail"
-import { BudgetList } from "@presentation/components/dashboard/budgets/budget-list"
-import { BudgetModal } from "@presentation/components/dashboard/budgets/budget-modal"
-import { Button } from "@presentation/components/ui/button"
-import { PageHeader } from "@presentation/components/ui/page-header"
-import { confirmToast, errorToast, successToast } from "@presentation/utils/toast"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Plus } from "lucide-react"
-import { useEffect, useState } from "react"
-import BudgetsLoading from "@presentation/components/dashboard/budgets/budgets-loading"
+import { HttpBudgetRepository } from "@adapters/http/budget.repository";
+import { useFetchBudgets } from "@adapters/query/dashboard";
+import { Budget } from "@domain/dashboard/budgets/budget.entity";
+import { BudgetDetail } from "@presentation/components/dashboard/budgets/budget-detail";
+import { BudgetList } from "@presentation/components/dashboard/budgets/budget-list";
+import { BudgetModal } from "@presentation/components/dashboard/budgets/budget-modal";
+import BudgetsLoading from "@presentation/components/dashboard/budgets/budgets-loading";
+import { Button } from "@presentation/components/ui/button";
+import { PageHeader } from "@presentation/components/ui/page-header";
+import {
+  confirmToast,
+  errorToast,
+  successToast,
+} from "@presentation/utils/toast";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export default function BudgetsPage() {
   const { t } = useTranslation();
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editSelectedBudget, setEditSelectedBudget] = useState<Budget | undefined>(undefined)
-  const [selectedBudget, setSelectedBudget] = useState<Budget | undefined>(undefined)
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editSelectedBudget, setEditSelectedBudget] = useState<
+    Budget | undefined
+  >(undefined);
+  const [selectedBudget, setSelectedBudget] = useState<Budget | undefined>(
+    undefined,
+  );
 
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
 
   const {
     data: budgets,
     isLoading,
     isSuccess: budgetsFetched,
     isRefetching,
-    refetch: refetchBudgets
-  } = useFetchBudgets()
+    refetch: refetchBudgets,
+  } = useFetchBudgets();
 
   if (isLoading) {
     return <BudgetsLoading />;
@@ -35,7 +43,7 @@ export default function BudgetsPage() {
 
   useEffect(() => {
     if (selectedBudget && budgets) {
-      const updatedBudget = budgets.find(b => b.id === selectedBudget.id);
+      const updatedBudget = budgets.find((b) => b.id === selectedBudget.id);
       if (updatedBudget) {
         setSelectedBudget(updatedBudget);
       } else {
@@ -46,52 +54,57 @@ export default function BudgetsPage() {
   }, [budgets]);
 
   const handleCreateBudget = () => {
-    setEditSelectedBudget(undefined)
-    setIsModalOpen(true)
-  }
+    setEditSelectedBudget(undefined);
+    setIsModalOpen(true);
+  };
 
   const handleEditBudget = (budget: Budget) => {
-    setEditSelectedBudget(budget)
-    setIsModalOpen(true)
-  }
+    setEditSelectedBudget(budget);
+    setIsModalOpen(true);
+  };
 
   const handleSelectBudget = (budget: Budget) => {
-    setSelectedBudget(budgets?.find(b => b.id === budget.id));
-  }
+    setSelectedBudget(budgets?.find((b) => b.id === budget.id));
+  };
 
   const { mutate: deleteBudget } = useMutation({
-    mutationKey: ['delete-budget'],
+    mutationKey: ["delete-budget"],
     mutationFn: HttpBudgetRepository.deleteBudget,
     onSuccess: (budgetId) => {
       if (selectedBudget?.id === budgetId) {
-        setSelectedBudget(undefined)
+        setSelectedBudget(undefined);
       }
-      successToast("Budget deleted successfully", 3000, "budget-delete")
-      queryClient.invalidateQueries({ queryKey: ["budgets"] })
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
-      setIsModalOpen(false)
+      successToast("Budget deleted successfully", 3000, "budget-delete");
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      setIsModalOpen(false);
     },
     onError: () => {
-      errorToast("Failed to delete budget", 3000, "budget-delete")
-    }
-  })
+      errorToast("Failed to delete budget", 3000, "budget-delete");
+    },
+  });
 
   const handleDeleteBudget = (budgetId: string | number) => {
-    confirmToast(
-      "Are you sure you want to delete this budget?",
-      {
-        onConfirm: () => deleteBudget(Number(budgetId)),
-        labelCancel: "Cancel",
-        labelConfirm: "Delete"
-      })
-  }
+    confirmToast("Are you sure you want to delete this budget?", {
+      onConfirm: () => deleteBudget(Number(budgetId)),
+      labelCancel: "Cancel",
+      labelConfirm: "Delete",
+    });
+  };
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('budgets.title')} description={t('budgets.description')}>
-        <Button variant="primary" onClick={handleCreateBudget} className="gap-1">
+      <PageHeader
+        title={t("budgets.title")}
+        description={t("budgets.description")}
+      >
+        <Button
+          variant="primary"
+          onClick={handleCreateBudget}
+          className="gap-1"
+        >
           <Plus className="h-4 w-4" />
-          {t('budgets.createBudget')}
+          {t("budgets.createBudget")}
         </Button>
       </PageHeader>
 
@@ -103,16 +116,19 @@ export default function BudgetsPage() {
               isLoading={isLoading}
               onBudgetSelect={handleSelectBudget}
               onEditBudget={handleEditBudget}
-              onDeleteBudget={handleDeleteBudget} />
+              onDeleteBudget={handleDeleteBudget}
+            />
           </div>
         )}
         <div className="md:col-span-2">
-          {budgetsFetched && <BudgetDetail
-            onEditBudget={handleEditBudget}
-            selectedBudget={selectedBudget}
-            isRefreshed={isRefetching}
-            refetchBudgets={refetchBudgets}
-          />}
+          {budgetsFetched && (
+            <BudgetDetail
+              onEditBudget={handleEditBudget}
+              selectedBudget={selectedBudget}
+              isRefreshed={isRefetching}
+              refetchBudgets={refetchBudgets}
+            />
+          )}
         </div>
       </div>
 
@@ -123,5 +139,5 @@ export default function BudgetsPage() {
         refetchBudgets={refetchBudgets}
       />
     </div>
-  )
+  );
 }

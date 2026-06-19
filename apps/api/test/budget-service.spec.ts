@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BudgetService } from '@application/dashboard/services/budget.service';
 import { BudgetRepository } from '@adapters/dashboard/persistence/budget.repository';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
-import { ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggingService } from '@infrastructure/log/logger.service';
 
 // Full mock User object matching the User entity
@@ -15,7 +15,9 @@ const mockUser = {
   authProvider: 'email' as const,
   role: 'user',
   refreshToken: null,
-  isPremium: false,
+  // isPremium is dormant for MVP launch; defaults to true at the DB column level.
+  // Kept in the mock so the literal satisfies the `User` type passthrough (T3.13).
+  isPremium: true,
   budgets: [],
   comparePassword: jest.fn(),
   hashPassword: jest.fn(),
@@ -27,7 +29,6 @@ const mockUser = {
   overviews: [],
   settings: [],
   incomes: [],
-  goals: [],
 };
 
 // Full mock User used as the `user` property on Budget entities
@@ -40,7 +41,8 @@ const budgetUser = {
   authProvider: 'email' as const,
   role: 'user',
   refreshToken: null,
-  isPremium: false,
+  // Defaults to true post-migration (see IspremiumDefaultTrue).
+  isPremium: true,
   budgets: [] as any[],
   comparePassword: jest.fn(),
   hashPassword: jest.fn(),
@@ -52,7 +54,6 @@ const budgetUser = {
   overviews: [],
   settings: [],
   incomes: [],
-  goals: [],
 };
 
 // Full mock Budget used as the `budget` property on BudgetCategory entities
@@ -198,7 +199,9 @@ describe('BudgetService', () => {
         updatedAt: new Date(),
       };
 
-      await expect(service.createBudget(1, dto)).rejects.toThrow(BadRequestException);
+      await expect(service.createBudget(1, dto)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -301,7 +304,9 @@ describe('BudgetService', () => {
         endDate: new Date('2026-06-01'), // end before start
       };
 
-      await expect(service.updateBudget(1, dto)).rejects.toThrow(BadRequestException);
+      await expect(service.updateBudget(1, dto)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -323,7 +328,10 @@ describe('BudgetService', () => {
 
       repo.getBudgetCategory.mockResolvedValue(existingCategory);
       userRepo.findById.mockResolvedValue(mockUser);
-      repo.updateBudgetCategory.mockResolvedValue({ ...existingCategory, spent: 850 });
+      repo.updateBudgetCategory.mockResolvedValue({
+        ...existingCategory,
+        spent: 850,
+      });
       // After update, recalculate loads budget with categories
       repo.findById.mockResolvedValue(budgetWithUpdatedCategory);
       repo.updateBudget.mockResolvedValue(budgetWithUpdatedCategory);
@@ -365,10 +373,17 @@ describe('BudgetService', () => {
     });
 
     it('should still reject non-existent category', async () => {
-      repo.getBudgetCategory.mockRejectedValue(new NotFoundException('Category 999 not found'));
+      repo.getBudgetCategory.mockRejectedValue(
+        new NotFoundException('Category 999 not found'),
+      );
 
       await expect(
-        service.updateBudgetCategory(1, { id: 999, name: 'Ghost', allocated: 0, spent: 100 }),
+        service.updateBudgetCategory(1, {
+          id: 999,
+          name: 'Ghost',
+          allocated: 0,
+          spent: 100,
+        }),
       ).rejects.toThrow(NotFoundException);
     });
   });

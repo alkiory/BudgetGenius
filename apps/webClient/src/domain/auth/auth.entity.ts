@@ -4,4 +4,4 @@ export type Auth = {
   accessToken: string;
   refreshToken: string;
   user: User;
-}
+};

@@ -1,9 +1,9 @@
-import { setUser } from '@adapters/slices/auth/authSlice';
-import api from '@infrastructure/api.config';
-import { RoutePaths } from '@presentation/utils/routes';
-import { useEffect, useRef } from 'react';
-import { useDispatch } from 'react-redux';
-import { useLocation } from 'react-router';
+import { setUser } from "@adapters/slices/auth/authSlice";
+import api from "@infrastructure/api.config";
+import { RoutePaths } from "@presentation/utils/routes";
+import { useEffect, useRef } from "react";
+import { useDispatch } from "react-redux";
+import { useLocation } from "react-router";
 
 const useRestoreSession = () => {
   const dispatch = useDispatch();
@@ -16,7 +16,6 @@ const useRestoreSession = () => {
   const PUBLIC_ROUTES = [
     RoutePaths.Home,
     RoutePaths.HowItWorks,
-    RoutePaths.Upgrade,
     RoutePaths.PrivacyPolicy,
     RoutePaths.TersmsAndConditions,
     RoutePaths.ContactSales,
@@ -47,14 +46,14 @@ const useRestoreSession = () => {
       lastVerifyCallRef.current = now;
 
       try {
-        const response = await api.get('/auth/verify');
+        const response = await api.get("/auth/verify");
 
         if (response.status === 200) {
-          const userProfile = await api.get('/user/profile');
+          const userProfile = await api.get("/user/profile");
           dispatch(setUser(userProfile.data));
         }
       } catch (error) {
-        console.error('🔴 Error validating sesion:', error);
+        console.error("🔴 Error validating sesion:", error);
         // Network errors are handled by the axios interceptor (offline queue)
       }
     };

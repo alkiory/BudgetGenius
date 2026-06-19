@@ -14,17 +14,17 @@ export const userRepository: UserRepository = {
   },
 
   async getAll() {
-    const response = await api.get('/user/userList');
+    const response = await api.get("/user/userList");
     return response.data;
   },
 
   async getCurrentUser() {
-    const response = await api.get('/user/profile');
+    const response = await api.get("/user/profile");
     return response.data;
   },
 
   async createUser(user: Omit<User, "id">) {
-    const response = await api.post('/auth/signup', user);
+    const response = await api.post("/auth/signup", user);
     return response.data;
   },
 
@@ -38,7 +38,7 @@ export const userRepository: UserRepository = {
   },
 
   async getUserSettings() {
-    const response = await api.get('/user-settings');
+    const response = await api.get("/user-settings");
     return response.data;
   },
   async updateUserSettings(settings: UserSettings) {

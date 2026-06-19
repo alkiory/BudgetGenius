@@ -1,5 +1,5 @@
-import { Wallet, Clock, Wrench } from "lucide-react"
-import { useTranslation } from 'react-i18next';
+import { Wallet, Clock, Wrench } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export default function MaintenancePage() {
   const { t } = useTranslation();
@@ -13,20 +13,24 @@ export default function MaintenancePage() {
         </div>
         <div className="mb-4 flex items-center justify-center gap-2">
           <Wallet className="h-6 w-6 text-purple-600" />
-          <span className="text-2xl font-bold">{t('app.name')}</span>
+          <span className="text-2xl font-bold">{t("app.name")}</span>
         </div>
-        <h1 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">{t('maintenance.title')}</h1>
+        <h1 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">
+          {t("maintenance.title")}
+        </h1>
         <p className="mb-8 text-muted-foreground">
-          {t('maintenance.description')}
+          {t("maintenance.description")}
         </p>
         <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
           <Clock className="h-4 w-4" />
-          <span>{t('maintenance.expectedDowntime')}</span>
+          <span>{t("maintenance.expectedDowntime")}</span>
         </div>
         <div className="mt-8 rounded-md bg-white p-4 shadow-sm">
-          <h2 className="mb-2 text-sm font-semibold">{t('maintenance.stayUpdated')}</h2>
+          <h2 className="mb-2 text-sm font-semibold">
+            {t("maintenance.stayUpdated")}
+          </h2>
           <p className="mb-4 text-sm text-muted-foreground">
-            {t('maintenance.followUs')}
+            {t("maintenance.followUs")}
           </p>
           <div className="flex justify-center gap-4">
             <a href="#" className="text-muted-foreground hover:text-foreground">
@@ -43,5 +47,5 @@ export default function MaintenancePage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

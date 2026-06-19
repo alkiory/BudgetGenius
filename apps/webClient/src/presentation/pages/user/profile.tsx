@@ -1,19 +1,24 @@
-import { AccountSettings } from '@presentation/components/profile/account-settings';
-import { NotificationSettings } from '@presentation/components/profile/notification-settings';
-import { PersonalInfoForm } from '@presentation/components/profile/personal-info-form';
-import { SecuritySettings } from '@presentation/components/profile/security-settings';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@presentation/components/ui/tabs';
-import { useState } from 'react';
-import ProfileLoading from './loading-profile';
-import { useSelector } from 'react-redux';
-import { RootState } from '@adapters/store/rootStore';
-import { PageHeader } from '@presentation/components/ui/page-header';
-import { useTranslation } from 'react-i18next';
+import { RootState } from "@adapters/store/rootStore";
+import { AccountSettings } from "@presentation/components/profile/account-settings";
+import { NotificationSettings } from "@presentation/components/profile/notification-settings";
+import { PersonalInfoForm } from "@presentation/components/profile/personal-info-form";
+import { SecuritySettings } from "@presentation/components/profile/security-settings";
+import { PageHeader } from "@presentation/components/ui/page-header";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@presentation/components/ui/tabs";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useSelector } from "react-redux";
+import ProfileLoading from "./loading-profile";
 
 export default function Profile() {
   const { t } = useTranslation();
   const user = useSelector((state: RootState) => state.auth.user);
-  const [activeTab, setActiveTab] = useState("personal-info")
+  const [activeTab, setActiveTab] = useState("personal-info");
 
   if (!user) {
     return <ProfileLoading />;
@@ -21,14 +26,42 @@ export default function Profile() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('profile.title')} description={t('profile.description')} />
+      <PageHeader
+        title={t("profile.title")}
+        description={t("profile.description")}
+      />
 
-      <Tabs defaultValue="personal-info" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <Tabs
+        defaultValue="personal-info"
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="space-y-4"
+      >
         <TabsList className="grid w-full grid-cols-4 lg:w-auto bg-accent/35 dark:bg-accent/30">
-          <TabsTrigger className='text-primary dark:text-neutral' value="personal-info">{t('profile.personalInfo')}</TabsTrigger>
-          <TabsTrigger className='text-primary dark:text-neutral' value="security">{t('profile.security')}</TabsTrigger>
-          <TabsTrigger className='text-primary dark:text-neutral' value="notifications">{t('profile.notifications')}</TabsTrigger>
-          <TabsTrigger className='text-primary dark:text-neutral' value="account">{t('profile.account')}</TabsTrigger>
+          <TabsTrigger
+            className="text-primary dark:text-neutral"
+            value="personal-info"
+          >
+            {t("profile.personalInfo")}
+          </TabsTrigger>
+          <TabsTrigger
+            className="text-primary dark:text-neutral"
+            value="security"
+          >
+            {t("profile.security")}
+          </TabsTrigger>
+          <TabsTrigger
+            className="text-primary dark:text-neutral"
+            value="notifications"
+          >
+            {t("profile.notifications")}
+          </TabsTrigger>
+          <TabsTrigger
+            className="text-primary dark:text-neutral"
+            value="account"
+          >
+            {t("profile.account")}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="personal-info" className="space-y-4">
@@ -48,5 +81,5 @@ export default function Profile() {
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }

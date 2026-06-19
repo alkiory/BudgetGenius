@@ -22,7 +22,8 @@
       "@application/*": ["src/application/*"],
       "@adapters/*": ["src/adapters/*"],
       "@domain/*": ["src/domain/*"],
-      "@infrastructure/*": ["src/infrastructure/*"]
+      "@infrastructure/*": ["src/infrastructure/*"],
+      "@migrations/*": ["src/migrations/*"]
     },
     "moduleResolution": "nodenext"
   }

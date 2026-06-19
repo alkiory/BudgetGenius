@@ -1,9 +1,16 @@
 import { Button } from "@presentation/components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@presentation/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@presentation/components/ui/card";
 import { RoutePaths } from "@presentation/utils/routes";
 import { CheckCircle } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
-import { useTranslation } from 'react-i18next';
 
 export default function ForgotPasswordConfirmationPage() {
   const { t } = useTranslation();
@@ -15,20 +22,21 @@ export default function ForgotPasswordConfirmationPage() {
             <CheckCircle className="h-6 w-6 text-green-600" />
           </div>
         </div>
-        <CardTitle className="text-2xl font-bold">{t('auth.checkEmail')}</CardTitle>
-        <CardDescription>{t('auth.resetLinkSent')}</CardDescription>
+        <CardTitle className="text-2xl font-bold">
+          {t("auth.checkEmail")}
+        </CardTitle>
+        <CardDescription>{t("auth.resetLinkSent")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 text-center">
         <p className="text-sm text-muted-foreground">
-          {t('auth.checkSpamFolder')}
+          {t("auth.checkSpamFolder")}
         </p>
       </CardContent>
       <CardFooter className="flex justify-center">
-        <Link to={RoutePaths.Auth + '/' + RoutePaths.Login}>
-          <Button variant="outline">{t('auth.returnToLogin')}</Button>
+        <Link to={RoutePaths.Auth + "/" + RoutePaths.Login}>
+          <Button variant="outline">{t("auth.returnToLogin")}</Button>
         </Link>
       </CardFooter>
     </Card>
-  )
+  );
 }
-

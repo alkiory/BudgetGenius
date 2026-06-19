@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { CreateExpenseDto } from '../dto/create-expense.dto';
 import { UpdateExpenseDTO } from '../dto/update-expense.dto';
-import { SavingGoalRepository } from '@adapters/dashboard/persistence/saving-goal.repository';
 import { TransactionRepository } from '@adapters/dashboard/persistence/transaction.repository';
 import { ExpenseCategoryRepository } from '@adapters/dashboard/persistence/expense-category.repository';
 
@@ -12,7 +11,6 @@ export class ExpenseCategoryService {
     private readonly expenseCategoryRepo: ExpenseCategoryRepository,
     private readonly transactionRepo: TransactionRepository,
     private readonly userRepo: UserRepositoryImpl,
-    private readonly savingGoalRepo: SavingGoalRepository,
   ) {}
   async createExpenseCategory(userId: number, dto: CreateExpenseDto) {
     const user = await this.userRepo.findById(userId);
@@ -61,9 +59,6 @@ export class ExpenseCategoryService {
   }
   async getTransactionsByUser(userId: number) {
     return this.transactionRepo.findByUser(userId);
-  }
-  async getSavingGoalsByUser(userId: number) {
-    return this.savingGoalRepo.findByUser(userId);
   }
   async getExpenseCategoryById(userId: number, id: number) {
     return this.expenseCategoryRepo.findByUser(userId).then((categories) => {

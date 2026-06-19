@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+// ConfigModule.forRoot() is registered at the AppModule level; only the token is needed here.
+import { ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [
@@ -11,7 +12,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         host: configService.get<string>('DB_HOST') || 'localhost',
         port: configService.get<number>('DB_PORT') || 5432,
         username: configService.get<string>('DB_USER'),
-        password: configService.get<string>('DB_PASS') || configService.get<string>('DB_PASSWORD'),
+        password:
+          configService.get<string>('DB_PASS') ||
+          configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_NAME'),
         schema: 'bg_public',
         // FORZADO: En Docker, conectando a un contenedor local, SSL debe estar desactivado.
@@ -22,12 +25,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         },
         // En producción (Docker), buscamos los archivos compilados .js
         // En local (ts-node), buscamos los .ts
-        entities: [
-          __dirname + '/../**/*.entity.{js,ts}'
-        ],
-        migrations: [
-          __dirname + '/../migrations/*.{js,ts}'
-        ],
+        entities: [__dirname + '/../**/*.entity.{js,ts}'],
+        migrations: [__dirname + '/../migrations/*.{js,ts}'],
         // -------------------------------------------------------
         autoLoadEntities: true,
         synchronize: false,
@@ -37,4 +36,4 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
   ],
   exports: [TypeOrmModule],
 })
-export class DatabaseModule { }
+export class DatabaseModule {}

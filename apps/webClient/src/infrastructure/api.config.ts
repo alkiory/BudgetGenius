@@ -1,9 +1,9 @@
-import axios from 'axios';
-import type { AxiosRequestConfig, AxiosResponse } from 'axios';
-import toast from 'react-hot-toast';
-import { requestQueue } from './request-queue';
-import { RoutePaths } from '@presentation/utils/routes';
-import { enqueueRequest, registerOnlineListener } from './offline-queue';
+import { RoutePaths } from "@presentation/utils/routes";
+import axios from "axios";
+import type { AxiosRequestConfig, AxiosResponse } from "axios";
+import toast from "react-hot-toast";
+import { enqueueRequest, registerOnlineListener } from "./offline-queue";
+import { requestQueue } from "./request-queue";
 
 interface ApiError {
   config: AxiosRequestConfig & {
@@ -16,7 +16,7 @@ interface ApiError {
 const base = import.meta.env.VITE_API_URL as string;
 
 const headers: Record<string, string> = {
-  'Content-Type': 'application/json',
+  "Content-Type": "application/json",
 };
 
 // Configuración de Axios
@@ -35,9 +35,9 @@ const PROXY_UNAVAILABLE_CODES = [502, 503, 504];
 const refreshToken = async (): Promise<void> => {
   try {
     // No enviamos nada, el navegador enviará la cookie 'refreshToken' sola
-    await api.post('/auth/refresh', {});
+    await api.post("/auth/refresh", {});
   } catch (error) {
-    throw new Error('Failed to refresh token');
+    throw new Error("Failed to refresh token");
   }
 };
 
@@ -46,7 +46,10 @@ api.interceptors.response.use(
   async (error: ApiError) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && originalRequest.url?.includes('/auth/login')) {
+    if (
+      error.response?.status === 401 &&
+      originalRequest.url?.includes("/auth/login")
+    ) {
       return Promise.reject(error);
     }
 
@@ -59,10 +62,10 @@ api.interceptors.response.use(
       } catch (refreshError) {
         requestQueue.process(refreshError);
 
-        window.localStorage.removeItem('refreshToken');
-        window.localStorage.removeItem('accessToken');
+        window.localStorage.removeItem("refreshToken");
+        window.localStorage.removeItem("accessToken");
 
-        toast.error('Tu sesión ha expirado por inactividad');
+        toast.error("Tu sesión ha expirado por inactividad");
 
         window.location.href = `${RoutePaths.Auth}/${RoutePaths.Login}`;
 
@@ -73,24 +76,25 @@ api.interceptors.response.use(
     // Network error (ERR_NETWORK) OR proxy unavailable (502/503/504 via Vite) —
     // backend is unreachable or user is offline. Queue mutations for retry.
     const isNetworkError = !error.response;
-    const isProxyError = error.response && PROXY_UNAVAILABLE_CODES.includes(error.response.status);
+    const isProxyError =
+      error.response && PROXY_UNAVAILABLE_CODES.includes(error.response.status);
 
     if (isNetworkError || isProxyError) {
-      const method = originalRequest.method?.toUpperCase() || '';
-      const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+      const method = originalRequest.method?.toUpperCase() || "";
+      const isMutation = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
 
       if (isMutation) {
         // Strip the baseURL prefix so the URL is stored as a relative path.
         // When flushQueue replays through the same axios instance (which has baseURL),
         // it will correctly re-combine them without doubling.
-        const baseURL = api.defaults.baseURL || '';
-        let relativeUrl = originalRequest.url || '';
+        const baseURL = api.defaults.baseURL || "";
+        let relativeUrl = originalRequest.url || "";
         if (baseURL && relativeUrl.startsWith(baseURL)) {
           relativeUrl = relativeUrl.slice(baseURL.length);
         }
         // Ensure it starts with /
-        if (!relativeUrl.startsWith('/')) {
-          relativeUrl = '/' + relativeUrl;
+        if (!relativeUrl.startsWith("/")) {
+          relativeUrl = "/" + relativeUrl;
         }
         enqueueRequest(method, relativeUrl, originalRequest.data);
         // Return a resolved promise so the caller doesn't see an error and the
@@ -99,14 +103,14 @@ api.interceptors.response.use(
           data: {
             _offline: true,
             _queued: true,
-            message: 'Saved offline — will sync when connection returns',
+            message: "Saved offline — will sync when connection returns",
           },
         });
       }
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;

@@ -33,8 +33,8 @@ export class Transaction {
   })
   amount: number;
 
-  @Column()
-  status: string;
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  recurrence: string | null;
 
   @CreateDateColumn({ type: 'timestamp', name: 'createdAt' })
   createdAt: Date;

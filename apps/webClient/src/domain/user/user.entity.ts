@@ -1,4 +1,7 @@
-import { isValidProvider, UserAuthProviderNotValidError } from "./UserAuthProvider";
+import {
+  isValidProvider,
+  UserAuthProviderNotValidError,
+} from "./UserAuthProvider";
 import { isValidEmail, UserEmailNotValidError } from "./UserEmail";
 import { isValidPassword, UserPasswordNotValidError } from "./UserPassword";
 
@@ -12,22 +15,31 @@ export type User = {
   username?: string;
   email: string;
   password: string;
-  authProvider: 'email' | 'google';
+  authProvider: "email" | "google";
   role: string;
   refreshToken?: string;
-  isPremium: boolean;
   phone?: string;
   address?: string;
   imageUrl?: string;
-}
+};
 
-export function ensureUserIsValid({ name, surname, username, email, password, authProvider, role, isPremium }: Omit<User, "id">) {
+export function ensureUserIsValid({
+  name,
+  surname,
+  username,
+  email,
+  password,
+  authProvider,
+  role,
+}: Omit<User, "id">) {
   if (!name) {
-    throw new Error('You must provide a name');
+    throw new Error("You must provide a name");
   }
 
   if (name.length < NAME_MIN_LENGTH || name.length > NAME_MAX_LENGTH) {
-    throw new Error(`Name must be between ${NAME_MIN_LENGTH} and ${NAME_MAX_LENGTH} characters`);
+    throw new Error(
+      `Name must be between ${NAME_MIN_LENGTH} and ${NAME_MAX_LENGTH} characters`,
+    );
   }
 
   if (surname && surname.length > NAME_MAX_LENGTH) {
@@ -44,8 +56,16 @@ export function ensureUserIsValid({ name, surname, username, email, password, au
     throw UserAuthProviderNotValidError(authProvider);
   }
   if (!role) {
-    throw new Error('User role is required');
+    throw new Error("User role is required");
   }
 
-  return { name, surname, username, email, password, authProvider, role, isPremium };
+  return {
+    name,
+    surname,
+    username,
+    email,
+    password,
+    authProvider,
+    role,
+  };
 }

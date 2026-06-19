@@ -1,69 +1,137 @@
-import { lazy } from 'react';
-import { Route, Routes } from 'react-router';
-import LoginPage from '@presentation/pages/auth/login';
-import CTAPage from '@presentation/pages/cta';
-import SignupPage from '@presentation/pages/auth/signup';
-import ProfilePage from '@presentation/pages/user/profile';
+import AuthLayout from "@presentation/layouts/auth";
+import LandingLayout from "@presentation/layouts/landing";
+import { lazy } from "react";
+import { Route, Routes } from "react-router";
 
-import AuthLayout from '@presentation/layouts/auth';
-import ProtectedRoute from './protected-route';
-import UserList from '@presentation/pages/user/userList';
-import ForgotPasswordPage from '@presentation/pages/auth/forgot-password';
-import ForgotPasswordConfirmationPage from '@presentation/pages/auth/confirmation';
-import ResetPasswordPage from '@presentation/pages/auth/reset-password';
-import HowItWorksPage from '@presentation/pages/demo/how-it-works';
-import NotFoundPage from '@presentation/pages/notFound';
-const DashboardPage = lazy(() => import('@presentation/pages/dashboard/dashboardPage'));
-import { RoutePaths } from '@presentation/utils/routes';
-import UpgradePage from '@presentation/pages/upgrade/upgradePage';
-import LoadingPage from '@presentation/pages/loading';
-import ReportsPage from '@presentation/pages/dashboard/reportsPage';
-import TransactionsPage from '@presentation/pages/dashboard/transactionPage';
-import PremiumRoute from './premium-pages';
-import SavingGoalPage from '@presentation/pages/dashboard/saving-goalPage';
-import IncomePage from '@presentation/pages/dashboard/incomePage';
-import BudgetsPage from '@presentation/pages/dashboard/budgetsPage';
-import { GoalsPage } from '@presentation/pages/dashboard/goalsPage';
-import InvestmentPage from '@presentation/pages/dashboard/investmentPage';
-import PrivacyPolicyPage from '@presentation/pages/contact/privacy-policy-page';
-import TermsOfServicePage from '@presentation/pages/contact/terms-of-service-page';
-import ContactSalesPage from '@presentation/pages/contact/contact-sales-page';
-import LandingLayout from '@presentation/layouts/landing';
+import LoadingPage from "@presentation/pages/loading";
+import NotFoundPage from "@presentation/pages/notFound";
+import CTAPage from "@presentation/pages/cta";
+import { RoutePaths } from "@presentation/utils/routes";
 
+import ProtectedRoute from "./protected-route";
+
+// Phase 6.8: every protected + auth + public-chrome route is now
+// lazy-loaded so the main entry only carries the layout/loading
+// chrome + the provider/state tree. React Router 7's `<Route>`
+// handles the `React.lazy()` Suspense boundary internally; the
+// React Router 7 `loader` prop on DashboardPage shows a LoadingPage
+// during hydration but doesn't gate the lazy chunk fetch.
+//
+// The vite manualChunks split in vite.config.ts keeps `recharts` +
+// `firebase` out of the main entry as separate vendor chunks.
+//
+// Eager (kept in main entry): these wrap every route above or
+// serve as the very first paint on the marketing site.
+//   - AuthLayout, LandingLayout, ProtectedRoute, LoadingPage,
+//     NotFoundPage, CTAPage (the anon landing is the first paint
+//     for first-time visitors; lazy would flash a layout hole
+//     before the chunk fetch resolves).
+//
+// Lazy (per-page chunks that load on navigation):
+//   - DashboardPage, ReportsPage, BudgetsPage, TransactionsPage,
+//     IncomePage, GoalsPage (dashboard protected routes)
+//   - ProfilePage, UserList (user protected routes)
+//   - LoginPage, SignupPage, ForgotPasswordPage,
+//     ForgotPasswordConfirmationPage, ResetPasswordPage (auth routes)
+//   - HowItWorksPage, PrivacyPolicyPage, TermsOfServicePage,
+//     ContactSalesPage (Phase 6.8 round-2 polish: these public
+//     chrome pages were the last >500 kB source on the main entry;
+//     lazy-loading them drops the warning without touching the
+//     landing-page first-paint).
+
+// Dashboard protected routes
+const DashboardPage = lazy(
+  () => import("@presentation/pages/dashboard/dashboardPage"),
+);
+const ReportsPage = lazy(
+  () => import("@presentation/pages/dashboard/reportsPage"),
+);
+const BudgetsPage = lazy(
+  () => import("@presentation/pages/dashboard/budgetsPage"),
+);
+const TransactionsPage = lazy(
+  () => import("@presentation/pages/dashboard/transactionPage"),
+);
+const IncomePage = lazy(
+  () => import("@presentation/pages/dashboard/incomePage"),
+);
+
+// User protected routes
+const ProfilePage = lazy(() => import("@presentation/pages/user/profile"));
+const UserList = lazy(() => import("@presentation/pages/user/userList"));
+
+// Auth routes
+const LoginPage = lazy(() => import("@presentation/pages/auth/login"));
+const SignupPage = lazy(() => import("@presentation/pages/auth/signup"));
+const ForgotPasswordPage = lazy(
+  () => import("@presentation/pages/auth/forgot-password"),
+);
+const ForgotPasswordConfirmationPage = lazy(
+  () => import("@presentation/pages/auth/confirmation"),
+);
+const ResetPasswordPage = lazy(
+  () => import("@presentation/pages/auth/reset-password"),
+);
+
+// Public chrome pages (Phase 6.8 round-2 polish)
+const HowItWorksPage = lazy(
+  () => import("@presentation/pages/demo/how-it-works"),
+);
+const PrivacyPolicyPage = lazy(
+  () => import("@presentation/pages/contact/privacy-policy-page"),
+);
+const TermsOfServicePage = lazy(
+  () => import("@presentation/pages/contact/terms-of-service-page"),
+);
+const ContactSalesPage = lazy(
+  () => import("@presentation/pages/contact/contact-sales-page"),
+);
 
 const RouteConfig = () => {
   return (
     <Routes>
       {/* Rutas públicas */}
       <Route path={RoutePaths.Home} element={<CTAPage />} />
-      <Route element={<LandingLayout />} >
+      <Route element={<LandingLayout />}>
         <Route path={RoutePaths.HowItWorks} element={<HowItWorksPage />} />
-        <Route path={RoutePaths.PrivacyPolicy} element={<PrivacyPolicyPage />} />
-        <Route path={RoutePaths.TersmsAndConditions} element={<TermsOfServicePage />} />
-        <Route path={RoutePaths.ContactSales} element={<ContactSalesPage />} /></Route>
+        <Route
+          path={RoutePaths.PrivacyPolicy}
+          element={<PrivacyPolicyPage />}
+        />
+        <Route
+          path={RoutePaths.TersmsAndConditions}
+          element={<TermsOfServicePage />}
+        />
+        <Route path={RoutePaths.ContactSales} element={<ContactSalesPage />} />
+      </Route>
       <Route path={RoutePaths.Auth} element={<AuthLayout />}>
         <Route path={RoutePaths.Login} element={<LoginPage />} />
         <Route path={RoutePaths.Signup} element={<SignupPage />} />
-        <Route path={RoutePaths.ForgotPassword} element={<ForgotPasswordPage />} />
-        <Route path={RoutePaths.ForgotPasswordConfirmation} element={<ForgotPasswordConfirmationPage />} />
-        <Route path={RoutePaths.ResetPassword} element={<ResetPasswordPage />} />
+        <Route
+          path={RoutePaths.ForgotPassword}
+          element={<ForgotPasswordPage />}
+        />
+        <Route
+          path={RoutePaths.ForgotPasswordConfirmation}
+          element={<ForgotPasswordConfirmationPage />}
+        />
+        <Route
+          path={RoutePaths.ResetPassword}
+          element={<ResetPasswordPage />}
+        />
       </Route>
-      {/* Ruta de compra / actualizacion de plan */}
-      <Route path={RoutePaths.Upgrade} element={<UpgradePage />} />
-
       {/* Rutas protegidas */}
       <Route path={RoutePaths.App} element={<ProtectedRoute />}>
         {/* dashboard section */}
-        <Route path={RoutePaths.Dashboard} loader={LoadingPage} element={<DashboardPage />} />
+        <Route
+          path={RoutePaths.Dashboard}
+          loader={LoadingPage}
+          element={<DashboardPage />}
+        />
         <Route path={RoutePaths.Transactions} element={<TransactionsPage />} />
         <Route path={RoutePaths.Income} element={<IncomePage />} />
-        <Route path={RoutePaths.Goals} element={<GoalsPage />} />
         <Route path={RoutePaths.Budgets} element={<BudgetsPage />} />
-        <Route element={<PremiumRoute />}>
-          <Route path={RoutePaths.Savings} element={<SavingGoalPage />} />
-          <Route path={RoutePaths.Reports} element={<ReportsPage />} />
-          <Route path={RoutePaths.Investments} element={<InvestmentPage />} />
-        </Route>
+        <Route path={RoutePaths.Reports} element={<ReportsPage />} />
         {/* user section */}
         <Route path={RoutePaths.Profile} element={<ProfilePage />} />
         <Route path={RoutePaths.UserList} element={<UserList />} />

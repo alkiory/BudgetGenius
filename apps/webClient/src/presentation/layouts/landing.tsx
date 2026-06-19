@@ -1,5 +1,5 @@
-import HeaderComponent from '@presentation/components/ui/header';
-import { Outlet } from 'react-router';
+import HeaderComponent from "@presentation/components/ui/header";
+import { Outlet } from "react-router";
 
 export default function LandingLayout() {
   return (
@@ -9,5 +9,5 @@ export default function LandingLayout() {
         <Outlet />
       </main>
     </div>
-  )
+  );
 }

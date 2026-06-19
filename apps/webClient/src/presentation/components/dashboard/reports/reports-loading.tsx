@@ -1,7 +1,7 @@
-import { Skeleton } from "@presentation/components/ui/skeleton"
-import { PageHeaderSkeleton } from "@presentation/components/ui/page-header"
-import { StatCardSkeleton } from "@presentation/components/ui/skeletons/stat-card-skeleton"
-import { CardSkeleton } from "@presentation/components/ui/skeletons/card-skeleton"
+import { PageHeaderSkeleton } from "@presentation/components/ui/page-header";
+import { Skeleton } from "@presentation/components/ui/skeleton";
+import { CardSkeleton } from "@presentation/components/ui/skeletons/card-skeleton";
+import { StatCardSkeleton } from "@presentation/components/ui/skeletons/stat-card-skeleton";
 
 export default function ReportsLoading() {
   return (
@@ -66,7 +66,10 @@ export default function ReportsLoading() {
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+            <div
+              key={i}
+              className="rounded-lg border border-slate-200 p-4 dark:border-slate-700"
+            >
               <Skeleton className="h-4 w-28" />
               <Skeleton className="mt-1 h-7 w-20" />
               <Skeleton className="mt-1 h-3 w-24" />
@@ -75,5 +78,5 @@ export default function ReportsLoading() {
         </div>
       </CardSkeleton>
     </div>
-  )
+  );
 }

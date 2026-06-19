@@ -1,63 +1,112 @@
-import { useState } from "react"
-import { useTranslation } from 'react-i18next';
-import { Plus } from "lucide-react"
-import { Modal } from "@presentation/components/modal/modal"
-import { Button } from "@presentation/components/ui/button"
-import AddTransactionForm from "./add-transaction"
-import { HttpTransactionRepository } from "@adapters/http/transaction.repository"
-import { successToast, errorToast } from "@presentation/utils/toast"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Transaction } from "@domain/dashboard/transactions/transaction.entity"
+import { HttpTransactionRepository } from "@adapters/http/transaction.repository";
+import { Transaction } from "@domain/dashboard/transactions/transaction.entity";
+import { Modal } from "@presentation/components/modal/modal";
+import { Button } from "@presentation/components/ui/button";
+import { successToast, errorToast } from "@presentation/utils/toast";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
+import {
+  cloneElement,
+  isValidElement,
+  ReactElement,
+  ReactNode,
+  useState,
+} from "react";
+import { useTranslation } from "react-i18next";
+import AddTransactionForm from "./add-transaction";
 
-export function AddTransactionModal({ isHeader }: { isHeader?: boolean }) {
+// Phase 3 (T3.7): callers may pass a custom trigger element (e.g. the
+// income-page row's "Add Income" button). When omitted we render the
+// default primary CTA. Both paths share the same modal + mutation
+// behaviour so onSuccess invalidations remain identical.
+export function AddTransactionModal({
+  isHeader,
+  trigger,
+}: {
+  isHeader?: boolean;
+  trigger?: ReactNode;
+}) {
   const { t } = useTranslation();
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(false);
 
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
 
   const { mutate: addTransaction } = useMutation({
-    mutationKey: ['add-transaction'],
+    mutationKey: ["add-transaction"],
     mutationFn: HttpTransactionRepository.createTransaction,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (data: any) => {
-      successToast(data.message, 3000, 'transaction-create');
-      queryClient.invalidateQueries({ queryKey: ["transactions"] })
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
-      setIsOpen(false)
+      successToast(data.message, 3000, "transaction-create");
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-summary"] });
+      setIsOpen(false);
     },
     onError: (error) => {
-      errorToast(error.message, 3000, "transaction-create")
-    }
-  })
+      errorToast(error.message, 3000, "transaction-create");
+    },
+  });
 
   const handleAddTransaction = (transaction: Omit<Transaction, "id">) => {
     if (transaction.amount === 0) {
-      errorToast("Amount cannot be 0", 3000, "invalid-amount")
-      return
+      errorToast("Amount cannot be 0", 3000, "invalid-amount");
+      return;
     }
 
     addTransaction({
       dto: {
         ...transaction,
-      }
-    })
-  }
+      },
+    });
+  };
 
   return (
     <>
-      {!isHeader ? (
+      {trigger ? (
+        // Phase 3 (T3.7): caller-provided trigger element (e.g. the
+        // income-page "Add Income" button). Compose onClick rather
+        // than overwrite so any pre-existing handler on the trigger
+        // element continues to fire \u2014 e.g. an analytics hook,
+        // a parent anchor, or a future caller's own click target.
+        isValidElement(trigger) ? (
+          cloneElement(
+            trigger as ReactElement<{
+              onClick?: (...args: unknown[]) => void;
+            }>,
+            {
+              onClick: (...args: unknown[]) => {
+                const existing = (
+                  trigger.props as {
+                    onClick?: (...args: unknown[]) => void;
+                  }
+                ).onClick;
+                existing?.(...args);
+                setIsOpen(true);
+              },
+            },
+          )
+        ) : (
+          <Button variant="primary" onClick={() => setIsOpen(true)}>
+            {trigger}
+          </Button>
+        )
+      ) : !isHeader ? (
         <>
           <Button
             variant="primary"
             onClick={() => setIsOpen(true)}
             size="lg"
-            className="inline-flex items-center gap-2 px-6 py-2.5 text-base font-semibold shadow-md hover:shadow-lg transition-all">
+            className="inline-flex items-center gap-2 px-6 py-2.5 text-base font-semibold shadow-md hover:shadow-lg transition-all"
+          >
             <Plus className="h-5 w-5" />
-            {t('transactions.addTransaction')}
+            {t("transactions.addTransaction")}
           </Button>
 
           <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="">
-            <AddTransactionForm onSubmit={handleAddTransaction} onCancel={() => setIsOpen(false)} />
+            <AddTransactionForm
+              onSubmit={handleAddTransaction}
+              onCancel={() => setIsOpen(false)}
+            />
           </Modal>
         </>
       ) : (
@@ -70,11 +119,18 @@ export function AddTransactionModal({ isHeader }: { isHeader?: boolean }) {
           >
             <Plus className="h-4 w-4" />
           </Button>
-          <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={t('transactions.addNewTransaction')}>
-            <AddTransactionForm onSubmit={handleAddTransaction} onCancel={() => setIsOpen(false)} />
+          <Modal
+            isOpen={isOpen}
+            onClose={() => setIsOpen(false)}
+            title={t("transactions.addNewTransaction")}
+          >
+            <AddTransactionForm
+              onSubmit={handleAddTransaction}
+              onCancel={() => setIsOpen(false)}
+            />
           </Modal>
         </>
       )}
     </>
-  )
+  );
 }

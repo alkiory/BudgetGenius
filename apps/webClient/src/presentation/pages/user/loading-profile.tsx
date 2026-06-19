@@ -1,4 +1,8 @@
-import { Card, CardHeader, CardContent } from "@presentation/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardContent,
+} from "@presentation/components/ui/card";
 import { Skeleton } from "@presentation/components/ui/skeleton";
 
 export default function ProfileLoading() {
@@ -39,6 +43,5 @@ export default function ProfileLoading() {
         </Card>
       </div>
     </div>
-  )
+  );
 }
-

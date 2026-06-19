@@ -1,6 +1,6 @@
-import { Skeleton } from "@presentation/components/ui/skeleton"
-import { DataTableSkeleton } from "@presentation/components/ui/data-table-skeleton"
-import { PageHeaderSkeleton } from "@presentation/components/ui/page-header"
+import { DataTableSkeleton } from "@presentation/components/ui/data-table-skeleton";
+import { PageHeaderSkeleton } from "@presentation/components/ui/page-header";
+import { Skeleton } from "@presentation/components/ui/skeleton";
 
 export default function TransactionsLoading() {
   return (
@@ -28,5 +28,5 @@ export default function TransactionsLoading() {
         rows={6}
       />
     </div>
-  )
+  );
 }
