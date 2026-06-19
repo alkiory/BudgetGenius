@@ -29,10 +29,5 @@
     "firebase": "11.8.0",
     "firebase-admin": "13.4.0",
     "pdfkit": "^0.19.1"
-  },
-  "pnpm": {
-    "overrides": {
-      "@firebasegen/default-connector": "link:dataconnect-generated/js/default-connector"
-    }
   }
 }
