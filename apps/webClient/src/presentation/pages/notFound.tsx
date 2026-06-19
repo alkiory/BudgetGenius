@@ -48,7 +48,7 @@ export default function NotFoundPage() {
             {user ? (
               <Button variant="outline" size="lg">
                 <Link to={RoutePaths.App + "/" + RoutePaths.Dashboard}>
-                  {t("sidebar.dashboard")}
+                  {t("routes.app.dashboard.dashboard")}
                 </Link>
               </Button>
             ) : (

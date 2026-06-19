@@ -3,6 +3,7 @@ import { RootState } from "@adapters/store/rootStore";
 import { Transaction } from "@domain/dashboard/transactions/transaction.entity";
 import { validateTransactionSelection } from "@domain/dashboard/transactions/validateTransactionSelection";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
+import { translateCategory } from "@presentation/utils/display-translations";
 import {
   successToast,
   errorToast,
@@ -18,8 +19,9 @@ import {
   SortingState,
   createColumnHelper,
 } from "@tanstack/react-table";
-import { Check, X, Trash2, ArrowDown, ArrowUp } from "lucide-react";
+import { Trash2, ArrowDown, ArrowUp } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 import { EditTransaction } from "../dashboard/transaction/edit-transaction";
 import { Button } from "./button";
@@ -28,6 +30,7 @@ export default function Table({ data }: { data: Transaction[] }) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
   const [rowSelection, setRowSelection] = useState({});
+  const { t } = useTranslation();
 
   const queryClient = useQueryClient();
 
@@ -45,6 +48,7 @@ export default function Table({ data }: { data: Transaction[] }) {
       successToast(data.message, 3000, "transaction-delete");
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-summary"] });
     },
     onError: (error) => {
       errorToast(error.message, 3000, "transaction-delete");
@@ -63,6 +67,7 @@ export default function Table({ data }: { data: Transaction[] }) {
 
     deleteAllTransactions(rowSelection);
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    queryClient.invalidateQueries({ queryKey: ["recent-summary"] });
   };
 
   const { mutate: deleteTransaction } = useMutation({
@@ -73,6 +78,7 @@ export default function Table({ data }: { data: Transaction[] }) {
       successToast(data.message, 3000, "transaction-delete");
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-summary"] });
     },
     onError: (error) => {
       errorToast(error.message, 3000, "transaction-delete");
@@ -113,7 +119,7 @@ export default function Table({ data }: { data: Transaction[] }) {
     }),
     columnHelper.accessor("category", {
       header: "Category",
-      cell: (info) => info.getValue(),
+      cell: (info) => translateCategory(info.getValue() as string, t),
     }),
     columnHelper.accessor("amount", {
       header: "Amount",
@@ -135,43 +141,6 @@ export default function Table({ data }: { data: Transaction[] }) {
             }
           >
             {formatted.formatted}
-          </span>
-        );
-      },
-    }),
-    columnHelper.accessor("status", {
-      header: "Status",
-      cell: (info) => {
-        const status = info.getValue();
-        let statusClass = "";
-        let statusIcon = null;
-
-        switch (status) {
-          case "Completed":
-            statusClass =
-              "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
-            statusIcon = <Check className="mr-1 h-3 w-3" />;
-            break;
-          case "Pending":
-            statusClass =
-              "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
-            break;
-          case "Cancelled":
-            statusClass =
-              "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
-            statusIcon = <X className="mr-1 h-3 w-3" />;
-            break;
-          default:
-            statusClass =
-              "bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200";
-        }
-
-        return (
-          <span
-            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClass}`}
-          >
-            {statusIcon}
-            {status}
           </span>
         );
       },

@@ -561,12 +561,6 @@ export default function HomePage() {
                 {t("landing.features")}
               </Link>
               <Link
-                to={RoutePaths.Upgrade}
-                className="text-sm text-slate-500 hover:text-slate-900"
-              >
-                {t("landing.pricing")}
-              </Link>
-              <Link
                 to="#"
                 className="text-sm text-slate-500 hover:text-slate-900"
               >

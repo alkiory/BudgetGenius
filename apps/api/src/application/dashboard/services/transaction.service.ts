@@ -19,8 +19,12 @@ export class TransactionService {
     // `findByUser` throws NotFoundException if user doesn't exist, so no need for a null check
     const user = await this.transactionRepo.findByUser(userId);
 
+    // Normalize `recurrence` so the built object fully satisfies the entity's
+    // nullable column contract — `Omit<Transaction, 'id'>` requires the field
+    // (it can be `null`, but not `undefined`).
     const transaction = {
       ...dto,
+      recurrence: dto.recurrence ?? null,
       user: { id: user.id } as User,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -33,10 +37,12 @@ export class TransactionService {
     userId,
     offset,
     limit,
+    type,
   }: {
     userId: number;
     offset: number;
     limit: number;
+    type?: 'income' | 'expense';
   }) {
     // Verify user exists — `findById` returns null if not found
     const user = await this.userRepo.findById(userId);
@@ -44,11 +50,16 @@ export class TransactionService {
       throw new NotFoundException(`User with ID ${userId} not found`);
     }
 
-    // Query the database directly instead of relying on an eager-loaded relation
+    // Query the database directly instead of relying on an eager-loaded relation.
+    // Phase 3 (T3.3): forward the optional `type` filter to the repository,
+    // which applies a sign-convention where-clause (MoreThan(0) / LessThan(0))
+    // when present. Omitted type returns all transactions — preserves
+    // existing callers (transactionPage) unchanged.
     return this.transactionRepo.findAndCount({
       offset,
       limit,
       userId,
+      type,
     });
   }
 
@@ -65,6 +76,9 @@ export class TransactionService {
       throw new NotFoundException(`Transaction with ID ${dto.id} not found`);
     }
 
+    // `recurrence` is intentionally NOT seeded here — the repo's
+    // destructured-undefined guard preserves the existing value when the dto
+    // omits the field (matches the partial-update contract on the controller).
     const transaction = {
       ...dto,
       user: { id: userId } as User,

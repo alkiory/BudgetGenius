@@ -1,4 +1,10 @@
-import { IsDateString, IsNotEmpty, IsNumber, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
 export class CreateTransactionDto {
@@ -20,9 +26,14 @@ export class CreateTransactionDto {
   @IsNotEmpty()
   amount: number;
 
+  /**
+   * Optional recurrence semantic — persisted when the row represents a
+   * recurring income (e.g. "Monthly", "Bi-weekly"). Nullable so legacy
+   * expense transactions remain unaffected. Mirrored on the update DTO.
+   */
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  status: string;
+  recurrence?: string;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;

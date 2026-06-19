@@ -50,7 +50,7 @@ export function ExpenseCategories({
                 innerRadius={60}
                 outerRadius={80}
                 paddingAngle={2}
-                dataKey="value.amount"
+                dataKey="value"
                 label={({ name, percent }) =>
                   `${name} ${(percent * 100).toFixed(0)}%`
                 }
@@ -60,7 +60,7 @@ export function ExpenseCategories({
                   <Cell
                     key={i}
                     fill={COLORS[i % COLORS.length]}
-                    alphabetic={entry}
+                    name={entry.name}
                   />
                 ))}
               </Pie>

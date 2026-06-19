@@ -112,7 +112,7 @@ export default function IncomeExpensesTab({
                 />
                 <Line
                   type="monotone"
-                  dataKey="amount"
+                  dataKey="savings"
                   stroke="#10b981"
                   activeDot={{ r: 8 }}
                 />

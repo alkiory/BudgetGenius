@@ -8,7 +8,7 @@ import TransactionsLoading from "@presentation/components/dashboard/transactions
 import { Button } from "@presentation/components/ui/button";
 import { PageHeader } from "@presentation/components/ui/page-header";
 import { warningToast } from "@presentation/utils/toast";
-import { Filter, Plus } from "lucide-react";
+import { Filter } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Table from "../../components/ui/table";
@@ -31,7 +31,6 @@ export default function TransactionsPage() {
     categories: ["All"],
     minAmount: 0,
     maxAmount: 0,
-    statuses: ["All"],
   });
 
   const handleApplyFilters = (newFilters: FilterCriteria) => {
@@ -61,11 +60,7 @@ export default function TransactionsPage() {
       const amountMatch =
         transaction.amount >= minAmount && transaction.amount <= maxAmount;
 
-      const statusMatch =
-        filters.statuses?.includes("All") ||
-        filters.statuses?.includes(transaction.status || "");
-
-      return dateMatch && categoryMatch && amountMatch && statusMatch;
+      return dateMatch && categoryMatch && amountMatch;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transactions?.transactions, filters]);
@@ -78,12 +73,6 @@ export default function TransactionsPage() {
       count++;
     if ((filters.minAmount ?? 0) > 0) count++;
     if ((filters.maxAmount ?? 0) > 0) count++;
-    if (
-      filters.statuses &&
-      !filters.statuses.includes("All") &&
-      filters.statuses?.length > 0
-    )
-      count++;
     return count;
   }, [filters]);
 
@@ -159,7 +148,6 @@ export default function TransactionsPage() {
                   categories: ["All"],
                   minAmount: 0,
                   maxAmount: 0,
-                  statuses: ["All"],
                 });
               }}
             >

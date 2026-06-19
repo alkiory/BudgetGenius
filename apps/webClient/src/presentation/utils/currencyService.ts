@@ -1,12 +1,16 @@
-export type Currency = "USD" | "EUR" | "GBP" | "JPY" | "COP";
+// MVP scope (T3.x): the MVP supports only three currencies — USD, EUR,
+// COP. Removing GBP, JPY, AUD, CAD here narrows the `Currency` union so
+// the rest of the codebase no longer has to deal with rows whose rates
+// the upstream provider occasionally returns as NaN (which surfaced as
+// "NaN" in the dashboard for the Australian and Canadian dollars —
+// fixed by simply not supporting them).
+export type Currency = "USD" | "EUR" | "COP";
 type ExchangeRates = Record<Currency, number>;
 
 // Exchange rates defaults (Should be fetched from an API)
 const DEFAULT_EXCHANGE_RATES: ExchangeRates = {
   USD: 1,
   EUR: 0.93,
-  GBP: 0.8,
-  JPY: 150.5,
   COP: 4000,
 };
 
@@ -14,8 +18,6 @@ const DEFAULT_EXCHANGE_RATES: ExchangeRates = {
 const CURRENCY_SYMBOLS: Record<Currency, string> = {
   USD: "$",
   EUR: "€",
-  GBP: "£",
-  JPY: "¥",
   COP: "$",
 };
 
@@ -26,7 +28,7 @@ interface CurrencyConversionOptions {
   exchangeRates?: ExchangeRates;
 }
 
-interface FormattedCurrency {
+export interface FormattedCurrency {
   amount: number;
   symbol: string;
   formatted: string;
@@ -45,8 +47,6 @@ export class CurrencyService {
     const localeMap: Record<Currency, string> = {
       USD: "en-US",
       EUR: "es-ES",
-      GBP: "en-GB",
-      JPY: "ja-JP",
       COP: "es-CO",
     };
     return localeMap[currency] || "en-US";
@@ -75,7 +75,7 @@ export class CurrencyService {
 
   public validateAmount(amount: number, currency: Currency): boolean {
     const decimalPlaces = this.getDecimalPrecision(currency);
-    // When decimalPlaces is 0 (e.g., COP, JPY), only allow integers
+    // When decimalPlaces is 0 (e.g., COP), only allow integers
     const pattern =
       decimalPlaces === 0
         ? /^-?\d+$/
@@ -87,8 +87,6 @@ export class CurrencyService {
     const precisionMap: Record<Currency, number> = {
       USD: 2,
       EUR: 2,
-      GBP: 2,
-      JPY: 0,
       COP: 0,
     };
     return precisionMap[currency] ?? 2;
@@ -146,6 +144,43 @@ export class CurrencyService {
       formatted: `${sign}${formatted}`,
       isPositive,
     };
+  }
+
+  /**
+   * Normalize a user-entered amount string from any supported locale to a
+   * number. Accepts `5.23`, `10,42`, and ` 5 . 23 ` (decimal-comma and
+   * decimal-dot inputs). Returns NaN for empty / unparseable input —
+   * callers should treat NaN as "no amount entered".
+   *
+   * The MVP handles single-decimal-separator inputs (dot OR comma).
+   * Thousand-grouped values such as `1,234.56` or `1.234,56` are NOT
+   * supported — they require locale-aware parsing, out of MVP scope.
+   */
+  public parseAmountInput(value: string | number | null | undefined): number {
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : Number.NaN;
+    }
+    if (value === null || value === undefined) return Number.NaN;
+    const trimmed = String(value).trim();
+    if (trimmed === "") return Number.NaN;
+    const normalized = trimmed.replace(/,/g, ".");
+    // Drop everything that is not a digit, sign, or decimal point.
+    const cleaned = normalized.replace(/[^.\d-]/g, "");
+    // Collapse repeated decimal points so only the FIRST one is kept as
+    // the decimal separator. Subsequent dots (likely misplaced thousand
+    // separators from a paste, e.g. "1.234.567") are dropped. Crucially
+    // we KEEP the first dot — the previous implementation stripped it
+    // from the prefix slice, so a single-decimal value like "10.5" came
+    // out as parseFloat("105") = 105.
+    const firstDot = cleaned.indexOf(".");
+    let safe = cleaned;
+    if (firstDot !== -1) {
+      safe =
+        cleaned.slice(0, firstDot + 1) +
+        cleaned.slice(firstDot + 1).replace(/\./g, "");
+    }
+    const parsed = parseFloat(safe);
+    return Number.isFinite(parsed) ? parsed : Number.NaN;
   }
 
   public getSymbol(currency: Currency): string {

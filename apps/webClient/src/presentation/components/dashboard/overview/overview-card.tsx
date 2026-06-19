@@ -40,7 +40,9 @@ export function OverviewCard({
             <div className="rounded-full bg-green-100 p-2 dark:bg-green-900">
               <ArrowUpRight className="h-5 w-5 text-green-600 dark:text-green-400" />
             </div>
-            <span className="text-sm font-medium">{t("income.title")}</span>
+            <span className="text-sm font-medium">
+              {t("dashboard.summaryIncome")}
+            </span>
           </div>
           <p className="mt-2 text-2xl font-bold text-green-600 dark:text-green-400">
             {income}

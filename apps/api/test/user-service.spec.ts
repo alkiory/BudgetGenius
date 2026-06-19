@@ -16,7 +16,9 @@ const user: User = {
   authProvider: 'email',
   role: 'user',
   refreshToken: null,
-  isPremium: false,
+  // isPremium is dormant for MVP launch; defaults to true at the DB column level.
+  // Kept in the mock so the literal satisfies the `User` type (T3.13 backward-compat).
+  isPremium: true,
   comparePassword: jest.fn(),
   hashPassword: jest.fn(),
   createdAt: new Date(),
@@ -26,8 +28,7 @@ const user: User = {
   expenseCategories: [],
   overviews: [],
   settings: [],
-  incomes: [],
-  goals: [],
+  // [PHASE 4 REMOVED — DO NOT RESTORE] `incomes: []` is gone; see rpi/income-redundancy/plan.md.
 };
 
 const mockUserRepository = () => ({
@@ -102,7 +103,6 @@ describe('UserService', () => {
       password: user.password,
       authProvider: user.authProvider as 'email',
       role: user.role,
-      isPremium: user.isPremium,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -135,11 +135,13 @@ describe('UserService', () => {
       authProvider: user.authProvider as 'email',
       role: user.role,
       refreshToken: null,
-      isPremium: false,
     };
     const id = user.id;
     userRepository.updateUser.mockResolvedValue({ id, ...updatedUserDto });
-    const updatedUser = await userService.updateUser(String(id), updatedUserDto);
+    const updatedUser = await userService.updateUser(
+      String(id),
+      updatedUserDto,
+    );
     expect(updatedUser).toEqual({ id, ...updatedUserDto });
   });
 

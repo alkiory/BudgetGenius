@@ -11,27 +11,27 @@ export default class MockAPI {
     this.page.route(endpoint, (route) => {
       route.fulfill({
         status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(body)
-      })
-    })
+        contentType: "application/json",
+        body: JSON.stringify(body),
+      });
+    });
   }
   async badResponseMock(endpoint: string, body?: object) {
     this.page.route(endpoint, (route) => {
       route.fulfill({
         status: 404,
-        contentType: 'application/json',
-        body: JSON.stringify(body)
-      })
-    })
+        contentType: "application/json",
+        body: JSON.stringify(body),
+      });
+    });
   }
   async notAuthResponseMock(endpoint: string, body?: object) {
     this.page.route(endpoint, (route) => {
       route.fulfill({
         status: 401,
-        contentType: 'application/json',
-        body: JSON.stringify(body)
-      })
-    })
+        contentType: "application/json",
+        body: JSON.stringify(body),
+      });
+    });
   }
 }

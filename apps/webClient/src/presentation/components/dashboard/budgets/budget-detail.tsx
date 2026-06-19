@@ -7,6 +7,7 @@ import {
 } from "@domain/dashboard/budgets/budget.entity";
 import Loader from "@presentation/components/loader";
 import { Button } from "@presentation/components/ui/button";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
 import {
   successToast,
   errorToast,
@@ -18,7 +19,6 @@ import { Plus } from "lucide-react";
 import { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
-import { Currency, currencyService } from "@presentation/utils/currencyService";
 import AddBudgetCategory from "./add-budget-category";
 import BudgetHeader from "./budget-header";
 import BudgetSpendingByCategory from "./budget-spending-ny-cat";

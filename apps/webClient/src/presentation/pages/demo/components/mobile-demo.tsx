@@ -52,7 +52,9 @@ export function MobileDemo() {
           <div className="h-[500px] overflow-y-auto p-3">
             {/* Date Selector */}
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold">{t("sidebar.dashboard")}</h2>
+              <h2 className="text-lg font-bold">
+                {t("routes.app.dashboard.dashboard")}
+              </h2>
               <div className="flex items-center gap-1 text-xs bg-slate-100 px-2 py-1 rounded-full dark:bg-slate-800">
                 <Calendar className="h-3 w-3 text-slate-500 dark:text-slate-400" />
                 <span>April</span>
@@ -216,7 +218,9 @@ export function MobileDemo() {
             </button>
             <button className="flex flex-col items-center text-slate-400">
               <BarChart3 className="h-5 w-5" />
-              <span className="text-[10px]">{t("sidebar.reports")}</span>
+              <span className="text-[10px]">
+                {t("routes.app.dashboard.reports")}
+              </span>
             </button>
             <button className="flex flex-col items-center text-slate-400">
               <Settings className="h-5 w-5" />

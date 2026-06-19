@@ -5,11 +5,27 @@ import { Button } from "@presentation/components/ui/button";
 import { successToast, errorToast } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import {
+  cloneElement,
+  isValidElement,
+  ReactElement,
+  ReactNode,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import AddTransactionForm from "./add-transaction";
 
-export function AddTransactionModal({ isHeader }: { isHeader?: boolean }) {
+// Phase 3 (T3.7): callers may pass a custom trigger element (e.g. the
+// income-page row's "Add Income" button). When omitted we render the
+// default primary CTA. Both paths share the same modal + mutation
+// behaviour so onSuccess invalidations remain identical.
+export function AddTransactionModal({
+  isHeader,
+  trigger,
+}: {
+  isHeader?: boolean;
+  trigger?: ReactNode;
+}) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -23,6 +39,7 @@ export function AddTransactionModal({ isHeader }: { isHeader?: boolean }) {
       successToast(data.message, 3000, "transaction-create");
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-summary"] });
       setIsOpen(false);
     },
     onError: (error) => {
@@ -45,7 +62,35 @@ export function AddTransactionModal({ isHeader }: { isHeader?: boolean }) {
 
   return (
     <>
-      {!isHeader ? (
+      {trigger ? (
+        // Phase 3 (T3.7): caller-provided trigger element (e.g. the
+        // income-page "Add Income" button). Compose onClick rather
+        // than overwrite so any pre-existing handler on the trigger
+        // element continues to fire \u2014 e.g. an analytics hook,
+        // a parent anchor, or a future caller's own click target.
+        isValidElement(trigger) ? (
+          cloneElement(
+            trigger as ReactElement<{
+              onClick?: (...args: unknown[]) => void;
+            }>,
+            {
+              onClick: (...args: unknown[]) => {
+                const existing = (
+                  trigger.props as {
+                    onClick?: (...args: unknown[]) => void;
+                  }
+                ).onClick;
+                existing?.(...args);
+                setIsOpen(true);
+              },
+            },
+          )
+        ) : (
+          <Button variant="primary" onClick={() => setIsOpen(true)}>
+            {trigger}
+          </Button>
+        )
+      ) : !isHeader ? (
         <>
           <Button
             variant="primary"

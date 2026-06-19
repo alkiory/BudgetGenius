@@ -37,6 +37,7 @@ export class UserDto {
   @IsOptional()
   refreshToken: string;
 
+  // @deprecated — kept for API response backward compatibility; always true for MVP.
   @IsBoolean()
   isPremium: boolean;
 

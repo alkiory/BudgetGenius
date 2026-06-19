@@ -1,4 +1,10 @@
-import { IsDateString, IsNotEmpty, IsNumber, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class UpdateTransactionDto {
   @IsNumber()
@@ -19,7 +25,12 @@ export class UpdateTransactionDto {
   @IsNotEmpty()
   amount: number;
 
+  /**
+   * Optional recurrence — same semantics as the create DTO. Omitted = no
+   * change on update (existing value is preserved); explicit `null` clears
+   * it (handled by the repo layer).
+   */
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  status: string;
+  recurrence?: string;
 }

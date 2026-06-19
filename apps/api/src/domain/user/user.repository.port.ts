@@ -9,8 +9,7 @@ export interface UserRepositoryPort {
     password,
     role,
     authProvider,
-    isPremium,
-  }: UserDto): Promise<User>;
+  }: Omit<UserDto, 'id' | 'isPremium'>): Promise<User>;
 
   findByEmail(email: string): Promise<User | null>;
 

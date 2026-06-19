@@ -13,7 +13,6 @@ import {
   PieChart,
   Settings,
   Wallet,
-  Goal,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -23,33 +22,43 @@ import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useLocation } from "react-router";
 import { Logo } from "../logo";
+// Phase 6 (T6.1 + T6.5): every primary nav entry now resolves its
+// label through the canonical `routes.app.dashboard.<key>` namespace
+// (single source of truth for sidebar + route-config + breadcrumb +
+// notFound.tsx back-link + demo/components/mobile-demo.tsx). The
+// `sidebar.*` keys are reserved for non-route chrome (settings,
+// logout, premium nav) which don't have a route binding.
 const navigation = [
   {
     key: "dashboard",
     href: RoutePaths.App + "/" + RoutePaths.Dashboard,
     icon: Home,
+    i18nKey: "routes.app.dashboard.dashboard",
   },
   {
     key: "transactions",
     href: RoutePaths.App + "/" + RoutePaths.Transactions,
     icon: CreditCard,
+    i18nKey: "routes.app.dashboard.transactions",
   },
   {
     key: "budgets",
     href: RoutePaths.App + "/" + RoutePaths.Budgets,
     icon: PieChart,
+    i18nKey: "routes.app.dashboard.budgets",
   },
   {
     key: "reports",
     href: RoutePaths.App + "/" + RoutePaths.Reports,
     icon: BarChart3,
+    i18nKey: "routes.app.dashboard.reports",
   },
   {
     key: "income",
     href: RoutePaths.App + "/" + RoutePaths.Income,
     icon: DollarSign,
+    i18nKey: "routes.app.dashboard.income",
   },
-  { key: "goals", href: RoutePaths.App + "/" + RoutePaths.Goals, icon: Goal },
   {
     key: "settings",
     href: RoutePaths.App + "/" + RoutePaths.Profile,
@@ -176,7 +185,11 @@ export function DashboardSidebar() {
           >
             {navigation.map((item) => {
               const isActive = pathname === item.href;
-              const label = t("sidebar." + item.key);
+              // Phase 6 (T6.1): every primary nav entry supplies an
+              // `i18nKey` pointing at `routes.app.dashboard.<key>`.
+              // Entries without `i18nKey` (settings) still fall back to
+              // `sidebar.<key>` for legacy chrome labels.
+              const label = t(item.i18nKey ?? "sidebar." + item.key);
               return (
                 <Link
                   key={item.key}

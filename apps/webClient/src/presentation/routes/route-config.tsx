@@ -1,32 +1,91 @@
 import AuthLayout from "@presentation/layouts/auth";
-import ForgotPasswordConfirmationPage from "@presentation/pages/auth/confirmation";
-import ForgotPasswordPage from "@presentation/pages/auth/forgot-password";
-import LoginPage from "@presentation/pages/auth/login";
-import ResetPasswordPage from "@presentation/pages/auth/reset-password";
-import SignupPage from "@presentation/pages/auth/signup";
-import ContactSalesPage from "@presentation/pages/contact/contact-sales-page";
-import PrivacyPolicyPage from "@presentation/pages/contact/privacy-policy-page";
-import TermsOfServicePage from "@presentation/pages/contact/terms-of-service-page";
-import CTAPage from "@presentation/pages/cta";
+import LandingLayout from "@presentation/layouts/landing";
 import { lazy } from "react";
 import { Route, Routes } from "react-router";
-import ProfilePage from "@presentation/pages/user/profile";
+
+import LoadingPage from "@presentation/pages/loading";
+import NotFoundPage from "@presentation/pages/notFound";
+import CTAPage from "@presentation/pages/cta";
+import { RoutePaths } from "@presentation/utils/routes";
 
 import ProtectedRoute from "./protected-route";
-import UserList from "@presentation/pages/user/userList";
-import HowItWorksPage from "@presentation/pages/demo/how-it-works";
-import NotFoundPage from "@presentation/pages/notFound";
+
+// Phase 6.8: every protected + auth + public-chrome route is now
+// lazy-loaded so the main entry only carries the layout/loading
+// chrome + the provider/state tree. React Router 7's `<Route>`
+// handles the `React.lazy()` Suspense boundary internally; the
+// React Router 7 `loader` prop on DashboardPage shows a LoadingPage
+// during hydration but doesn't gate the lazy chunk fetch.
+//
+// The vite manualChunks split in vite.config.ts keeps `recharts` +
+// `firebase` out of the main entry as separate vendor chunks.
+//
+// Eager (kept in main entry): these wrap every route above or
+// serve as the very first paint on the marketing site.
+//   - AuthLayout, LandingLayout, ProtectedRoute, LoadingPage,
+//     NotFoundPage, CTAPage (the anon landing is the first paint
+//     for first-time visitors; lazy would flash a layout hole
+//     before the chunk fetch resolves).
+//
+// Lazy (per-page chunks that load on navigation):
+//   - DashboardPage, ReportsPage, BudgetsPage, TransactionsPage,
+//     IncomePage, GoalsPage (dashboard protected routes)
+//   - ProfilePage, UserList (user protected routes)
+//   - LoginPage, SignupPage, ForgotPasswordPage,
+//     ForgotPasswordConfirmationPage, ResetPasswordPage (auth routes)
+//   - HowItWorksPage, PrivacyPolicyPage, TermsOfServicePage,
+//     ContactSalesPage (Phase 6.8 round-2 polish: these public
+//     chrome pages were the last >500 kB source on the main entry;
+//     lazy-loading them drops the warning without touching the
+//     landing-page first-paint).
+
+// Dashboard protected routes
 const DashboardPage = lazy(
   () => import("@presentation/pages/dashboard/dashboardPage"),
 );
-import { RoutePaths } from "@presentation/utils/routes";
-import LoadingPage from "@presentation/pages/loading";
-import ReportsPage from "@presentation/pages/dashboard/reportsPage";
-import TransactionsPage from "@presentation/pages/dashboard/transactionPage";
-import IncomePage from "@presentation/pages/dashboard/incomePage";
-import BudgetsPage from "@presentation/pages/dashboard/budgetsPage";
-import { GoalsPage } from "@presentation/pages/dashboard/goalsPage";
-import LandingLayout from "@presentation/layouts/landing";
+const ReportsPage = lazy(
+  () => import("@presentation/pages/dashboard/reportsPage"),
+);
+const BudgetsPage = lazy(
+  () => import("@presentation/pages/dashboard/budgetsPage"),
+);
+const TransactionsPage = lazy(
+  () => import("@presentation/pages/dashboard/transactionPage"),
+);
+const IncomePage = lazy(
+  () => import("@presentation/pages/dashboard/incomePage"),
+);
+
+// User protected routes
+const ProfilePage = lazy(() => import("@presentation/pages/user/profile"));
+const UserList = lazy(() => import("@presentation/pages/user/userList"));
+
+// Auth routes
+const LoginPage = lazy(() => import("@presentation/pages/auth/login"));
+const SignupPage = lazy(() => import("@presentation/pages/auth/signup"));
+const ForgotPasswordPage = lazy(
+  () => import("@presentation/pages/auth/forgot-password"),
+);
+const ForgotPasswordConfirmationPage = lazy(
+  () => import("@presentation/pages/auth/confirmation"),
+);
+const ResetPasswordPage = lazy(
+  () => import("@presentation/pages/auth/reset-password"),
+);
+
+// Public chrome pages (Phase 6.8 round-2 polish)
+const HowItWorksPage = lazy(
+  () => import("@presentation/pages/demo/how-it-works"),
+);
+const PrivacyPolicyPage = lazy(
+  () => import("@presentation/pages/contact/privacy-policy-page"),
+);
+const TermsOfServicePage = lazy(
+  () => import("@presentation/pages/contact/terms-of-service-page"),
+);
+const ContactSalesPage = lazy(
+  () => import("@presentation/pages/contact/contact-sales-page"),
+);
 
 const RouteConfig = () => {
   return (
@@ -71,7 +130,6 @@ const RouteConfig = () => {
         />
         <Route path={RoutePaths.Transactions} element={<TransactionsPage />} />
         <Route path={RoutePaths.Income} element={<IncomePage />} />
-        <Route path={RoutePaths.Goals} element={<GoalsPage />} />
         <Route path={RoutePaths.Budgets} element={<BudgetsPage />} />
         <Route path={RoutePaths.Reports} element={<ReportsPage />} />
         {/* user section */}

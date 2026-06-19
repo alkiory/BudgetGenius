@@ -1,74 +1,49 @@
 import { ReportRepository } from '@adapters/dashboard/persistence/reports.repository';
-import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { Injectable } from '@nestjs/common';
 import Configuration, { OpenAI } from 'openai';
 
+/**
+ * Reports service — MVP launch (no premium gating).
+ *
+ * The `userRepo` injection was removed as part of T3.21: no public method
+ * consults the user's premium flag any more. AI retry loop is preserved per
+ * plan so future billing-state transitions still have an integration point.
+ */
 @Injectable()
 export class ReportService {
   private openai: OpenAI;
 
-  constructor(
-    private repo: ReportRepository,
-    private readonly userRepo: UserRepositoryImpl,
-  ) {
+  constructor(private repo: ReportRepository) {
     this.openai = new Configuration({
       apiKey: process.env.OPENAI_API_KEY,
       project: process.env.OPENAI_PROJECT_ID,
     });
   }
 
-  async getOverview({ year, userId }: { year: number; userId: number }) {
-    const user = await this.userRepo.findById(userId);
-
-    if (!user.isPremium) return [];
-
+  async getOverview({ year }: { year: number }) {
     return this.repo.getMonthlyOverview(year);
   }
 
-  async getByCategory({
-    start,
-    end,
-    userId,
-  }: {
-    start: Date;
-    end: Date;
-    userId: number;
-  }) {
-    const user = await this.userRepo.findById(userId);
-
-    if (!user.isPremium) return [];
-
+  async getByCategory({ start, end }: { start: Date; end: Date }) {
     return this.repo.getCategoryBreakdown(start, end);
   }
 
-  async getWeekly({ userId }: { userId: number }) {
-    const user = await this.userRepo.findById(userId);
-
-    if (!user.isPremium) return [];
-
+  async getWeekly() {
     return this.repo.getWeeklyTrend();
   }
 
-  async getSavings({ year, userId }: { year: number; userId: number }) {
-    const user = await this.userRepo.findById(userId);
-
-    if (!user.isPremium) return [];
-
+  async getSavings({ year }: { year: number }) {
     return this.repo.getSavingsGrowth(year);
   }
 
   /** AI‑powered insights */
-  async getInsights({ year, userId }: { year: number; userId: number }) {
+  async getInsights({ year }: { year: number }) {
     const maxAttempts = 3;
     let attempts = 0;
 
-    const user = await this.userRepo.findById(userId);
-
-    if (!user.isPremium) return [];
-
     while (attempts < maxAttempts) {
       try {
-        const overview = await this.getOverview({ year, userId });
+        const overview = await this.getOverview({ year });
         const prompt = `
         You are a helpful financial AI assistant designed to provide users with actionable insights based on their financial data.
 

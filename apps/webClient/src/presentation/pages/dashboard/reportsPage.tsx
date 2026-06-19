@@ -5,59 +5,153 @@ import {
   useSavingsGrowth,
   useInsights,
 } from "@adapters/query/reports/reportsQuery";
+import { HttpReportRepository } from "@adapters/http/reports.repository";
+import type {
+  ExportFormat,
+  ExportLocale,
+} from "@domain/dashboard/reports/reports.repository";
 import CategoryTab from "@presentation/components/dashboard/reports/categories-tab";
 import IncomeExpensesTab from "@presentation/components/dashboard/reports/income-expenses-tab";
 import OverviewTab from "@presentation/components/dashboard/reports/overview-tab";
 import ReportsLoading from "@presentation/components/dashboard/reports/reports-loading";
 import TrendsTab from "@presentation/components/dashboard/reports/trends-tab";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@presentation/components/ui/dropdown-menu";
 import { PageHeader } from "@presentation/components/ui/page-header";
-import { Calendar, Download, Filter } from "lucide-react";
+import { downloadBlob } from "@presentation/utils/downloadBlob";
+import {
+  Calendar,
+  ChevronDown,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Loader2,
+} from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import toast from "react-hot-toast";
+
+const FILENAME_BY_FORMAT: Record<ExportFormat, string> = {
+  pdf: "budget-report-{year}.pdf",
+  excel: "budget-report-{year}.xlsx",
+};
 
 export default function ReportsPage() {
-  const { t } = useTranslation();
+  // `i18n` is exposed by react-i18next so we can pass the active UI locale
+  // to the export endpoint and let the server localize month labels in
+  // PDF / Excel accordingly.
+  const { t, i18n } = useTranslation();
   const [activeTab, setActiveTab] = useState("overview");
   const [timeframe, setTimeframe] = useState("year");
+  const [isExporting, setIsExporting] = useState<ExportFormat | null>(null);
   const currentYear = new Date().getFullYear();
 
   // Consultas de datos
-  const { data: overview, isLoading: isLoadingOverview } = useOverview({
+  const { data: overviewMonthly, isLoading: isLoadingOverview } = useOverview({
     year: String(currentYear),
   });
-  const { data: categories, isLoading: isLoadingCategories } =
+  const { data: categoryRows, isLoading: isLoadingCategories } =
     useCategoryBreakdown({
       start: `${currentYear}-01-01`,
       end: `${currentYear}-12-31`,
     });
   const { data: weeklyTrend, isLoading: isLoadingTrend } = useWeeklyTrend();
-  const { data: savings } = useSavingsGrowth({ year: String(currentYear) });
+  const { data: savingsMonthly, isLoading: isLoadingSavings } =
+    useSavingsGrowth({ year: String(currentYear) });
   const { data: insights, isLoading: isLoadingInsights } = useInsights({
     year: String(currentYear),
   });
 
-  if (isLoadingOverview || isLoadingCategories) {
+  if (isLoadingOverview || isLoadingCategories || isLoadingSavings) {
     return <ReportsLoading />;
   }
 
-  // Datos procesados
-  const totalIncome = overview?.totalIncome || 0;
-  const totalExpenses = overview?.totalExpenses || 0;
-  const savingsAmount = totalIncome - totalExpenses;
-  const savingsRate = Math.round((savingsAmount / totalIncome) * 100) || 0;
+  // The tabs expect envelope shapes ({monthly, ...}). The backend returns
+  // raw arrays, so wrap them here and remap fields. This is the only place
+  // in the app that consumes /reports/* responses.
+  const overview = { monthly: overviewMonthly ?? [] };
+  const savings = { monthly: savingsMonthly ?? [] };
+  const categories = (categoryRows ?? []).map(
+    (row: { category: string; total: number | string }) => ({
+      category: row.category,
+      amount: Number(row.total) || 0,
+    }),
+  );
 
-  const topCategory = [...(categories || [])].sort(
-    (a, b) => b.amount - a.amount,
-  )[0];
-  const highestSpendingMonth = [...(overview?.monthly || [])].sort(
-    (a, b) => b.expenses - a.expenses,
-  )[0];
+  // Datos procesados
+  const safeMonthly: {
+    month: string;
+    income: number | string;
+    expenses: number | string;
+  }[] = Array.isArray(overview.monthly)
+    ? (overview.monthly as {
+        month: string;
+        income: number | string;
+        expenses: number | string;
+      }[])
+    : [];
+  const totalIncome = safeMonthly.reduce(
+    (acc, row) => acc + (Number(row?.income) || 0),
+    0,
+  );
+  const totalExpenses = safeMonthly.reduce(
+    (acc, row) => acc + (Number(row?.expenses) || 0),
+    0,
+  );
+  const savingsAmount = totalIncome - totalExpenses;
+  const savingsRate =
+    totalIncome > 0
+      ? Math.max(0, Math.round((savingsAmount / totalIncome) * 100))
+      : 0;
+
+  const topCategory =
+    categories.length > 0
+      ? [...categories].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0))[0]
+      : undefined;
+  const highestSpendingMonth =
+    safeMonthly.length > 0
+      ? [...safeMonthly].sort(
+          (a, b) => (Number(b?.expenses) || 0) - (Number(a?.expenses) || 0),
+        )[0]
+      : undefined;
 
   const timeframeText: Record<string, string> = {
     month: t("reports.thisMonth"),
     quarter: t("reports.thisQuarter"),
     year: t("reports.thisYear"),
     all: t("reports.allTime"),
+  };
+
+  const handleExport = async (format: ExportFormat) => {
+    if (isExporting) return;
+    setIsExporting(format);
+    try {
+      // Forward the active UI locale (e.g. "es-CO") so the server can
+      // translate the English month labels coming from Postgres
+      // `to_char`. Anything outside the supported set falls back to
+      // English server-side, so this stays permissive.
+      const locale = i18n.language as ExportLocale | undefined;
+      const blob = await HttpReportRepository.exportReport({
+        format,
+        year: String(currentYear),
+        locale,
+      });
+      const filename = FILENAME_BY_FORMAT[format].replace(
+        "{year}",
+        String(currentYear),
+      );
+      downloadBlob(blob, filename);
+      toast.success(t("reports.exportSuccess"));
+    } catch (err) {
+      console.error("Report export failed:", err);
+      toast.error(t("reports.exportError"));
+    } finally {
+      setIsExporting(null);
+    }
   };
 
   return (
@@ -84,15 +178,41 @@ export default function ReportsPage() {
             <Calendar className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           </div>
 
-          <button className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
-            <Filter className="h-4 w-4" />
-            {t("reports.filter")}
-          </button>
-
-          <button className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
-            <Download className="h-4 w-4" />
-            {t("reports.export")}
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              disabled={isExporting !== null}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              {isExporting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {t("reports.export")}
+              <ChevronDown
+                className="ml-1 h-3 w-3 opacity-70"
+                aria-hidden="true"
+              />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={6} className="w-48">
+              <DropdownMenuItem
+                onClick={() => handleExport("pdf")}
+                disabled={isExporting !== null}
+                className="flex items-center gap-2"
+              >
+                <FileText className="h-4 w-4 text-red-500" />
+                <span>{t("reports.exportPdf")}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleExport("excel")}
+                disabled={isExporting !== null}
+                className="flex items-center gap-2"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-green-600" />
+                <span>{t("reports.exportExcel")}</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </PageHeader>
 

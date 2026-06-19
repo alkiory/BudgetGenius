@@ -1,10 +1,10 @@
 import type { APIRequestContext } from "@playwright/test";
 
 const HTTP_METHODS = {
-  GET: 'get',
-  POST: 'post',
-  PUT: 'put',
-  DELETE: 'delete',
+  GET: "get",
+  POST: "post",
+  PUT: "put",
+  DELETE: "delete",
 } as const;
 
 type HttpMethod = (typeof HTTP_METHODS)[keyof typeof HTTP_METHODS];
@@ -24,7 +24,7 @@ export default class AppAPI {
     try {
       const response = await this.apiContext[method](endpoint, {
         headers: {
-          Accept: 'application/json',
+          Accept: "application/json",
         },
         data: body,
       });

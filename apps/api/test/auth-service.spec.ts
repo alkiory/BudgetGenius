@@ -21,7 +21,9 @@ const user: User = {
   authProvider: 'email',
   role: 'user',
   refreshToken: null,
-  isPremium: false,
+  // isPremium is dormant for MVP launch; defaults to true at the DB column level.
+  // Kept in the mock so the literal satisfies the `User` type (T3.13 backward-compat).
+  isPremium: true,
   comparePassword: jest.fn((password) =>
     bcrypt.compare(password, user.password),
   ),
@@ -33,8 +35,7 @@ const user: User = {
   expenseCategories: [],
   overviews: [],
   settings: [],
-  incomes: [],
-  goals: [],
+  // [PHASE 4 REMOVED — DO NOT RESTORE] `incomes: []` is gone; see rpi/income-redundancy/plan.md. Income rows flow through `user.transactions` filtered by amount > 0.
 };
 
 describe('AuthService', () => {

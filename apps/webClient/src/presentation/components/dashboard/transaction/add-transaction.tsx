@@ -35,23 +35,35 @@ export default function AddTransactionForm({
     description: "",
     amount: undefined as unknown as number,
     currency: userCurrency,
-    status: "Pending",
   });
 
+  // Bug fix (separate amountInput string): mirrors the same fix as in
+  // transaction-form.tsx. Without a raw input buffer, every `.` or `,`
+  // the user typed was being erased on the next React render because
+  // parseAmountInput returns the integer base, and the controlled
+  // input would re-render with that integer — effectively blocking
+  // decimals. The numeric submit value is computed once from this
+  // buffer in handleSubmit.
+  const [amountInput, setAmountInput] = useState<string>("");
+
+  // The amount input has its own inline onChange that updates the raw
+  // `amountInput` buffer. `handleChange` therefore only serves the
+  // description/category fields — keep it dead-branch-free.
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: name === "amount" ? Math.abs(parseFloat(value) || 0) : value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const absAmount = Math.abs(formData.amount);
+    // Re-parse the raw input buffer at submit time so `10,15` resolves
+    // to 10.15 and not 10 (the previous shape stored `formData.amount`
+    // as the parsed number, so trailing separators were dropped).
+    const parsedAtSubmit = currencyService.parseAmountInput(amountInput);
+    const absAmount = Math.abs(parsedAtSubmit);
 
     if (Number.isNaN(absAmount) || absAmount === 0) {
       errorToast(t("transactions.zeroAmountMsg"), 3000, "invalid-amount");
@@ -154,19 +166,14 @@ export default function AddTransactionForm({
           <Input
             id="amount"
             name="amount"
-            type="number"
-            step="0.01"
-            min="0"
-            value={formData.amount ?? ""}
+            type="text"
+            inputMode="decimal"
+            // Controlled by the raw string buffer `amountInput` so the
+            // user's keystrokes are preserved (the previous shape wiped
+            // the dot/comma the user just pressed).
+            value={amountInput}
             onChange={(e) => {
-              const { value } = e.target;
-              setFormData((prev) => ({
-                ...prev,
-                amount:
-                  value === ""
-                    ? (undefined as unknown as number)
-                    : Math.abs(parseFloat(value) || 0),
-              }));
+              setAmountInput(e.target.value);
             }}
             className="pl-7"
             placeholder={t("common.amountPlaceholder")}
@@ -176,22 +183,6 @@ export default function AddTransactionForm({
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {t("transactions.amountHint")}
         </p>
-      </div>
-
-      <div className="space-y-2 grid">
-        <Label htmlFor="status">{t("transactions.status")}</Label>
-        <select
-          id="status"
-          name="status"
-          value={formData.status}
-          onChange={handleChange}
-          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-          required
-        >
-          <option value="Pending">{t("transactions.statusPending")}</option>
-          <option value="Completed">{t("transactions.statusCompleted")}</option>
-          <option value="Cancelled">{t("transactions.statusCancelled")}</option>
-        </select>
       </div>
 
       <div className="mt-6 flex justify-end gap-2">

@@ -29,13 +29,23 @@ const InsightBox = ({
   </div>
 );
 
-const ProgressBar = ({ value, color }: { value: number; color: string }) => (
-  <div className="mt-1 h-2 w-full rounded-full bg-slate-100 dark:bg-slate-700">
-    <div
-      className="h-2 rounded-full"
-      style={{ width: `${value}%`, backgroundColor: color }}
-    />
-  </div>
-);
+const ProgressBar = ({ value, color }: { value: number; color: string }) => {
+  // Phase 6.8 (Bug C): for over-spent categories, `(category.amount /
+  // totalExpenses) * 100` can exceed 100%. Clamp the rendered width
+  // to the track width so the bar visually matches the track. The
+  // over-budget signal is rendered by the parent (categories-tab.tsx)
+  // as an explicit 'over by X%' text label, NOT by flipping this
+  // bar's color — preserving the per-category color semantics for
+  // the tab's breakdown list.
+  const safeWidth = Math.max(0, Math.min(value, 100));
+  return (
+    <div className="mt-1 h-2 w-full rounded-full bg-slate-100 dark:bg-slate-700">
+      <div
+        className="h-2 rounded-full"
+        style={{ width: `${safeWidth}%`, backgroundColor: color }}
+      />
+    </div>
+  );
+};
 
 export { ChartContainer, InsightBox, ProgressBar };

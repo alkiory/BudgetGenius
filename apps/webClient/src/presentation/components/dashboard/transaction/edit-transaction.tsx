@@ -40,6 +40,7 @@ export function EditTransaction({
       setIsOpen(false);
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-summary"] });
     },
     onError: (error) => {
       errorToast(error.message, 3000, "transaction-create");
@@ -61,6 +62,7 @@ export function EditTransaction({
     });
     setIsOpen(false);
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    queryClient.invalidateQueries({ queryKey: ["recent-summary"] });
   };
 
   return (

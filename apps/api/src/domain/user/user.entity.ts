@@ -14,8 +14,6 @@ import { ExpenseCategory } from '@domain/dashboard/expense-category.entity';
 import { Overview } from '@domain/dashboard/overview.entity';
 import { Transaction } from '@domain/dashboard/transaction.entity';
 import { UserSettings } from './user-settings.entity';
-import { Income } from '@domain/dashboard/income.entity';
-import { Goal } from '@domain/dashboard/goal.entity';
 
 @Entity('users')
 export class User {
@@ -43,7 +41,8 @@ export class User {
   @Column({ nullable: true })
   refreshToken: string;
 
-  @Column()
+  @Column({ default: true })
+  /** @deprecated — always true for MVP. Will be removed in post-MVP cleanup. */
   isPremium: boolean;
 
   @CreateDateColumn({ type: 'timestamp', name: 'createdAt' })
@@ -79,12 +78,6 @@ export class User {
 
   @OneToMany(() => UserSettings, (settings) => settings.user)
   settings: UserSettings[];
-
-  @OneToMany(() => Income, (income) => income.user)
-  incomes: Income[];
-
-  @OneToMany(() => Goal, (goal) => goal.user)
-  goals: Goal[];
 }
 
 export enum UserRole {

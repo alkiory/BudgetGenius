@@ -1,4 +1,4 @@
-import { useFetchTransactions } from "@adapters/query/dashboard";
+import { useFetchRecentSummary } from "@adapters/query/dashboard";
 import { RootState } from "@adapters/store/rootStore";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { RoutePaths } from "@presentation/utils/routes";
@@ -71,11 +71,18 @@ export function RecentTransactions() {
     return { IconComponent, color, bg };
   };
 
-  const { data: transactions, isSuccess } = useFetchTransactions(0, 5);
+  // Recent slice returned by GET /dashboard/recent-summary (already DESC).
+  const { data, isSuccess } = useFetchRecentSummary(50);
 
   const userSetting = useSelector((state: RootState) => state.userSettings);
 
   const { settings } = userSetting;
+
+  const recentTransactions = (data?.transactions ?? []).slice(0, 3);
+
+  const targetCurrency = (settings?.currency || "USD") as Currency;
+  const renderAmount = (raw: number) =>
+    currencyService.formatCurrency(raw, "USD" as Currency, targetCurrency);
 
   return (
     <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
@@ -92,47 +99,44 @@ export function RecentTransactions() {
       </div>
 
       <div className="space-y-4">
-        {isSuccess && transactions.transactions?.length > 0 ? (
-          transactions.transactions?.slice(-1 * 3)?.map((transaction) => {
-            const { IconComponent, color, bg } = getTransactionIcon(
-              transaction.category,
-            );
-            const targetCurrency = (settings?.currency || "USD") as Currency;
-            const formatted = currencyService.formatCurrency(
-              transaction.amount,
-              "USD" as Currency,
-              targetCurrency,
-            );
+        {isSuccess && recentTransactions.length > 0 ? (
+          <>
+            {recentTransactions.map((transaction) => {
+              const { IconComponent, color, bg } = getTransactionIcon(
+                transaction.category,
+              );
+              const formatted = renderAmount(transaction.amount);
 
-            return (
-              <div
-                key={transaction.id}
-                className="flex items-center justify-between rounded-lg border border-slate-100 p-3 dark:border-slate-700"
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`rounded-full p-2 ${bg}`}>
-                    <IconComponent className={`h-5 w-5 ${color}`} />
-                  </div>
-                  <div>
-                    <p className="font-medium">{transaction.description}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {transaction.category} •{" "}
-                      {new Date(transaction.date).toDateString()}
-                    </p>
-                  </div>
-                </div>
-                <span
-                  className={`font-medium ${
-                    transaction.amount >= 0
-                      ? "text-green-600 dark:text-green-400"
-                      : "text-red-600 dark:text-red-400"
-                  }`}
+              return (
+                <div
+                  key={transaction.id}
+                  className="flex items-center justify-between rounded-lg border border-slate-100 p-3 dark:border-slate-700"
                 >
-                  {formatted.formatted}
-                </span>
-              </div>
-            );
-          })
+                  <div className="flex items-center gap-3">
+                    <div className={`rounded-full p-2 ${bg}`}>
+                      <IconComponent className={`h-5 w-5 ${color}`} />
+                    </div>
+                    <div>
+                      <p className="font-medium">{transaction.description}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {transaction.category} •{" "}
+                        {new Date(transaction.date).toDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className={`font-medium ${
+                      transaction.amount >= 0
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-600 dark:text-red-400"
+                    }`}
+                  >
+                    {formatted.formatted}
+                  </span>
+                </div>
+              );
+            })}
+          </>
         ) : (
           <div className="flex items-center justify-between rounded-lg border border-slate-100 p-3 dark:border-slate-700">
             <div className="flex items-center gap-3">

@@ -1,5 +1,7 @@
 import { RootState } from "@adapters/store/rootStore";
 import {
+  INCOME_RECURRENCES,
+  IncomeRecurrence,
   TRANSACTION_CATEGORIES,
   Transaction,
 } from "@domain/dashboard/transactions/transaction.entity";
@@ -18,6 +20,11 @@ interface TransactionFormProps {
   onSubmit: (transaction: Partial<Transaction>) => void;
   onCancel: () => void;
 }
+
+// Phase 3 (T3.5): "One-time" represents the default no-recurrence label.
+// The backend stores `null` for non-recurring rows; the frontend maps an
+// empty select / the One-time sentinel to `null` on submit.
+const ONE_TIME_LABEL = "One-time";
 
 export function TransactionForm({
   transaction,
@@ -38,9 +45,20 @@ export function TransactionForm({
     category: "Other",
     description: "",
     amount: undefined as unknown as number,
-    status: "Pending",
     currency: "USD",
+    recurrence: null,
   });
+
+  // Bug fix (separate amountInput string): the input element is displayed
+  // from this raw string so the user's literal keystrokes (`.` or `,`)
+  // are preserved while typing. Without this, every keystroke ran
+  // through parseAmountInput and React's controlled <input> would
+  // immediately re-render with the parsed NUMBER, erasing the trailing
+  // `.` or `,` the user just pressed (so "10.5" turned into "105" and
+  // dot/comma entry appeared broken). The numeric submission reads from
+  // `amount` (re-parsed at submit time); `amountInput` is purely the
+  // displayed buffer.
+  const [amountInput, setAmountInput] = useState<string>("");
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
@@ -52,7 +70,10 @@ export function TransactionForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const absAmount = Math.abs(Number(formData.amount));
+    // Re-parse the raw string at submit time so the trailing separators
+    // the user typed (`10.5`, `23,15`) resolve to the right number.
+    const parsedAtSubmit = currencyService.parseAmountInput(amountInput);
+    const absAmount = Math.abs(parsedAtSubmit);
 
     if (Number.isNaN(absAmount) || absAmount === 0) {
       errorToast(t("transactions.zeroAmountMsg"), 3000, "invalid-amount");
@@ -62,13 +83,20 @@ export function TransactionForm({
     // Apply sign: expense → negative, income → positive
     const signedAmount = transactionType === "expense" ? -absAmount : absAmount;
 
+    // Map "One-time" or empty value back to `null` so the backend stores
+    // an absent recurrence on a non-recurring transaction.
+    const recurrence: IncomeRecurrence | null =
+      formData.recurrence && formData.recurrence !== ONE_TIME_LABEL
+        ? (formData.recurrence as IncomeRecurrence)
+        : null;
+
     onSubmit({
       id: transaction?.id ?? undefined,
       date: formData.date,
       category: formData.category,
       description: formData.description,
       amount: signedAmount,
-      status: formData.status,
+      recurrence,
     });
   };
 
@@ -76,15 +104,20 @@ export function TransactionForm({
 
   useEffect(() => {
     if (transaction) {
+      const abs = Math.abs(transaction.amount);
       setFormData({
         id: transaction.id,
         date: transaction.date,
         category: transaction.category,
         description: transaction.description,
-        amount: Math.abs(transaction.amount),
-        status: transaction.status,
+        amount: abs,
         currency: transaction.currency,
+        recurrence: transaction.recurrence ?? null,
       });
+      // Seed the input buffer with a locale-neutral representation so
+      // existing rows open with a sensible value and edits keep the
+      // exact numeric magnitude.
+      setAmountInput(String(abs));
       // Derive the toggle from the original amount sign
       setTransactionType(transaction.amount >= 0 ? "income" : "expense");
     }
@@ -98,6 +131,7 @@ export function TransactionForm({
         <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
           <button
             type="button"
+            data-testid="type-expense"
             onClick={() => setTransactionType("expense")}
             className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
               transactionType === "expense"
@@ -109,6 +143,7 @@ export function TransactionForm({
           </button>
           <button
             type="button"
+            data-testid="type-income"
             onClick={() => setTransactionType("income")}
             className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
               transactionType === "income"
@@ -163,19 +198,15 @@ export function TransactionForm({
           <Input
             id="amount"
             name="amount"
-            type="number"
-            step="0.01"
-            min="0"
-            value={formData.amount ?? ""}
+            type="text"
+            inputMode="decimal"
+            // Controlled by the raw string buffer `amountInput` so the
+            // user's typing (including the `.` or `,` they just pressed)
+            // is preserved character-for-character. Parsing happens once
+            // at submit time in `handleSubmit`.
+            value={amountInput}
             onChange={(e) => {
-              const { value } = e.target;
-              setFormData((prev) => ({
-                ...prev,
-                amount:
-                  value === ""
-                    ? (undefined as unknown as number)
-                    : Math.abs(parseFloat(value) || 0),
-              }));
+              setAmountInput(e.target.value);
             }}
             className="pl-7"
             placeholder="0.00"
@@ -187,24 +218,24 @@ export function TransactionForm({
         </p>
       </div>
 
-      {isEditing && (
-        <div className="space-y-2 grid">
-          <Label htmlFor="status">{t("transactions.status")}</Label>
+      {/* Phase 3 (T3.5): recurrence picker shown only for income rows.
+          Expense rows store `null` (non-recurring by default). */}
+      {transactionType === "income" && (
+        <div className="space-y-2">
+          <Label htmlFor="recurrence">{t("transactions.recurrence")}</Label>
           <select
-            id="status"
-            name="status"
-            value={formData.status}
+            id="recurrence"
+            name="recurrence"
+            value={formData.recurrence ?? ONE_TIME_LABEL}
             onChange={handleChange}
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-            required
           >
-            <option value="Pending">{t("transactions.statusPending")}</option>
-            <option value="Completed">
-              {t("transactions.statusCompleted")}
-            </option>
-            <option value="Cancelled">
-              {t("transactions.statusCancelled")}
-            </option>
+            <option value={ONE_TIME_LABEL}>{t("transactions.oneTime")}</option>
+            {INCOME_RECURRENCES.filter((r) => r !== ONE_TIME_LABEL).map((r) => (
+              <option key={r} value={r}>
+                {t(`recurrence.${r}`)}
+              </option>
+            ))}
           </select>
         </div>
       )}

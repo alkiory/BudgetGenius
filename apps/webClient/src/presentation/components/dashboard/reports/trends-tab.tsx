@@ -87,7 +87,7 @@ export default function TrendsTab({
           </ChartContainer>
         </div>
       )}
-      {insights && (
+      {insights && insights.projectedExpenses !== undefined && (
         <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
           <h3 className="mb-4 text-lg font-medium">
             {t("reports.trendAnalysis")}
@@ -114,21 +114,23 @@ export default function TrendsTab({
         </div>
       )}
 
-      <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
-        <h3 className="mb-4 text-lg font-medium">
-          {t("reports.historicalPatterns")}
-        </h3>
-        <div className="space-y-4">
-          {insights?.seasonalPatterns?.map((pattern: any) => (
-            <InsightBox
-              key={pattern.period}
-              title={pattern.period}
-              value={formatCurrency(pattern.averageSpending)}
-              description={`${t("reports.typical")} ${pattern.description}`}
-            />
-          ))}
+      {insights?.seasonalPatterns?.length > 0 && (
+        <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
+          <h3 className="mb-4 text-lg font-medium">
+            {t("reports.historicalPatterns")}
+          </h3>
+          <div className="space-y-4">
+            {insights.seasonalPatterns.map((pattern: any) => (
+              <InsightBox
+                key={pattern.period}
+                title={pattern.period}
+                value={formatCurrency(pattern.averageSpending)}
+                description={`${t("reports.typical")} ${pattern.description}`}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

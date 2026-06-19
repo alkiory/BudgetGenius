@@ -16,7 +16,6 @@ const useRestoreSession = () => {
   const PUBLIC_ROUTES = [
     RoutePaths.Home,
     RoutePaths.HowItWorks,
-    RoutePaths.Upgrade,
     RoutePaths.PrivacyPolicy,
     RoutePaths.TersmsAndConditions,
     RoutePaths.ContactSales,

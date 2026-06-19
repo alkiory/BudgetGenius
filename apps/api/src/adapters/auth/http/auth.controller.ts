@@ -108,7 +108,6 @@ export class AuthController {
       password: signupDTO.password,
       authProvider: 'email',
       role: 'user',
-      isPremium: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -145,7 +144,7 @@ export class AuthController {
         surname: 'Doe',
         email: 'john.doe@example.com',
         role: 'user',
-        isPremium: false,
+        isPremium: true,
       },
     },
   })

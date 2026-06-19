@@ -1,11 +1,19 @@
-import { Transaction } from "@domain/dashboard/transactions/transaction.entity";
+import {
+  Transaction,
+  TransactionTypeFilter,
+} from "@domain/dashboard/transactions/transaction.entity";
 import { TransactionRepository } from "@domain/dashboard/transactions/transactionRepository";
 import api from "@infrastructure/api.config";
 
+// Phase 3 (T3.2): HttpTransactionRepository forwards an optional `type`
+// query param to the backend. The backend applies a sign-convention
+// where-clause only when `type` is present (MoreThan(0) / LessThan(0)),
+// so existing callers (transactionPage) that pass no `type` continue
+// to receive the full transaction list untouched.
 export const HttpTransactionRepository: TransactionRepository = {
-  async getAll(offset: number, limit: number) {
+  async getAll(offset: number, limit: number, type?: TransactionTypeFilter) {
     const response = await api.get("/transactions", {
-      params: { offset, limit },
+      params: { offset, limit, ...(type ? { type } : {}) },
     });
     return response.data;
   },

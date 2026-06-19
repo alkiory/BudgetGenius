@@ -18,7 +18,6 @@ export type User = {
   authProvider: "email" | "google";
   role: string;
   refreshToken?: string;
-  isPremium: boolean;
   phone?: string;
   address?: string;
   imageUrl?: string;
@@ -32,7 +31,6 @@ export function ensureUserIsValid({
   password,
   authProvider,
   role,
-  isPremium,
 }: Omit<User, "id">) {
   if (!name) {
     throw new Error("You must provide a name");
@@ -69,6 +67,5 @@ export function ensureUserIsValid({
     password,
     authProvider,
     role,
-    isPremium,
   };
 }

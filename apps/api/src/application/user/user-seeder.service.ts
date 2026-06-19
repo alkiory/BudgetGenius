@@ -26,7 +26,6 @@ export class UserSeederService {
         role: 'admin',
         authProvider: 'email',
         refreshToken: null,
-        isPremium: true,
       });
       const adminUserDto: UserDto = {
         id: (await adminUser).id,
@@ -37,7 +36,7 @@ export class UserSeederService {
         role: (await adminUser).role,
         refreshToken: (await adminUser).refreshToken,
         authProvider: (await adminUser).authProvider,
-        isPremium: (await adminUser).isPremium,
+        isPremium: (await adminUser).isPremium ?? true,
       };
 
       await this.userRepository.save(adminUserDto);
@@ -57,7 +56,6 @@ export class UserSeederService {
         role: 'user',
         authProvider: 'email',
         refreshToken: null,
-        isPremium: false,
       });
       const normalUserDto: UserDto = {
         id: (await normalUser).id,
@@ -68,7 +66,7 @@ export class UserSeederService {
         role: (await normalUser).role,
         refreshToken: (await normalUser).refreshToken,
         authProvider: (await normalUser).authProvider,
-        isPremium: (await normalUser).isPremium,
+        isPremium: (await normalUser).isPremium ?? true,
       };
 
       // Set default settings for the normal user

@@ -32,7 +32,6 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, _setRole] = useState("user");
-  const [isPremium, _setIsPremium] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [error, setError] = useState("");
 
@@ -77,7 +76,6 @@ export default function SignupPage() {
       email,
       password,
       role,
-      isPremium,
       authProvider: "email",
     });
   };
@@ -90,7 +88,6 @@ export default function SignupPage() {
         email,
         password,
         role,
-        isPremium,
         authProvider: "email",
       });
       setError("");
@@ -103,7 +100,7 @@ export default function SignupPage() {
     return () => {
       setError("");
     };
-  }, [name, surname, email, password, role, isPremium]);
+  }, [name, surname, email, password, role]);
 
   return (
     <div className="flex min-h-screen items-center justify-center">

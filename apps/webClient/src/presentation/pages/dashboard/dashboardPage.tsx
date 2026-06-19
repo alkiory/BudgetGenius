@@ -10,7 +10,6 @@ import DashboardLoading from "@presentation/components/dashboard/dashboard-loadi
 import { ExpenseCategories } from "@presentation/components/dashboard/expense-categories";
 import { OverviewCard } from "@presentation/components/dashboard/overview/overview-card";
 import { RecentTransactions } from "@presentation/components/dashboard/recent-transactions";
-import { SavingsGoals } from "@presentation/components/dashboard/saving-goals";
 import { PageHeader } from "@presentation/components/ui/page-header";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { useEffect } from "react";
@@ -51,41 +50,21 @@ export default function DashboardPage() {
     false,
   );
 
-  const formattedBreackdownCategories = breackdown?.byCategory.flatMap(
-    (category) => ({
-      name: category.name,
-      value: currencyService.formatCurrency(
-        category.value,
-        "USD" as Currency,
-        targetCurrency,
-        false,
-      ),
-    }),
-  );
+  const rawBreackdownCategories = breackdown?.byCategory;
 
-  const formattedBreackdownLargets = breackdown?.largest?.value
+  const rawBreackdownLargest = breackdown?.largest?.value
     ? {
-        largest: {
-          name: breackdown.largest.name,
-          value: currencyService.formatCurrency(
-            breackdown.largest.value,
-            "USD" as Currency,
-            targetCurrency,
-            false,
-          ),
-        },
-      }
+      largest: {
+        name: breackdown.largest.name,
+        value: breackdown.largest.value,
+      },
+    }
     : {
-        largest: {
-          name: t("common.noData"),
-          value: currencyService.formatCurrency(
-            0,
-            "USD" as Currency,
-            targetCurrency,
-            false,
-          ),
-        },
-      };
+      largest: {
+        name: t("common.noData"),
+        value: 0,
+      },
+    };
 
   const formattedBreackdown = {
     total: currencyService.formatCurrency(
@@ -133,15 +112,14 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-2">
         <ExpenseCategories
           total={formattedBreackdown.total.formatted}
-          byCategory={formattedBreackdownCategories ?? []}
+          byCategory={rawBreackdownCategories ?? []}
           largest={{
-            name: formattedBreackdownLargets?.largest.name,
-            value: formattedBreackdownLargets?.largest.value.amount,
+            name: rawBreackdownLargest?.largest.name,
+            value: rawBreackdownLargest?.largest.value,
           }}
           timezone={userSettings?.timezone ?? "Europe/Paris"}
           period={breackdown?.period ?? new Date().toLocaleDateString()}
         />
-        <SavingsGoals />
       </div>
     </div>
   );

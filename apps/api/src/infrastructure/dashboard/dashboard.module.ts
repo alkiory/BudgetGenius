@@ -15,19 +15,12 @@ import { ExpenseCategoryRepository } from '@adapters/dashboard/persistence/expen
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { User } from '@domain/user/user.entity';
 import { BudgetController } from '@adapters/dashboard/http/budget.controller';
-import { Income } from '@domain/dashboard/income.entity';
-import { IncomeController } from '@adapters/dashboard/http/income.controller';
-import { IncomeRepository } from '@adapters/dashboard/persistence/income.repository';
-import { IncomeService } from '@application/dashboard/services/income.service';
 import { OverviewController } from '@adapters/dashboard/http/overview.controller';
 import { OverviewService } from '@application/dashboard/services/overview.service';
 import { BudgetCategory } from '@domain/dashboard/budget-category.entity';
-import { Goal } from '@domain/dashboard/goal.entity';
-import { GoalController } from '@adapters/dashboard/http/goal.controller';
-import { GoalService } from '@application/dashboard/services/goal.service';
-import { GoalRepository } from '@adapters/dashboard/persistence/goal.repository';
 import { ReportsController } from '@adapters/dashboard/http/reports.controller';
 import { ReportService } from '@application/dashboard/services/reports.service';
+import { ReportExportService } from '@application/dashboard/services/report-export.service';
 import { ReportRepository } from '@adapters/dashboard/persistence/reports.repository';
 import { OverviewRepository } from '@adapters/dashboard/persistence/overview.repository';
 
@@ -40,16 +33,12 @@ import { OverviewRepository } from '@adapters/dashboard/persistence/overview.rep
       Transaction,
       Overview,
       User,
-      Income,
-      Goal,
     ]),
   ],
   controllers: [
     TransactionController,
     BudgetController,
-    IncomeController,
     OverviewController,
-    GoalController,
     ReportsController,
   ],
   providers: [
@@ -61,12 +50,9 @@ import { OverviewRepository } from '@adapters/dashboard/persistence/overview.rep
     BudgetRepository,
     ExpenseCategoryRepository,
     UserRepositoryImpl,
-    IncomeRepository,
-    IncomeService,
     OverviewService,
-    GoalService,
-    GoalRepository,
     ReportService,
+    ReportExportService,
     ReportRepository,
     OverviewRepository,
   ],

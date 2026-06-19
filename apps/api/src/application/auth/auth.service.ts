@@ -188,7 +188,6 @@ export class AuthService {
         authProvider: 'google',
         role: UserRole.USER,
         password: null,
-        isPremium: false,
       });
 
       await queryRunner.manager.save(newUser);

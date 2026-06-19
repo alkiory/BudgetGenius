@@ -14,55 +14,99 @@ test.describe("Currency conversion", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ id: 1, name: "Test", surname: "User", email: "test@test.com", isPremium: true }),
+        body: JSON.stringify({
+          id: 1,
+          name: "Test",
+          surname: "User",
+          email: "test@test.com",
+          isPremium: true,
+        }),
       });
     });
     await page.route("**/api/user-settings**", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ id: 1, timezone: "America/Bogota", currency: "COP", locale: "es-CO" }),
+        body: JSON.stringify({
+          id: 1,
+          timezone: "America/Bogota",
+          currency: "COP",
+          locale: "es-CO",
+        }),
       });
     });
     await page.route("**/api/dashboard/overview**", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ balance: 5000, income: 3000, expenses: 2000, period: new Date().toISOString() }),
+        body: JSON.stringify({
+          balance: 5000,
+          income: 3000,
+          expenses: 2000,
+          period: new Date().toISOString(),
+        }),
       });
     });
     await page.route("**/api/dashboard/expense-breakdown**", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ total: 2000, byCategory: [], largest: null, period: new Date().toISOString() }),
+        body: JSON.stringify({
+          total: 2000,
+          byCategory: [],
+          largest: null,
+          period: new Date().toISOString(),
+        }),
       });
     });
     await page.route("**/api/transactions**", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ transactions: [], meta: { total: 0, offset: "0", limit: "5", nextOffset: null } }),
+        body: JSON.stringify({
+          transactions: [],
+          meta: { total: 0, offset: "0", limit: "5", nextOffset: null },
+        }),
       });
     });
     await page.route("**/api/budgets**", async (route) => {
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
     });
     await page.route("**/api/saving-goals**", async (route) => {
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
     });
     await page.route("**/api/goals**", async (route) => {
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
     });
     await page.route("**/api/incomes**", async (route) => {
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ incomes: [] }) });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ incomes: [] }),
+      });
     });
   });
 
   test("should convert USD dashboard values to COP", async ({ page }) => {
     // Set up response promises before navigating
-    const overviewResp = page.waitForResponse("**/api/dashboard/overview**", { timeout: 20000 });
-    const settingsResp = page.waitForResponse("**/api/user-settings**", { timeout: 20000 });
+    const overviewResp = page.waitForResponse("**/api/dashboard/overview**", {
+      timeout: 20000,
+    });
+    const settingsResp = page.waitForResponse("**/api/user-settings**", {
+      timeout: 20000,
+    });
 
     await page.goto("/app/dashboard", { waitUntil: "domcontentloaded" });
 

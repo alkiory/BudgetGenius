@@ -148,10 +148,6 @@ export function AccountSettings() {
                 { value: "USD", label: "United States Dollar (USD)" },
                 { value: "EUR", label: "Euro (EUR)" },
                 { value: "COP", label: "Colombian Peso (COP)" },
-                { value: "GBP", label: "British Pound Sterling (GBP)" },
-                { value: "JPY", label: "Japanese Yen (JPY)" },
-                { value: "AUD", label: "Australian Dollar (AUD)" },
-                { value: "CAD", label: "Canadian Dollar (CAD)" },
               ]}
             />
 
