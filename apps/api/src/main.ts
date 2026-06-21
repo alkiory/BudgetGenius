@@ -6,6 +6,38 @@ import { LoggingService } from '@infrastructure/log/logger.service';
 import cookieParser from 'cookie-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
+// CORS - Default origins served for each environment.
+// They are merged with whatever is declared in the FRONTEND_URL env var
+// so deployment-specific domains can be added without code changes.
+const PRODUCTION_DEFAULT_ORIGINS = [
+  'https://budgetgeniusia.web.app',
+  'https://budgetgeniusia.firebaseapp.com',
+];
+
+const DEV_DEFAULT_ORIGINS = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3001',
+  'http://127.0.0.1:3001',
+];
+
+/**
+ * Trims whitespace and trailing slashes so we can compare origins
+ * exactly against the `Origin` header the browser sends.
+ */
+const normalizeOrigin = (raw: string): string =>
+  (raw ?? '').trim().replace(/\/+$/, '');
+
+/**
+ * FRONTEND_URL may be a single URL or a comma-separated list.
+ * Empty entries are dropped; duplicates are de-duplicated by the caller.
+ */
+const parseOriginList = (raw: string | undefined | null): string[] =>
+  (raw ?? '')
+    .split(',')
+    .map(normalizeOrigin)
+    .filter(Boolean);
+
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
@@ -16,17 +48,35 @@ async function bootstrap() {
   // Enable middleware to read cookies
   app.use(cookieParser());
 
-  // Enable CORS before starting the server
+  // ── CORS ───────────────────────────────────────────────────────────────
+  // FRONTEND_URL may be a single URL or a comma-separated list of origins.
+  // Whatever the operator sets is merged with the environment defaults
+  // (production defaults to the Firebase Hosting domains).
+  const frontendOrigins = parseOriginList(process.env.FRONTEND_URL);
+
+  const allowedOrigins = Array.from(
+    new Set(
+      isProduction
+        ? [...PRODUCTION_DEFAULT_ORIGINS, ...frontendOrigins]
+        : [...DEV_DEFAULT_ORIGINS, ...frontendOrigins],
+    ),
+  );
+
+  // Requests without an `Origin` header (curl, server-to-server) are
+  // allowed. Browser requests need an exact match against the allow-list
+  // after normalization.
   app.enableCors({
-    origin: isProduction
-      ? process.env.FRONTEND_URL
-      : [
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-        'http://localhost:3001', // Por si usas el front de Docker
-        'http://127.0.0.1:3001',
-        'https://budgetgeniusia.web.app/'
-      ],
+    origin: (origin, callback) => {
+      if (!origin) {
+        return callback(null, true);
+      }
+      const normalized = normalizeOrigin(origin);
+      if (allowedOrigins.includes(normalized)) {
+        return callback(null, true);
+      }
+      logger.warn(`🛑 CORS: blocking request from origin '${origin}'`);
+      return callback(null, false);
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     credentials: true,
@@ -61,6 +111,9 @@ async function bootstrap() {
     `🚂 App is in ${isProduction ? 'production' : 'development'} mode`,
   );
   logger.log(`🚀 Application is running on: ${await app.getUrl()}`);
+  logger.log(
+    `🔐 CORS allowed origins (${allowedOrigins.length}): ${allowedOrigins.join(', ')}`,
+  );
 }
 
 bootstrap();

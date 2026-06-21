@@ -258,10 +258,17 @@ export class AuthService {
     await this.passwordResetRepository.saveToken(dto.email, token);
 
     // Aquí enviarías el correo con el enlace para restablecer la contraseña.
+    // FRONTEND_URL puede contener varios orígenes separados por coma; usamos
+    // el primero (el principal) para construir el enlace de recuperación.
+    const primaryFrontendUrl =
+      this.configService
+        .get<string>('FRONTEND_URL')
+        ?.split(',')[0]
+        ?.trim()
+        .replace(/\/+$/, '') ?? '';
+
     this.logger.log(
-      `🔗 Link to reset password: ${this.configService.get<string>(
-        'FRONTEND_URL',
-      )}/auth/reset-password?token=${token}`,
+      `🔗 Link to reset password: ${primaryFrontendUrl}/auth/reset-password?token=${token}`,
     );
 
     return {
