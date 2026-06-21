@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -16,8 +18,11 @@ import { ResetPasswordDto } from '@application/auth/dto/reset-password.dto';
 import { randomBytes } from 'crypto';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { DataSource } from 'typeorm';
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
-import { getApps, initializeApp } from 'firebase/app';
+
+/** Per-email brute-force protection. Anything tighter would block legitimate users
+ *  who mistype; anything looser would not stop a credential-stuffing script. */
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_WINDOW_SECONDS = 15 * 60;
 
 @Injectable()
 export class AuthService {
@@ -57,61 +62,73 @@ export class AuthService {
     await this.userRepository.updateToken(id, hashedToken);
   }
 
+  private loginAttemptsKey(email: string): string {
+    // Normalize so 'User@x.com' and 'user@x.com' share the same bucket.
+    return `login:attempts:${email.trim().toLowerCase()}`;
+  }
+
   async login(email: string, password: string) {
     try {
-      // 1. Buscar el usuario en la DB local primero
+      // 1. Per-email rate-limit check (brute-force mitigation).
+      // Done before any DB lookup / bcrypt work so attackers can't burn CPU.
+      // The counter auto-expires after LOGIN_WINDOW_SECONDS thanks to incr().
+      const attemptsKey = this.loginAttemptsKey(email);
+      const attemptsRaw = await this.redisService.get(attemptsKey);
+      const attempts = attemptsRaw ? Number(attemptsRaw) : 0;
+
+      if (attempts >= LOGIN_MAX_ATTEMPTS) {
+        this.logger.warn(
+          `🚫 Login bloqueado por rate-limit (${attempts}/${LOGIN_MAX_ATTEMPTS}) para ${email}`,
+        );
+        throw new HttpException(
+          {
+            message:
+              '🚫 Demasiados intentos. Vuelve a intentarlo en unos minutos o usa "Olvidé mi contraseña".',
+            error: 'Too Many Requests',
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+
+      // 2. Buscar el usuario en la DB local primero
       const user = await this.userRepository.findByEmail(email);
 
       if (!user) {
+        // Increment failed-attempt counter (also prevents user enumeration).
+        await this.redisService.incr(attemptsKey, LOGIN_WINDOW_SECONDS);
         throw new UnauthorizedException(
           '⚠️ Usuario no encontrado en la base de datos',
         );
       }
 
-      // 2. VALIDACIÓN DE CONTRASEÑA (MODO LOCAL)
-      // Si no usas Firebase, debes comparar el hash.
-      // Si usas Firebase siempre, este paso falla porque el usuario no existe en la nube.
-
-      // --- Lógica para saltar Firebase en desarrollo ---
-      const useFirebase =
-        this.configService.get<string>('NODE_ENV') === 'production';
-
-      if (useFirebase) {
-        if (!getApps().length) {
-          initializeApp({
-            apiKey: this.configService.get<string>('FIREBASE_API_KEY'),
-            authDomain: this.configService.get<string>('FIREBASE_AUTH_DOMAIN'),
-            projectId: this.configService.get<string>('FIREBASE_PROJECT_ID'),
-            storageBucket: this.configService.get<string>(
-              'FIREBASE_STORAGE_BUCKET',
-            ),
-            messagingSenderId: this.configService.get<string>(
-              'FIREBASE_MESSAGING_SENDER_ID',
-            ),
-            appId: this.configService.get<string>('FIREBASE_APP_ID'),
-            measurementId: this.configService.get<string>(
-              'FIREBASE_MEASURENT_ID',
-            ),
-          });
-        }
-        const auth = getAuth();
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        // Simulación o validación bcrypt (si guardas passwords en tu DB)
-        // const isMatch = await bcrypt.compare(password, user.password);
-        // if (!isMatch) throw new UnauthorizedException('🔒 Contraseña incorrecta');
-
-        this.logger.log(
-          `Modo local: Saltando validación de Firebase para ${email}`,
+      // 3. Social-only users (no password) can't be brute-forced — surface a clear
+      // error so they take the OAuth path. IMPORTANT: do NOT touch the counter
+      // here. Clearing it before throwing would let an attacker distinguish
+      // OAuth-only emails (counter reset) from non-existent emails (counter
+      // increments), creating an enumeration side channel. Let the counter
+      // expire naturally via the 15-min TTL.
+      if (!user.password) {
+        throw new UnauthorizedException(
+          '⚠️ Este usuario no tiene contraseña configurada (probablemente login social)',
         );
       }
 
-      // 3. Generar tokens (JWT)
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        await this.redisService.incr(attemptsKey, LOGIN_WINDOW_SECONDS);
+        throw new UnauthorizedException('🔒 Contraseña incorrecta');
+      }
+
+      // 4. Login exitoso: limpiamos el contador para no penalizar a usuarios
+      // legítimos que tuvieron typos previos.
+      await this.redisService.delete(attemptsKey);
+
+      // 5. Generar tokens (JWT)
       const userData = { id: user.id, email: user.email, role: user.role };
       const accessToken = this.jwtService.sign(userData, { expiresIn: '1h' });
       const refreshToken = this.jwtService.sign(userData, { expiresIn: '7d' });
 
-      // 4. Guardar en Redis
+      // 6. Guardar en Redis
       await this.redisService.set(
         `refreshToken:${user.id}`,
         refreshToken,
@@ -120,14 +137,10 @@ export class AuthService {
 
       return { accessToken, refreshToken, user };
     } catch (error) {
+      // Rate-limit HttpException (429) MUST propagate without being swallowed
+      // by the generic UnauthorizedException catcher below.
       if (error instanceof UnauthorizedException) throw error;
-
-      // Errores de Firebase
-      if (error.code?.includes('auth/')) {
-        throw new UnauthorizedException(
-          '🔒 Credenciales inválidas en Firebase',
-        );
-      }
+      if (error instanceof HttpException) throw error;
 
       this.logger.error(`Error login: ${error.message}`);
       throw new UnauthorizedException('Error de autenticación');

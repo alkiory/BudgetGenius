@@ -126,6 +126,29 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Atomically increment a counter key. On the first increment (count === 1),
+   * apply `ttlSeconds` so the counter auto-expires. Mirrors the `set` API
+   * shape so callers can opt-in to TTL behavior identically.
+   *
+   * Returns the new count value.
+   */
+  async incr(key: string, ttlSeconds?: number): Promise<number> {
+    try {
+      const count = await this.client.incr(key);
+      if (ttlSeconds && count === 1) {
+        await this.client.expire(key, ttlSeconds);
+      }
+      return count;
+    } catch (error) {
+      this.logger.error(
+        `⚠️ Error incrementing key ${key} in Redis`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
   async keys(pattern: string): Promise<string[]> {
     try {
       return await this.client.keys(pattern);

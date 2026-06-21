@@ -3,6 +3,7 @@ import { store } from "@adapters/store/rootStore";
 import { AuthRepository } from "@domain/auth/AuthRepository";
 import { User } from "@domain/index";
 import api from "@infrastructure/api.config";
+import { app as firebaseApp } from "@infrastructure/firebaseConfig";
 import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 
 export const authRepository: AuthRepository = {
@@ -47,7 +48,16 @@ export const authRepository: AuthRepository = {
   },
 
   async googleLogin() {
-    const auth = getAuth();
+    // Guard against Firebase not being configured (missing env vars). Without
+    // this, `getAuth()` would throw "Installations: Missing App configuration
+    // value: projectId" and surface as an unhandled popup error.
+    if (!firebaseApp) {
+      throw new Error(
+        "Google login is not available: Firebase is not configured.",
+      );
+    }
+
+    const auth = getAuth(firebaseApp);
     const provider = new GoogleAuthProvider();
 
     try {

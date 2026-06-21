@@ -42,13 +42,27 @@ describe('AuthService', () => {
   let authService: AuthService;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let userRepository: UserRepositoryImpl;
+  // Exposed so per-test spies (`mockResolvedValueOnce`, etc.) can target the same
+  // instance that the AuthService is using for its Redis interactions.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let redisServiceMock: any;
 
   beforeEach(async () => {
+    // Mock bcrypt.compare so we don't need a real bcrypt hash in the fixture.
+    // Default behavior validates the password as correct.
+    jest
+      .spyOn(bcrypt, 'compare')
+      .mockImplementation((() => Promise.resolve(true)) as never);
+
     const jwtServiceMock = {
       sign: jest.fn(() => 'mock-access-token'),
     };
-    const redisServiceMock = {
+    redisServiceMock = {
+      // No prior failed attempts by default (login:attempts:* absent).
+      get: jest.fn(() => Promise.resolve(null)),
       set: jest.fn(() => Promise.resolve()),
+      incr: jest.fn(() => Promise.resolve(1)),
+      delete: jest.fn(() => Promise.resolve(1)),
     };
     const userRepositoryMock = {
       findByEmail: jest.fn().mockResolvedValue(user),
@@ -60,6 +74,7 @@ describe('AuthService', () => {
     };
     const loggerMock = {
       log: jest.fn(),
+      warn: jest.fn(),
     };
     const dataSourceMock = {
       query: jest.fn(),
@@ -97,11 +112,15 @@ describe('AuthService', () => {
     userRepository = module.get<UserRepositoryImpl>(UserRepositoryImpl);
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('should be defined', () => {
     expect(authService).toBeDefined();
   });
 
-  it('should login successfully in development mode (password validation skipped)', async () => {
+  it('should login successfully with the correct password', async () => {
     const result = await authService.login(user.email, user.password);
     expect(result).toHaveProperty('accessToken', 'mock-access-token');
     expect(result).toHaveProperty('refreshToken', 'mock-access-token');
@@ -109,10 +128,78 @@ describe('AuthService', () => {
     expect(result.user.email).toBe(user.email);
   });
 
-  it('should login successfully even with wrong password in development mode', async () => {
-    const result = await authService.login(user.email, 'wrong-password');
-    expect(result).toHaveProperty('accessToken', 'mock-access-token');
-    expect(result).toHaveProperty('refreshToken', 'mock-access-token');
+  it('should reject login when the password is incorrect', async () => {
+    (bcrypt.compare as jest.Mock).mockImplementationOnce(() =>
+      Promise.resolve(false),
+    );
+
+    await expect(
+      authService.login(user.email, 'wrong-password'),
+    ).rejects.toMatchObject({ status: 401 });
+  });
+
+  it('should reject login for users without a password (social-only)', async () => {
+    // Swap the repo response so the user has no password set (e.g. Google OAuth).
+    userRepository.findByEmail = jest.fn().mockResolvedValueOnce({
+      ...user,
+      password: undefined,
+    });
+
+    await expect(
+      authService.login(user.email, 'whatever'),
+    ).rejects.toMatchObject({ status: 401 });
+  });
+
+  // ─── Login rate-limit (5 attempts per 15 min per email) ─────────────────
+
+  it('should reject login with HTTP 429 when the per-email rate limit is exceeded', async () => {
+    // Simulate that the email already had 5 failed attempts before this call.
+    redisServiceMock.get.mockResolvedValueOnce('5');
+
+    await expect(
+      authService.login(user.email, user.password),
+    ).rejects.toMatchObject({ status: 429 });
+
+    // Critically, the rate-limited call must NOT reach bcrypt (no CPU burn for
+    // brute-force attackers, no DB lookup either).
+    expect(bcrypt.compare).not.toHaveBeenCalled();
+    expect(userRepository.findByEmail).not.toHaveBeenCalled();
+  });
+
+  it('should increment the attempts counter (with 15-min TTL) on wrong password', async () => {
+    (bcrypt.compare as jest.Mock).mockImplementationOnce(() =>
+      Promise.resolve(false),
+    );
+
+    await expect(authService.login(user.email, 'wrong')).rejects.toMatchObject({
+      status: 401,
+    });
+
+    expect(redisServiceMock.incr).toHaveBeenCalledWith(
+      `login:attempts:${user.email}`,
+      15 * 60,
+    );
+  });
+
+  it('should increment the attempts counter on user-not-found (anti-enumeration)', async () => {
+    userRepository.findByEmail = jest.fn().mockResolvedValueOnce(null);
+
+    await expect(
+      authService.login('nobody@nowhere.com', 'whatever'),
+    ).rejects.toMatchObject({ status: 401 });
+
+    expect(redisServiceMock.incr).toHaveBeenCalledWith(
+      'login:attempts:nobody@nowhere.com',
+      15 * 60,
+    );
+  });
+
+  it('should clear the attempts counter on successful login', async () => {
+    await authService.login(user.email, user.password);
+
+    expect(redisServiceMock.delete).toHaveBeenCalledWith(
+      `login:attempts:${user.email}`,
+    );
   });
 
   it('should reset password', async () => {

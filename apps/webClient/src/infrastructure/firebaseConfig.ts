@@ -1,11 +1,14 @@
 // Import the functions you need from the SDKs you need
-import { getAnalytics } from "firebase/analytics";
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { getAnalytics, isSupported } from "firebase/analytics";
+import { initializeApp, type FirebaseApp } from "firebase/app";
 
 // Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// All values are optional strings — missing/empty values are tolerated so the
+// app can still load and run (signup/login/etc.) in environments where Firebase
+// env vars haven't been provisioned (e.g. CI, preview deploys, local dev
+// without a Firebase project). Only services that strictly require configuration
+// (Analytics, Auth) will then be skipped — they are not on the critical path
+// for email/password signup/login against our NestJS backend.
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -16,19 +19,51 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASURENT_ID,
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Firebase requires at least apiKey + projectId + appId for any service to
+// be usable. If any of these are missing, we skip initialization entirely
+// instead of throwing and spamming the console (or breaking the bundle load).
+const hasRequiredConfig = Boolean(
+  firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId,
+);
 
-// Solo inicializa Analytics si es necesario y si el navegador lo soporta
-// Esto es una buena práctica para entornos de desarrollo y testing,
-// y para evitar errores si Analytics está bloqueado por el navegador (ej. por extensiones)
-let analytics: any;
-if (typeof window !== "undefined" && typeof document !== "undefined") {
+let app: FirebaseApp | null = null;
+
+if (hasRequiredConfig) {
   try {
-    analytics = getAnalytics(app);
+    app = initializeApp(firebaseConfig);
   } catch (e) {
-    console.error("Firebase Analytics could not be initialized.", e);
+    console.warn("Firebase app could not be initialized.", e);
   }
+} else if (typeof window !== "undefined") {
+  console.warn(
+    "Firebase configuration is incomplete (missing VITE_FIREBASE_API_KEY, " +
+      "VITE_FIREBASE_PROJECT_ID, or VITE_FIREBASE_APP_ID). Skipping Firebase " +
+      "initialization — signup/login via email/password will still work.",
+  );
+}
+
+// Initialize Analytics asynchronously using Firebase's recommended pattern.
+// `isSupported()` checks both browser support (IndexedDB, Cookies) AND config
+// validity (projectId present) before we attempt getAnalytics(). This is what
+// prevents the noisy "Installations: Missing App configuration value:
+// projectId" error in production console.
+let analytics: ReturnType<typeof getAnalytics> | null = null;
+
+if (app && typeof window !== "undefined" && typeof document !== "undefined") {
+  isSupported()
+    .then((supported) => {
+      if (!supported) {
+        return;
+      }
+      try {
+        analytics = getAnalytics(app as FirebaseApp);
+      } catch (e) {
+        console.warn("Firebase Analytics could not be initialized.", e);
+      }
+    })
+    .catch((e) => {
+      console.warn("Could not check Firebase Analytics support.", e);
+    });
 }
 
 export { app, analytics };
