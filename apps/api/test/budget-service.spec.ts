@@ -341,8 +341,11 @@ describe('BudgetService', () => {
       const result = await service.updateBudgetCategory(1, dto);
 
       expect(result.spent).toBe(850);
-      // Should have recalculated the parent budget's totalSpent
-      expect(repo.findById).toHaveBeenCalledWith(1); // the budget ID from category.budget.id
+      // Should have recalculated the parent budget's totalSpent.
+      // The new repo signature forwards userId so the WHERE clause also
+      // scopes by owner; the assertion below checks both args so any
+      // future signature drift on either parameter is caught.
+      expect(repo.findById).toHaveBeenCalledWith(1, 1); // budget id + userId from category owner
       expect(repo.updateBudget).toHaveBeenCalled();
     });
 
@@ -383,6 +386,172 @@ describe('BudgetService', () => {
           name: 'Ghost',
           allocated: 0,
           spent: 100,
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  /**
+   * Cross-user ownership isolation. These tests lock in the post-audit
+   * contract: any attempt by user A to touch a row owned by user B
+   * either throws NotFoundException (fetches / updates) or is a silent
+   * no-op (deletes). They never leak the foreign row, never return it,
+   * and never expose a 403 that would let a caller probe for ownership
+   * existence by status-code inference.
+   */
+  describe('ownership/cross-user isolation', () => {
+    const userAId = 1;
+    const userBId = 2;
+    const foreignBudgetId = 999; // owned by userB
+    const foreignCategoryId = 888; // owned by userB inside userB's budget
+
+    beforeEach(() => {
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [buildBudget({ id: 1, user: { id: userAId, ...budgetUser } })],
+      });
+    });
+
+    it('getBudget: foreign-id attempt does not return the row', async () => {
+      // Repo throws on miss (no foreign row visible) — defence in depth.
+      repo.findById.mockRejectedValue(
+        new NotFoundException(`Budget ${foreignBudgetId} not found`),
+      );
+
+      await expect(
+        service.getBudget(foreignBudgetId, userAId),
+      ).rejects.toThrow(NotFoundException);
+
+      // Scope must include both id AND userId; a future regression that
+      // drops `userId` would still appear to "work" by accident, so we
+      // pin the full argument shape.
+      expect(repo.findById).toHaveBeenCalledWith(foreignBudgetId, userAId);
+    });
+
+    it('getBudgetCategory: foreign-id attempt does not return the row', async () => {
+      repo.getBudgetCategory.mockRejectedValue(
+        new NotFoundException(`Budget category ${foreignCategoryId} not found`),
+      );
+
+      await expect(
+        service.getBudgetCategory(foreignCategoryId, userAId),
+      ).rejects.toThrow(NotFoundException);
+      expect(repo.getBudgetCategory).toHaveBeenCalledWith(
+        foreignCategoryId,
+        userAId,
+      );
+    });
+
+    it('updateBudget: attempt to mutate a foreign budget is rejected', async () => {
+      repo.findById.mockRejectedValue(
+        new NotFoundException(`Budget ${foreignBudgetId} not found`),
+      );
+
+      const dto = {
+        id: foreignBudgetId,
+        name: 'Hijacked',
+        totalAllocated: 1000,
+        totalSpent: 0,
+        startDate: new Date('2026-01-01'),
+        endDate: new Date('2026-01-31'),
+        categories: [],
+      };
+
+      await expect(service.updateBudget(userAId, dto)).rejects.toThrow(
+        NotFoundException,
+      );
+
+      // Repo.updateBudget must NEVER be reached once findById throws.
+      expect(repo.updateBudget).not.toHaveBeenCalled();
+    });
+
+    it('updateBudgetCategory: attempt to mutate a foreign category is rejected', async () => {
+      repo.getBudgetCategory.mockRejectedValue(
+        new NotFoundException(`Category ${foreignCategoryId} not found`),
+      );
+
+      const dto = {
+        id: foreignCategoryId,
+        name: 'Hijacked',
+        allocated: 1000,
+        spent: 0,
+      };
+
+      await expect(
+        service.updateBudgetCategory(userAId, dto),
+      ).rejects.toThrow(NotFoundException);
+      expect(repo.updateBudgetCategory).not.toHaveBeenCalled();
+      // Recompute side-effect must also be skipped.
+      expect(repo.findById).not.toHaveBeenCalled();
+    });
+
+    it('deleteBudget: foreign-id attempt is a silent no-op', async () => {
+      // Repo contract: void on silent no-op. No throw, no row deleted.
+      repo.deleteBudget.mockResolvedValue(undefined);
+
+      const result = await service.deleteBudget(userAId, foreignBudgetId);
+
+      expect(result).toBeUndefined();
+      // Repo must receive the userId so the WHERE clause scopes the
+      // DELETE statement; otherwise we'd hit a flat
+      // `delete({id: foreignBudgetId})` — which would be a privilege
+      // escalation.
+      expect(repo.deleteBudget).toHaveBeenCalledWith(foreignBudgetId, userAId);
+    });
+
+    it('deleteBudgetCategory: foreign-id attempt is a silent no-op', async () => {
+      repo.deleteBudgetCategory.mockResolvedValue(undefined);
+
+      const result = await service.deleteBudgetCategory(
+        userAId,
+        foreignCategoryId,
+      );
+
+      expect(result).toEqual({ message: 'Category deleted successfully' });
+      expect(repo.deleteBudgetCategory).toHaveBeenCalledWith(
+        foreignCategoryId,
+        userAId,
+      );
+    });
+
+    it('createBudgetCategory: appending to a foreign budget is rejected', async () => {
+      // The defence-in-depth ownership check (`repo.findById(budgetId, userId)`)
+      // throws if the budget does not belong to userA. The repo's
+      // NotFoundException bubbles; createBudgetCategory never reaches
+      // the DB write.
+      repo.findById.mockRejectedValue(
+        new NotFoundException(`Budget ${foreignBudgetId} not found`),
+      );
+      repo.findCategotyQuery.mockResolvedValue([]);
+
+      await expect(
+        service.createBudgetCategory({
+          userId: userAId,
+          budgetId: foreignBudgetId,
+          dto: {
+            name: 'Smuggled',
+            allocated: 1000,
+            spent: 0,
+          } as any,
+        }),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(repo.createBudgetCategory).not.toHaveBeenCalled();
+    });
+
+    it('findCategories: filtering by a foreign budgetId is rejected', async () => {
+      // The service eagerly checks `user.budgets.find(b.id === budgetId)`
+      // before hitting the repo. This guards against a user enumerating
+      // other users' budget ids via the categories endpoint.
+      // A foreign budgetId trips the guard and throws NotFoundException
+      // before the repo is called. The `expect(...).rejects.toThrow()`
+      // assertion also makes the rejection observable to the runner
+      // (a bare `await` followed by an assertion would re-throw and
+      // fail the test on the assignment line, not on intent).
+      await expect(
+        service.findCategories({
+          userId: userAId,
+          budgetId: foreignBudgetId,
         }),
       ).rejects.toThrow(NotFoundException);
     });

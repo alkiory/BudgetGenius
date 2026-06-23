@@ -39,13 +39,12 @@ export default function SignupPage() {
 
   const navigate = useNavigate();
 
-  const { mutate: createNewUser } = useMutation({
+  const { mutate: createNewUser, isPending } = useMutation({
     mutationKey: ["signup"],
     mutationFn: signup,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onSuccess: (data: any) => {
+    onSuccess: (data) => {
       alert("Signup successful");
-      dispatch(setUser(data));
+      dispatch(setUser(data.user));
       navigate(RoutePaths.App + "/" + RoutePaths.Dashboard);
     },
     onError: (
@@ -54,7 +53,7 @@ export default function SignupPage() {
         response: { data: { message: string } };
       },
     ) => {
-      if (error.status === 401) {
+      if (error.status === 401 || error.status === 409) {
         setError(error.response.data.message);
         return;
       }
@@ -197,7 +196,7 @@ export default function SignupPage() {
             <Button
               type="submit"
               variant="default"
-              disabled={!name || !surname || !email || !password}
+              disabled={!name || !surname || !email || !password || isPending}
               className="w-full"
             >
               {t("auth.createAccount")}

@@ -162,13 +162,14 @@ export class ReportExportService {
     locale: ExportLocale,
   ): Promise<ExportPayload> {
     const [monthly, categories] = await Promise.all([
-      this.repo.getMonthlyOverview(year),
+      this.repo.getMonthlyOverview(year, userId),
       // Re-use the existing category breakdown spanning all months of the
       // selected year. This keeps the PDF aligned with what the user sees
       // on the Categories tab.
       this.repo.getCategoryBreakdown(
         new Date(Date.UTC(year, 0, 1)),
         new Date(Date.UTC(year, 11, 31)),
+        userId,
       ),
     ]);
 
@@ -437,10 +438,11 @@ export class ReportExportService {
     locale: ExportLocale,
   ): Promise<ExportPayload> {
     const [monthly, categories] = await Promise.all([
-      this.repo.getMonthlyOverview(year),
+      this.repo.getMonthlyOverview(year, userId),
       this.repo.getCategoryBreakdown(
         new Date(Date.UTC(year, 0, 1)),
         new Date(Date.UTC(year, 11, 31)),
+        userId,
       ),
     ]);
 

@@ -80,8 +80,33 @@ export class BudgetService {
       throw new NotFoundException('User not found');
     }
 
-    if (user.budgets.find((b) => b.name === dto.name)) {
-      throw new BadRequestException(`3. Category ${dto.name} already exists`);
+    // Direct DB ownership check (defence in depth). The earlier
+    // `user.budgets.find(...)` relied on the eager-loaded `budgets`
+    // array, which can go stale if the budget was deleted concurrently;
+    // pointing through the repo's user-scoped findById is authoritative.
+    // The repo throws NotFoundException for foreign ids so we get a
+    // clean 404 instead of a generic FK violation downstream.
+    await this.repo.findById(budgetId, userId);
+
+    // DB-based uniqueness check for duplicate category names under the
+    // same parent budget. The previous eager-load check was removed
+    // because it raced; this query reads the actual table, so it
+    // catches concurrent inserts only if a DB-level UNIQUE constraint
+    // is also added — see the post-MVP cleanup task list for that
+    // migration. Until then, two simultaneous POSTs from the same user
+    // could create two categories with the same name; the application-
+    // level check still protects against the common-path replay case.
+    const existing = await this.repo.findCategotyQuery({
+      where: {
+        budget: { id: budgetId },
+        user: { id: userId },
+        name: dto.name,
+      },
+    });
+    if (existing.length > 0) {
+      throw new BadRequestException(
+        `Category "${dto.name}" already exists for this budget`,
+      );
     }
 
     const newCategory = {
@@ -119,16 +144,14 @@ export class BudgetService {
     return budgets;
   }
 
-  async getBudget(id: number): Promise<Budget> {
-    const response = await this.repo.findById(id);
-    if (!response) {
-      throw new NotFoundException(`Budget ${id} not found`);
-    }
-    return response;
+  async getBudget(id: number, userId: number): Promise<Budget> {
+    // Repo scopes by userId — throws NotFoundException on miss so we don't
+    // leak whether the budget exists for another user.
+    return this.repo.findById(id, userId);
   }
 
   async findCategories(filters: {
-    userId?: number;
+    userId: number;
     budgetId?: number;
     name?: string;
   }) {
@@ -138,11 +161,14 @@ export class BudgetService {
       throw new NotFoundException('User not found');
     }
 
-    if (!user.budgets.find((b) => b.id === filters.budgetId)) {
+    if (
+      filters.budgetId !== undefined &&
+      !user.budgets.find((b) => b.id === filters.budgetId)
+    ) {
       throw new NotFoundException(`This budget does not exist`);
     }
 
-    const where: any = {};
+    const where: any = { user: { id: filters.userId } };
     if (filters.budgetId) {
       where.budget = { id: filters.budgetId };
     }
@@ -153,28 +179,24 @@ export class BudgetService {
     return this.repo.findCategotyQuery({ where });
   }
 
-  async getBudgetCategory(id: number): Promise<BudgetCategory> {
-    const response = await this.repo.getBudgetCategory(id);
-    if (!response) {
-      throw new NotFoundException(`Budget category ${id} not found`);
-    }
-    return response;
+  async getBudgetCategory(id: number, userId: number): Promise<BudgetCategory> {
+    // Repo scopes by userId through category → budget → user relation.
+    return this.repo.getBudgetCategory(id, userId);
   }
 
   async updateBudget(userId: number, dto: UpdateBudgetDto): Promise<Budget> {
-    const budget = await this.repo.findById(dto.id);
     const user = await this.userRepo.findById(userId);
-
-    if (!budget) {
-      throw new NotFoundException(`Budget ${dto.id} not found`);
-    }
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    if (budget.user.id !== userId) {
-      throw new NotFoundException(`This budget does not exist`);
+    // Repo pre-filters and throws NotFoundException if the budget is not
+    // owned by the requesting user; this is the primary ownership check
+    // (defence in depth: see budget.repository.updateBudget).
+    const existing = await this.repo.findById(dto.id, userId);
+    if (!existing) {
+      throw new NotFoundException(`Budget ${dto.id} not found`);
     }
 
     if (dto.endDate < dto.startDate) {
@@ -190,88 +212,77 @@ export class BudgetService {
       spent: category.spent,
     })) as BudgetCategory[];
 
-    return this.repo.updateBudget({
-      ...dto,
-      categories: updatedCategories,
-      updatedAt: new Date(),
-    });
+    return this.repo.updateBudget(
+      {
+        ...dto,
+        categories: updatedCategories,
+        updatedAt: new Date(),
+      },
+      userId,
+    );
   }
 
   async updateBudgetCategory(
     userId: number,
     dto: UpdateBudgetCategoryDto,
   ): Promise<BudgetCategory> {
-    const category = await this.categoryRepo.getBudgetCategory(dto.id);
-    const user = await this.userRepo.findById(userId);
-
+    // Repo pre-filters via category → budget → user; throws NotFoundException
+    // if the category is not owned by the requesting user.
+    const category = await this.categoryRepo.getBudgetCategory(dto.id, userId);
     if (!category) {
       throw new NotFoundException(`Category ${dto.id} not found`);
     }
 
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    const updatedCategory = await this.repo.updateBudgetCategory({
-      ...dto,
-      updatedAt: new Date(),
-    });
+    const updatedCategory = await this.repo.updateBudgetCategory(
+      {
+        ...dto,
+        updatedAt: new Date(),
+      },
+      userId,
+    );
 
     // Recalculate the parent budget's totalSpent after category update
-    await this.recalculateBudgetTotalSpent(category.budget.id);
+    await this.recalculateBudgetTotalSpent(category.budget.id, userId);
 
     return updatedCategory;
   }
 
-  private async recalculateBudgetTotalSpent(budgetId: number): Promise<void> {
-    const budget = await this.repo.findById(budgetId);
+  private async recalculateBudgetTotalSpent(
+    budgetId: number,
+    userId: number,
+  ): Promise<void> {
+    const budget = await this.repo.findById(budgetId, userId);
     const totalSpent = budget.categories.reduce(
       (sum, cat) => sum + cat.spent,
       0,
     );
     budget.totalSpent = totalSpent;
-    await this.repo.updateBudget(budget);
+    await this.repo.updateBudget(budget, userId);
   }
 
   async deleteBudgetCategory(userId: number, id: number) {
-    const category = await this.categoryRepo.getBudgetCategory(id);
     const user = await this.userRepo.findById(userId);
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    if (!category) {
-      throw new NotFoundException(`Category ${id} not found`);
-    }
-
-    if (!user.budgets.some((b) => b.id === category.budget.id)) {
-      throw new NotFoundException(
-        `This category does not belong to this user's budget`,
-      );
-    }
-
-    await this.repo.deleteBudgetCategory(id);
+    // Repo scopes the DELETE statement by userId → row delete is a no-op
+    // for foreign ids, so no Foreign-key / 403 leakage here.
+    await this.repo.deleteBudgetCategory(id, userId);
 
     return { message: 'Category deleted successfully' };
   }
 
   async deleteBudget(userId: number, id: number): Promise<void> {
-    const budget = await this.repo.findById(id);
     const user = await this.userRepo.findById(userId);
-
-    if (!budget) {
-      throw new NotFoundException(`Budget ${id} not found`);
-    }
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    if (!user.budgets.find((b) => b.id === budget.id)) {
-      throw new NotFoundException(`This budget does not exist`);
-    }
-
-    return this.repo.deleteBudget(id);
+    // Repo scopes the DELETE statement by userId; same no-op semantics as
+    // deleteBudgetCategory for foreign ids.
+    return this.repo.deleteBudget(id, userId);
   }
 }

@@ -2,13 +2,6 @@ import { ReportRepository } from '@adapters/dashboard/persistence/reports.reposi
 import { Injectable } from '@nestjs/common';
 import Configuration, { OpenAI } from 'openai';
 
-/**
- * Reports service — MVP launch (no premium gating).
- *
- * The `userRepo` injection was removed as part of T3.21: no public method
- * consults the user's premium flag any more. AI retry loop is preserved per
- * plan so future billing-state transitions still have an integration point.
- */
 @Injectable()
 export class ReportService {
   private openai: OpenAI;
@@ -20,30 +13,44 @@ export class ReportService {
     });
   }
 
-  async getOverview({ year }: { year: number }) {
-    return this.repo.getMonthlyOverview(year);
+  async getOverview({ year, userId }: { year: number; userId: number }) {
+    return this.repo.getMonthlyOverview(year, userId);
   }
 
-  async getByCategory({ start, end }: { start: Date; end: Date }) {
-    return this.repo.getCategoryBreakdown(start, end);
+  async getByCategory({
+    start,
+    end,
+    userId,
+  }: {
+    start: Date;
+    end: Date;
+    userId: number;
+  }) {
+    return this.repo.getCategoryBreakdown(start, end, userId);
   }
 
-  async getWeekly() {
-    return this.repo.getWeeklyTrend();
+  async getWeekly({ userId }: { userId: number }) {
+    return this.repo.getWeeklyTrend(userId);
   }
 
-  async getSavings({ year }: { year: number }) {
-    return this.repo.getSavingsGrowth(year);
+  async getSavings({ year, userId }: { year: number; userId: number }) {
+    return this.repo.getSavingsGrowth(year, userId);
   }
 
   /** AI‑powered insights */
-  async getInsights({ year }: { year: number }) {
+  async getInsights({ year, userId }: { year: number; userId: number }) {
     const maxAttempts = 3;
     let attempts = 0;
 
     while (attempts < maxAttempts) {
       try {
-        const overview = await this.getOverview({ year });
+        // Forward userId so the underlying query is scoped to the
+        // requesting user (closed-loop ownership after the security
+        // audit). The current route is disabled by the controller
+        // (returns a dummy payload), but the type-correct call keeps
+        // the contract honest so a future re-enable can't regress the
+        // scoping by accident.
+        const overview = await this.getOverview({ year, userId });
         const prompt = `
         You are a helpful financial AI assistant designed to provide users with actionable insights based on their financial data.
 

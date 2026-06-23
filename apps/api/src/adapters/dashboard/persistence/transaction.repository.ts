@@ -37,9 +37,9 @@ export class TransactionRepository {
     return user;
   }
 
-  async findOne(id: number): Promise<Transaction> {
+  async findOne(id: number, userId: number): Promise<Transaction> {
     const transaction = await this.repo.findOne({
-      where: { id },
+      where: { id, user: { id: userId } },
       relations: ['user'],
     });
     if (!transaction) {
@@ -50,9 +50,17 @@ export class TransactionRepository {
 
   async update(
     data: Partial<Transaction> & { id: number },
+    userId: number,
   ): Promise<Transaction> {
     const { id, description, category, amount, recurrence } = data;
-    const transaction = await this.repo.findOneOrFail({ where: { id } });
+    // findOneOrFail with the userId where-clause: throws
+    // EntityNotFoundError if the row does not belong to the user — the
+    // service layer lets this bubble up wrapped as NotFoundException so
+    // the controller returns a clean 404 (not a 403, on purpose: avoid
+    // leaking ownership existence).
+    const transaction = await this.repo.findOneOrFail({
+      where: { id, user: { id: userId } },
+    });
     transaction.description = description;
     transaction.category = category;
     transaction.amount = amount;
@@ -65,13 +73,12 @@ export class TransactionRepository {
     await this.repo.save(transaction);
     return transaction;
   }
-  async delete(id: number): Promise<boolean> {
-    const deletedTransaction = await this.repo.findOne({ where: { id } });
-    if (!deletedTransaction) {
-      return false;
-    }
-    await this.repo.delete(id);
-    return true;
+  async delete(id: number, userId: number): Promise<boolean> {
+    // Where-clause DELETE scopes the row to the owning user; foreign ids
+    // become no-ops (affected = 0). Caller decides what "no-op" means
+    // (the service treats it as "not found" and returns false).
+    const result = await this.repo.delete({ id, user: { id: userId } });
+    return (result.affected ?? 0) > 0;
   }
 
   async deleteAllTransactions(userId: number) {
