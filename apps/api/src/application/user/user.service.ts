@@ -1,4 +1,8 @@
-import { Injectable, UnprocessableEntityException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { UserDto } from './dto/user.dto';
 import { CreateUserDto } from '@application/user/dto/create.dto';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
@@ -88,14 +92,29 @@ export class UserService {
   }
 
   async updateUser(id: string, updateUserDto: Partial<UserDto>) {
-    const user = await this.userRepository.findById(Number(id));
+    // Reject empty-string passwords BEFORE delegation. The User entity's
+    // @BeforeUpdate hashPassword hook treats `''` as falsy and skips the
+    // hash, so a literal empty string reaching the repo would silently
+    // overwrite a real hash with `''`. Login then fails because
+    // `bcrypt.compare(plaintext, '')` is always false.
+    if (updateUserDto.password === '') {
+      throw new BadRequestException(
+        '🛑 Password cannot be empty. Use the "forgot password" flow to remove password login.',
+      );
+    }
 
-    this.logger.log(`User ${user.email} updated successfully`);
+    // Forward the payload unchanged. `userRepository.updateUser` runs
+    // `repo.preload + repo.save` which fires the User entity's
+    // `@BeforeUpdate hashPassword` hook — bcrypt is the hook's job, not
+    // ours, so a future caller can't forget to hash. `updatedAt` is
+    // handled by TypeORM's @UpdateDateColumn automatically.
+    const updated = await this.userRepository.updateUser(
+      Number(id),
+      updateUserDto,
+    );
 
-    return this.userRepository.updateUser(Number(id), {
-      ...updateUserDto,
-      updatedAt: new Date(),
-    });
+    this.logger.log(`User ${updated.email} updated successfully`);
+    return updated;
   }
 
   async deleteUser(id: number) {

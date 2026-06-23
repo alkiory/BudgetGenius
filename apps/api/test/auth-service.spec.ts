@@ -345,7 +345,7 @@ describe('AuthService', () => {
 
   // ─── reset-password (writes new hash, token TTL, cleanup) ──────────────
 
-  it('should reset password: bcrypt-hash newPassword, write to user, delete token', async () => {
+  it('should reset password: forward plaintext to repo (hook fires), write to user, delete token', async () => {
     const passwordResetRepositoryMock = (authService as any)
       .passwordResetRepository as any;
 
@@ -364,15 +364,15 @@ describe('AuthService', () => {
 
     expect(result).toEqual({ message: '🔑 Password reset successfully' });
 
-    // updateUser MUST be called with a bcrypt-hashed new password, NOT
-    // the plaintext. (Plaintext → DB corruption + login failure on next
-    // attempt.)
+    // updateUser MUST be called with the PLAINTEXT new password, NOT a
+    // pre-hashed value. The User entity's @BeforeUpdate hook (fired
+    // inside `userRepositoryImpl.updateUser` via `repo.preload +
+    // repo.save`) is what now bcrypt-hashes the column value before
+    // the SQL UPDATE runs — the service is a thin pass-through.
+    // Hashing here too would double-hash and silently break login.
     expect(userRepository.updateUser).toHaveBeenCalledTimes(1);
     const [, updateArg] = (userRepository.updateUser as jest.Mock).mock.calls[0];
-    expect(updateArg.password).toBeDefined();
-    expect(updateArg.password).not.toBe('NewP4ssword!');
-    // The hash must validate when compared back to the plaintext.
-    expect(await bcrypt.compare('NewP4ssword!', updateArg.password)).toBe(true);
+    expect(updateArg.password).toBe('NewP4ssword!');
 
     // Token must be deleted so it can't be reused.
     expect(passwordResetRepositoryMock.deleteToken).toHaveBeenCalledWith('tok-1');

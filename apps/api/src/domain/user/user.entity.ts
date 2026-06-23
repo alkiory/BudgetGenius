@@ -15,6 +15,12 @@ import { Overview } from '@domain/dashboard/overview.entity';
 import { Transaction } from '@domain/dashboard/transaction.entity';
 import { UserSettings } from './user-settings.entity';
 
+/** Shared bcrypt cost factor used by the entity hook in this file and by
+ *  every service-layer manual hash (see `UserService.updateUser` and
+ *  `AuthService.resetPassword`). Single source of truth so callers cannot
+ *  silently drift. */
+export const BCRYPT_COST = 10;
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn()
@@ -55,7 +61,7 @@ export class User {
   @BeforeUpdate()
   async hashPassword() {
     if (this.password) {
-      this.password = await bcrypt.hash(this.password, 10);
+      this.password = await bcrypt.hash(this.password, BCRYPT_COST);
     }
   }
 

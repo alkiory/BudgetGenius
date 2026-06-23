@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { UserDto } from '@application/user/dto/user.dto';
 import { User } from '@domain/user/user.entity';
 import { UserRepositoryPort } from '@domain/user/user.repository.port';
@@ -77,25 +77,27 @@ export class UserRepositoryImpl implements UserRepositoryPort {
   }
 
   async updateUser(id: number, updateUserDto: Partial<UserDto>): Promise<User> {
-    // ── ENTITY-HOOK BYPASS WARNING ──
-    // `repo.update(id, partial)` runs a bare UPDATE statement and does
-    // NOT fire `@BeforeInsert` / `@BeforeUpdate` hooks on the entity. The
-    // User entity relies on those hooks to bcrypt-hash the password.
+    // `repo.preload({ id, ...partial })` reads the row, builds a User
+    // entity instance with the partial MERGED on top of the loaded
+    // values (so `password` overwrites the existing hash in memory
+    // BEFORE hooks fire), and returns the hydrated entity. The
+    // subsequent `repo.save(preloaded)` then fires the User entity's
+    // `@BeforeUpdate hashPassword` hook which bcrypt-hashes the new
+    // plaintext — see `User.hashPassword` in
+    // `apps/api/src/domain/user/user.entity.ts`.
     //
-    // CURRENT PRE-HASH CONSUMER: `AuthService.resetPassword` in
-    // `apps/api/src/application/auth/auth.service.ts` pre-hashes with
-    // `bcrypt.hash(plain, 10)` before passing `{ password: hash }`
-    // through here. Pre-comment code passed plaintext and ended up with
-    // a literal plaintext password in MySQL — a critical silent-
-    // corruption bug.
-    //
-    // IF YOU EVER REFACTOR THIS METHOD to use `repo.save(entityInstance)`
-    // instead of `repo.update(id, partial)`, REMOVE the manual
-    // `bcrypt.hash()` call in `AuthService.resetPassword` — otherwise
-    // the password will be double-hashed and login will silently fail
-    // (`bcrypt.compare(plaintext, doublyHashed)` returns false).
-    await this.repo.update(id, updateUserDto);
-    return this.findById(id);
+    // This is the TypeORM-idiomatic pattern for an UPDATE-with-hooks.
+    // The previous `repo.update(id, partial)` ran a bare UPDATE
+    // statement that BYPASSed hooks; service-layer callers compensated
+    // by manually pre-hashing, which is the exact footgun that caused
+    // the /profile password update 401-on-login bug. The hook is now
+    // the single source of truth for password hashing — callers
+    // forward plaintext and trust the entity.
+    const preloaded = await this.repo.preload({ id, ...updateUserDto });
+    if (!preloaded) {
+      throw new NotFoundException(`⚠️ User with id ${id} not found`);
+    }
+    return this.repo.save(preloaded);
   }
 
   async deleteUser(id: number): Promise<void> {
