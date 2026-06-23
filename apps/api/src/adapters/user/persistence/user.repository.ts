@@ -77,6 +77,23 @@ export class UserRepositoryImpl implements UserRepositoryPort {
   }
 
   async updateUser(id: number, updateUserDto: Partial<UserDto>): Promise<User> {
+    // ── ENTITY-HOOK BYPASS WARNING ──
+    // `repo.update(id, partial)` runs a bare UPDATE statement and does
+    // NOT fire `@BeforeInsert` / `@BeforeUpdate` hooks on the entity. The
+    // User entity relies on those hooks to bcrypt-hash the password.
+    //
+    // CURRENT PRE-HASH CONSUMER: `AuthService.resetPassword` in
+    // `apps/api/src/application/auth/auth.service.ts` pre-hashes with
+    // `bcrypt.hash(plain, 10)` before passing `{ password: hash }`
+    // through here. Pre-comment code passed plaintext and ended up with
+    // a literal plaintext password in MySQL — a critical silent-
+    // corruption bug.
+    //
+    // IF YOU EVER REFACTOR THIS METHOD to use `repo.save(entityInstance)`
+    // instead of `repo.update(id, partial)`, REMOVE the manual
+    // `bcrypt.hash()` call in `AuthService.resetPassword` — otherwise
+    // the password will be double-hashed and login will silently fail
+    // (`bcrypt.compare(plaintext, doublyHashed)` returns false).
     await this.repo.update(id, updateUserDto);
     return this.findById(id);
   }

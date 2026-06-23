@@ -15,7 +15,7 @@ import { JwtService } from '@nestjs/jwt';
 import { UserService } from '@application/user/user.service';
 import { CreateUserDto } from '@application/user/dto/create.dto';
 import { JwtAuthGuard } from '@infrastructure/auth/guards/jwt-auth.guard';
-import { SkipThrottle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle, hours } from '@nestjs/throttler';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { ForgotPasswordDto } from '../../../application/auth/dto/forgot-password.dto';
 import { ResetPasswordDto } from '../../../application/auth/dto/reset-password.dto';
@@ -39,7 +39,7 @@ export class AuthController {
     private readonly jwtService: JwtService,
     private readonly logger: LoggingService,
     private readonly cookieService: CookieService,
-  ) {}
+  ) { }
 
   @Post('firebase-login')
   @ApiOperation({ summary: 'Autenticar con Firebase' })
@@ -187,7 +187,6 @@ export class AuthController {
     },
   })
   @ApiResponse({ status: 401, description: 'Credenciales inválidas' })
-  @Post('login')
   async login(
     @Body() body: LoginDto,
     @Res({ passthrough: true }) res: Response,
@@ -227,6 +226,33 @@ export class AuthController {
     };
   }
 
+  /**
+   * Per-IP rate cap for the password-reset flow.
+   *
+   * Why a per-route override and not a second configured throttler in
+   * `ThrottlerModule.forRoot()`: each entry in that array applies
+   * APP_GUARD-wide, so adding a "forgot-password" named throttler there
+   * would silently subject every endpoint to the same hour-scale cap.
+   * The `default` override on this route replaces ONLY the global
+   * 4-rps rule for `/auth/forgot-password`, with a stricter bucket
+   * aimed at the Resend free-tier daily-cap threat (an attacker
+   * hammering this endpoint to drain ~100 sends/day from
+   * `onboarding@resend.dev`).
+   *
+   * Limit: 5 successes per IP per hour. Allows a few legitimate
+   * retries (typo, refresh, recovering client's "resend" button
+   * jitter) while forcing an attacker to rotate through 20+ IPs to
+   * exhaust the daily delivery cap.
+   *
+   * The ResendMailerService counters still increment per send, so
+   * ops sees real Resend API cost pressure independent of this
+   * IP-side cap.
+   *
+   * Note: the route-level override REPLACES the global 4/10s for this
+   * path. That is the user-visible intent of "separate from the
+   * global limiter".
+   */
+  @Throttle({ default: { limit: 5, ttl: hours(1) } })
   @Post('forgot-password')
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.requestPasswordReset(dto);

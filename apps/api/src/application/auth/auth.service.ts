@@ -4,6 +4,7 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -19,11 +20,32 @@ import { ResetPasswordDto } from '@application/auth/dto/reset-password.dto';
 import { randomBytes } from 'crypto';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { DataSource } from 'typeorm';
+import { ResendMailerService } from '@infrastructure/mail/resend-mailer.service';
 
 /** Per-email brute-force protection. Anything tighter would block legitimate users
  *  who mistype; anything looser would not stop a credential-stuffing script. */
 const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_WINDOW_SECONDS = 15 * 60;
+
+/** Password-reset token TTL. Long enough for the user to find the email and
+ *  click the link; short enough that a leaked URL is useless after a few hours. */
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/** Half-open interval for the anti-enumeration timing jitter on
+ *  `requestPasswordReset`. We await this delay on every request so the
+ *  attacker cannot distinguish "user exists" from "user doesn't exist"
+ *  by response-time deltas (the findByEmail + DB lookup on the hit
+ *  branch would otherwise be measurably slower than the miss branch).
+ *
+ *  ~100 ms per request is acceptable because forgot-password is a
+ *  low-traffic endpoint. Do NOT move this INTO the rejection branch
+ *  — that re-introduces the timing oracle. The sleep MUST run BEFORE
+ *  any branching on user existence. */
+const RESET_TIMING_JITTER_MS_LO = 60;
+const RESET_TIMING_JITTER_MS_HI = 120;
+
+/** Wait a small randomised interval to flatten out timing oracles. */
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 @Injectable()
 export class AuthService {
@@ -35,6 +57,7 @@ export class AuthService {
     private readonly passwordResetRepository: PasswordResetRepository,
     private readonly dataSource: DataSource,
     private readonly configService: ConfigService,
+    private readonly mailer: ResendMailerService,
   ) {}
 
   findOne(email: string) {
@@ -367,17 +390,50 @@ export class AuthService {
   }
 
   async requestPasswordReset(dto: ForgotPasswordDto) {
+    // Flatten timing oracle: pick a random sleep BEFORE branching on
+    // user existence so the response-time envelope is the same whether
+    // the row exists or not. Without this, the hit branch's
+    // Postgres lookup + bcrypt-free token generation were measurably
+    // slower than the miss branch's plain return.
+    const jitter =
+      RESET_TIMING_JITTER_MS_LO +
+      Math.floor(
+        Math.random() *
+          (RESET_TIMING_JITTER_MS_HI - RESET_TIMING_JITTER_MS_LO),
+      );
+    await sleep(jitter);
+
     const user = await this.userRepository.findByEmail(dto.email);
-    if (!user) {
-      throw new NotFoundException('⚠️ User not found');
+
+    // Self-documenting gate inline so the rejection intent reads at a
+    // glance AND TypeScript narrows `user` to non-null across the rest
+    // of the function (the `Boolean(user)` predicate is what flips
+    // narrowing). Only true email-auth users (with a password set) are
+    // eligible for password reset. Un-resettable accounts (unknown
+    // email, social-only, missing password) are silently absorbed to
+    // prevent user-enumeration and to avoid expanding the auth surface
+    // of OAuth-only accounts (Google-only users must not silently gain
+    // a password they didn't opt into).
+    if (!user || user.authProvider !== 'email' || !user.password) {
+      const reason =
+        !user
+          ? 'unknown'
+          : user.authProvider !== 'email'
+            ? 'social-only'
+            : 'no-password';
+      this.logger.warn(
+        `🔍 Password reset requested for un-resettable account: ${dto.email} (reason: ${reason})`,
+      );
+      return {
+        message: '📨 Recovery link sent to your email',
+      };
     }
 
     const token = randomBytes(32).toString('hex');
-    await this.passwordResetRepository.saveToken(dto.email, token);
+    await this.passwordResetRepository.saveToken(user.email, token);
 
-    // Aquí enviarías el correo con el enlace para restablecer la contraseña.
-    // FRONTEND_URL puede contener varios orígenes separados por coma; usamos
-    // el primero (el principal) para construir el enlace de recuperación.
+    // FRONTEND_URL may carry multiple comma-separated origins; we use the
+    // first (primary) to build the user-facing reset link.
     const primaryFrontendUrl =
       this.configService
         .get<string>('FRONTEND_URL')
@@ -385,9 +441,39 @@ export class AuthService {
         ?.trim()
         .replace(/\/+$/, '') ?? '';
 
-    this.logger.log(
-      `🔗 Link to reset password: ${primaryFrontendUrl}/auth/reset-password?token=${token}`,
-    );
+    // Hard-fail on missing OR malformed FRONTEND_URL: previous code would
+    // silently ship an email with a relative URL like
+    // `/auth/reset-password?token=…` which resolves against the mail
+    // client's origin (Google's webmail), not the app. A bare `not-a-url`
+    // would also pass the empty-string guard and produce a broken
+    // absolute URL — tighten to require an explicit http(s):// scheme.
+    // (`s` is optional so the dev `http://localhost:3001` fallback
+    // still passes the guard.)
+    if (
+      !primaryFrontendUrl ||
+      !/^https?:\/\//.test(primaryFrontendUrl)
+    ) {
+      this.logger.error(
+        '🚨 FRONTEND_URL is missing or malformed; aborting password reset email',
+      );
+      throw new InternalServerErrorException(
+        'FRONTEND_URL is misconfigured; cannot build the reset link.',
+      );
+    }
+
+    const resetUrl = `${primaryFrontendUrl}/auth/reset-password?token=${token}`;
+
+    // The previous implementation only wrote the URL to a log line and
+    // lied to the client (`message: 'Recovery link sent to your email'`)
+    // while no email was ever sent. resendMailer throws on transport
+    // failure, so the controller surfaces a 5xx if delivery fails —
+    // clients can retry instead of believing a phantom success.
+    await this.mailer.sendPasswordReset(user.email, resetUrl);
+
+    // Still log the URL in dev so it's grep-able when debugging locally
+    // (Resend's sent inbox also shows the message, but a console line
+    // speeds up "did the call even fire?" triage).
+    this.logger.log(`🔗 Password reset URL for ${user.email}: ${resetUrl}`);
 
     return {
       message: '📨 Recovery link sent to your email',
@@ -400,14 +486,38 @@ export class AuthService {
       throw new BadRequestException('🛑 Invalid token');
     }
 
+    // Token TTL defence: the previous implementation accepted any token
+    // forever, which is bad if the URL ever leaks (logs, screenshots,
+    // email-forwarding). The token table stores createdAt via
+    // @CreateDateColumn; reject anything older than RESET_TOKEN_TTL_MS.
+    const tokenAgeMs = Date.now() - new Date(resetToken.createdAt).getTime();
+    if (Number.isNaN(tokenAgeMs) || tokenAgeMs > RESET_TOKEN_TTL_MS) {
+      // Best-effort cleanup so the row doesn't dangle for a year.
+      try {
+        await this.passwordResetRepository.deleteToken(resetToken.id);
+      } catch (cleanupErr) {
+        this.logger.warn(
+          `Could not delete expired reset token ${resetToken.id}: ${(cleanupErr as Error).message}`,
+        );
+      }
+      throw new BadRequestException('🛑 Reset token expired');
+    }
+
     const user = await this.userRepository.findByEmail(resetToken.email);
     if (!user) {
       throw new NotFoundException('⚠️ User not found');
     }
 
+    // Hooks bypass: the User entity declares `@BeforeInsert` /
+    // `@BeforeUpdate` that hashes the password, but those only fire when
+    // we call `repo.save(entityInstance)`. The user's repository uses
+    // `repo.update(id, partial)`, which bypasses hooks and would store
+    // the plaintext password straight into MySQL. Manually bcrypt-hash
+    // here so the new password lands as a real hash.
+    const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
+
     await this.userRepository.updateUser(user.id, {
-      ...user,
-      password: user.password,
+      password: hashedPassword,
     });
     await this.passwordResetRepository.deleteToken(resetToken.id);
 

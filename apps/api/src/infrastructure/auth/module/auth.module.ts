@@ -14,6 +14,7 @@ import { LoggingService } from '@infrastructure/log/logger.service';
 import { PasswordResetToken } from '@domain/auth/password-reset.entity';
 import { PasswordResetRepository } from '@adapters/auth/persistence/password-reset.repository';
 import { CookieService } from '@infrastructure/config/cookie.service';
+import { ResendMailerService } from '@infrastructure/mail/resend-mailer.service';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { CookieService } from '@infrastructure/config/cookie.service';
     GoogleStrategy,
     LoggingService,
     CookieService,
+    ResendMailerService,
   ],
   controllers: [AuthController],
 })
