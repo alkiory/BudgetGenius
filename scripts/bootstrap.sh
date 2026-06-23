@@ -104,6 +104,7 @@ set_env "apps/api/.env.development" "REDIS_PORT" "6379"
 set_env "apps/api/.env.development" "NODE_ENV" "development"
 set_env "apps/api/.env.development" "PORT" "5000"
 set_env "apps/api/.env.development" "FRONTEND_URL" "http://localhost:3001"
+set_env "apps/api/.env.development" "RESEND_API_KEY" "Your_Resend_API_Key_Here"  # Replace with your actual Resend API key
 
 # Ensure JWT secret exists
 if grep -qE "^JWT_SECRET=" "apps/api/.env.development"; then

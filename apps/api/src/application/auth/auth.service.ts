@@ -12,7 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { RedisService } from '@infrastructure/config/redis.service';
-import { User, UserRole } from '@domain/user/user.entity';
+import { User, UserRole, BCRYPT_COST } from '@domain/user/user.entity';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { PasswordResetRepository } from '@adapters/auth/persistence/password-reset.repository';
 import { ForgotPasswordDto } from '@application/auth/dto/forgot-password.dto';
@@ -186,7 +186,11 @@ export class AuthService {
   }
 
   async updateRefreshToken(id: number, refreshToken: string) {
-    const hashedToken = await bcrypt.hash(refreshToken, 10);
+    // Note: refresh tokens live in Redis (not in a User column), so the
+    // entity-hook wiring we built for `users.password` does not apply
+    // here — hashing is done directly. `BCRYPT_COST` keeps this in lock
+    // step with password hashing in case the cost factor ever changes.
+    const hashedToken = await bcrypt.hash(refreshToken, BCRYPT_COST);
     await this.userRepository.updateToken(id, hashedToken);
   }
 
@@ -508,16 +512,13 @@ export class AuthService {
       throw new NotFoundException('⚠️ User not found');
     }
 
-    // Hooks bypass: the User entity declares `@BeforeInsert` /
-    // `@BeforeUpdate` that hashes the password, but those only fire when
-    // we call `repo.save(entityInstance)`. The user's repository uses
-    // `repo.update(id, partial)`, which bypasses hooks and would store
-    // the plaintext password straight into MySQL. Manually bcrypt-hash
-    // here so the new password lands as a real hash.
-    const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
-
+    // `userRepository.updateUser` runs `repo.preload + repo.save`, which
+    // fires the User entity's `@BeforeUpdate hashPassword` hook — the
+    // hook is the single source of truth for password hashing. Forward
+    // the plaintext: the @BeforeUpdate body will bcrypt-hash it before
+    // the SQL UPDATE runs.
     await this.userRepository.updateUser(user.id, {
-      password: hashedPassword,
+      password: dto.newPassword,
     });
     await this.passwordResetRepository.deleteToken(resetToken.id);
 
