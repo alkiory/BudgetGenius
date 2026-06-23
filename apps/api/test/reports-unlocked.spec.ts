@@ -87,7 +87,7 @@ describe('ReportService — MVP isPremium gate removed (T3.26)', () => {
   });
 
   it('getOverview returns repo data without consulting isPremium', async () => {
-    const result = await service.getOverview({ year: 2026 });
+    const result = await service.getOverview({ year: 2026, userId: 1 });
     expect(result).toEqual([{ month: 'Jan', income: 100, expenses: 50 }]);
     expect(userRepo.findById).not.toHaveBeenCalled();
   });
@@ -96,19 +96,20 @@ describe('ReportService — MVP isPremium gate removed (T3.26)', () => {
     const result = await service.getByCategory({
       start: new Date('2026-01-01'),
       end: new Date('2026-01-31'),
+      userId: 1,
     });
     expect(result).toEqual([{ category: 'Food', total: 100 }]);
     expect(userRepo.findById).not.toHaveBeenCalled();
   });
 
   it('getWeekly returns repo data without consulting isPremium', async () => {
-    const result = await service.getWeekly();
+    const result = await service.getWeekly({ userId: 1 });
     expect(result).toEqual([{ day: 'Mon', amount: 25 }]);
     expect(userRepo.findById).not.toHaveBeenCalled();
   });
 
   it('getSavings returns repo data without consulting isPremium', async () => {
-    const result = await service.getSavings({ year: 2026 });
+    const result = await service.getSavings({ year: 2026, userId: 1 });
     expect(result).toEqual([{ month: 'Jan', savings: 50 }]);
     expect(userRepo.findById).not.toHaveBeenCalled();
   });
@@ -117,8 +118,9 @@ describe('ReportService — MVP isPremium gate removed (T3.26)', () => {
     // With openai mocked, the retry loop's first call resolves cleanly.
     // The contract: NO `return []` short-circuit before the openai call —
     // assertion verifies the content reaches through, proving the gate
-    // removal at the cleaned entry point.
-    const result = await service.getInsights({ year: 2026 });
+    // removal at the cleaned entry point. userId is forwarded for the
+    // same scoping reason as the other report endpoints.
+    const result = await service.getInsights({ year: 2026, userId: 1 });
     expect(typeof result).toBe('string');
     expect(userRepo.findById).not.toHaveBeenCalled();
   });

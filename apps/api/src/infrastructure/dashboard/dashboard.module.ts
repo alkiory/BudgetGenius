@@ -23,6 +23,7 @@ import { ReportService } from '@application/dashboard/services/reports.service';
 import { ReportExportService } from '@application/dashboard/services/report-export.service';
 import { ReportRepository } from '@adapters/dashboard/persistence/reports.repository';
 import { OverviewRepository } from '@adapters/dashboard/persistence/overview.repository';
+import { ExpenseCategoryController } from '@adapters/dashboard/http/expense-category.controller';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { OverviewRepository } from '@adapters/dashboard/persistence/overview.rep
     BudgetController,
     OverviewController,
     ReportsController,
+    ExpenseCategoryController,
   ],
   providers: [
     LoggingService,

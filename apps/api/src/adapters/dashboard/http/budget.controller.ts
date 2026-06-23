@@ -62,16 +62,16 @@ export class BudgetController {
   @ApiOperation({ summary: 'Get one budget by id' })
   @ApiParam({ name: 'id', type: Number })
   @ApiResponse({ status: 200, type: Budget })
-  get(@Param('id') id: string) {
-    return this.svc.getBudget(+id);
+  get(@Param('id') id: string, @Req() req) {
+    return this.svc.getBudget(+id, req.user.userId);
   }
 
   @Get(':id/category')
   @ApiOperation({ summary: 'Get one budget category by id' })
   @ApiParam({ name: 'id', type: Number })
   @ApiResponse({ status: 200, type: BudgetCategory })
-  getCategory(@Param('id') id: string) {
-    return this.svc.getBudgetCategory(+id);
+  getCategory(@Param('id') id: string, @Req() req) {
+    return this.svc.getBudgetCategory(+id, req.user.userId);
   }
 
   @Post()

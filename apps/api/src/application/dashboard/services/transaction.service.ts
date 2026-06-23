@@ -70,39 +70,28 @@ export class TransactionService {
     // Verify user exists - `findByUser` throws NotFoundException if not
     await this.transactionRepo.findByUser(userId);
 
-    const existingTransaction = await this.transactionRepo.findOne(dto.id);
-    // `findOne` also throws NotFoundException if not found, but check is explicit
-    if (!existingTransaction) {
-      throw new NotFoundException(`Transaction with ID ${dto.id} not found`);
-    }
-
-    // `recurrence` is intentionally NOT seeded here — the repo's
-    // destructured-undefined guard preserves the existing value when the dto
-    // omits the field (matches the partial-update contract on the controller).
+    // `recurrence` is intentionally NOT seeded separately — the repo's
+    // destructured-undefined guard preserves the existing value when the
+    // dto omits the field (matches the partial-update contract on the
+    // controller). The userId is forwarded to the repo so the WHERE clause
+    // also filters — defence in depth: even if this service ever gets
+    // called with a foreign id, the SQL will refuse it.
     const transaction = {
       ...dto,
       user: { id: userId } as User,
-      createdAt: existingTransaction.createdAt,
       updatedAt: new Date(),
     };
-    return this.transactionRepo.update(transaction);
+    return this.transactionRepo.update(transaction, userId);
   }
   async deleteTransaction(
     transactionId: number,
     userId: number,
   ): Promise<boolean> {
-    const transaction = await this.transactionRepo.findOne(transactionId);
-
-    if (!transaction) {
-      return false;
-    }
-
-    if (transaction.user.id !== userId) {
-      return false;
-    }
-
-    await this.transactionRepo.delete(transactionId);
-    return true;
+    // The repo's `delete` performs a WHERE-scoped DELETE and reports
+    // affected row count, so a foreign-id attempt is a no-op (returns
+    // false). No need for an explicit `findOne + ownership` round-trip
+    // here.
+    return this.transactionRepo.delete(transactionId, userId);
   }
 
   async deleteAllTransactions(userId: number, transactions: any) {
@@ -124,9 +113,13 @@ export class TransactionService {
       };
     }
 
+    // The repo's `delete` is now scoped by userId, so each row also gets
+    // a WHERE userId = :userId check at SQL level. Foreign ids cannot
+    // sneak through this loop even if `transactionsToDelete` is somehow
+    // cross-contaminated.
     await Promise.all(
       transactionsToDelete.map((transaction) =>
-        this.transactionRepo.delete(transaction.id),
+        this.transactionRepo.delete(transaction.id, userId),
       ),
     );
 

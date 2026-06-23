@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -38,6 +39,110 @@ export class AuthService {
 
   findOne(email: string) {
     return this.userRepository.findByEmail(email);
+  }
+
+  /**
+   * Idempotent signup. Three possible outcomes:
+   *
+   * 1. The email is brand-new → create the account and return fresh tokens.
+   * 2. The email already exists AND has the same bcrypt-hashed password →
+   *    treat the call as a retry and re-issue tokens (handles double-clicks
+   *    and flaky networks that re-trigger /signup on the same client).
+   *    The caller already proved knowledge of the password, so this is
+   *    equivalent to a normal login.
+   * 3. The email already exists without a matching password (different
+   *    password, or the account was created via Google/social and never
+   *    had a password set) → 409 Conflict. We deliberately do NOT leak
+   *    which case it is, to avoid user-enumeration side channels.
+   */
+  async signup(dto: {
+    name: string;
+    surname?: string;
+    email: string;
+    password: string;
+    authProvider: 'email' | 'google';
+    role: string;
+  }): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    user: User;
+    isNewUser: boolean;
+  }> {
+    const existingUser = await this.userRepository.findByEmail(dto.email);
+
+    if (existingUser) {
+      // Social-only account: no email/password set, so we cannot log them
+      // in via this endpoint.
+      if (!existingUser.password) {
+        throw new ConflictException(
+          '⚠️ This email is registered via social login. Please sign in with that provider.',
+        );
+      }
+
+      // Same password → idempotent retry → log them in.
+      const passwordMatches = await bcrypt.compare(
+        dto.password,
+        existingUser.password,
+      );
+      if (!passwordMatches) {
+        throw new ConflictException('⚠️ Email already in use');
+      }
+
+      const payload = {
+        id: existingUser.id,
+        email: existingUser.email,
+        role: existingUser.role,
+      };
+      const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
+      const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+      await this.redisService.set(
+        `refreshToken:${existingUser.id}`,
+        refreshToken,
+        604800,
+      );
+
+      return {
+        accessToken,
+        refreshToken,
+        user: existingUser,
+        isNewUser: false,
+      };
+    }
+
+    // Brand-new account. Bypass UserService.createUser intentionally: its
+    // current implementation calls userRepository.save() a second time after
+    // createUser() resolved, which is a no-op at best and can mask silent
+    // failures at worst. Persisting once via the repository is enough.
+    const newUser = await this.userRepository.createUser({
+      name: dto.name,
+      surname: dto.surname,
+      email: dto.email,
+      password: dto.password,
+      role: dto.role,
+      authProvider: dto.authProvider,
+      refreshToken: null,
+    });
+
+    const payload = {
+      id: newUser.id,
+      email: newUser.email,
+      role: newUser.role,
+    };
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+    await this.redisService.set(
+      `refreshToken:${newUser.id}`,
+      refreshToken,
+      604800,
+    );
+
+    this.logger.log(`🪪 New user registered: ${newUser.email}`);
+    return {
+      accessToken,
+      refreshToken,
+      user: newUser,
+      isNewUser: true,
+    };
   }
 
   async validateUser(email: string, password: string): Promise<any> {

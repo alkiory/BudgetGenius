@@ -89,43 +89,52 @@ export class AuthController {
       example: {
         accessToken: 'jwt-access-token',
         refreshToken: 'jwt-refresh-token',
+        user: {
+          id: 1,
+          name: 'Sergio',
+          email: 'sergio@example.com',
+          role: 'user',
+        },
+        isNewUser: true,
         message: '🪪 Successfully signed up and logged in',
       },
     },
   })
   @ApiResponse({ status: 400, description: 'Solicitud inválida' })
-  @ApiResponse({ status: 401, description: 'Correo electrónico ya en uso' })
-  async signup(@Body() signupDTO: CreateUserDto) {
-    const existingUser = await this.authService.findOne(signupDTO.email);
-    if (existingUser) {
-      throw new UnauthorizedException('⚠️ Email already in use');
+  @ApiResponse({
+    status: 409,
+    description:
+      'El correo ya está registrado. Si coincide con tu contraseña, se inicia sesión (idempotente); si no, devuelve conflicto.',
+  })
+  async signup(
+    @Body() signupDTO: CreateUserDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { accessToken, refreshToken, user, isNewUser } =
+      await this.authService.signup({
+        name: signupDTO.name,
+        surname: signupDTO.surname,
+        email: signupDTO.email,
+        password: signupDTO.password,
+        authProvider: signupDTO.authProvider ?? 'email',
+        role: signupDTO.role ?? 'user',
+      });
+
+    this.cookieService.setCookie(res, 'accessToken', accessToken);
+    this.cookieService.setCookie(res, 'refreshToken', refreshToken);
+
+    if (isNewUser) {
+      this.logger.log(`🪪 Registering new user: ${signupDTO.email}`);
     }
-
-    const newUser = await this.userService.createUser({
-      name: signupDTO.name,
-      surname: signupDTO.surname,
-      email: signupDTO.email,
-      password: signupDTO.password,
-      authProvider: 'email',
-      role: 'user',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    const userData = {
-      sub: newUser.id,
-      email: newUser.email,
-      role: newUser.role,
-    };
-    const accessToken = this.jwtService.sign(userData, { expiresIn: '1h' });
-    const refreshToken = this.jwtService.sign(userData, { expiresIn: '7d' });
-
-    this.logger.log(`🪪 Registering new user: ${signupDTO.email}`);
 
     return {
       accessToken,
       refreshToken,
-      message: '🪪 Successfully signed up and logged in',
+      user,
+      isNewUser,
+      message: isNewUser
+        ? '🪪 Successfully signed up and logged in'
+        : '🔓 Login successful (existing account)',
     };
   }
 

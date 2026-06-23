@@ -1,5 +1,6 @@
 // test/transaction.service.spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { TransactionService } from '@application/dashboard/services/transaction.service';
 import { TransactionRepository } from '@adapters/dashboard/persistence/transaction.repository';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
@@ -183,6 +184,90 @@ describe('TransactionService', () => {
       const calledArg = (repo.update as jest.Mock).mock.calls[0][0];
       expect(calledArg.recurrence).toBeNull();
       expect('recurrence' in calledArg).toBe(true);
+    });
+  });
+
+  /**
+   * Cross-user ownership isolation. Locks in the post-audit contract:
+   * user A cannot read, mutate, or delete a transaction owned by user B.
+   * The repo's WHERE clause is the source of truth — defence in depth
+   * atop any controller-level userId forwarding.
+   */
+  describe('ownership/cross-user isolation', () => {
+    const userAId = 1;
+    const foreignTxId = 999; // owned by userB (2)
+
+    it('deleteTransaction: foreign-id attempt returns false (no row deleted)', async () => {
+      // Repo contract: returns `false` when the WHERE-scoped DELETE
+      // affected zero rows. Caller treats it as "not found".
+      (repo.delete as jest.Mock).mockResolvedValue(false);
+
+      const result = await service.deleteTransaction(foreignTxId, userAId);
+
+      expect(result).toBe(false);
+      // The DELETE must be scoped to the owning user; a regression to
+      // a flat `delete({id: foreignTxId})` would surface here.
+      expect(repo.delete).toHaveBeenCalledWith(foreignTxId, userAId);
+    });
+
+    it('updateTransaction: foreign-id update is rejected with NotFoundException', async () => {
+      // Repo.update path: findOneOrFail throws NotFoundException on miss.
+      // The service has no try/catch — let it bubble so the controller
+      // surfaces a clean 404 (no information leak about row existence).
+      (repo.update as jest.Mock).mockRejectedValue(
+        new NotFoundException(`Transaction with ID ${foreignTxId} not found`),
+      );
+
+      const dto = {
+        id: foreignTxId,
+        date: new Date(),
+        description: 'Hijacked',
+        category: 'Spam',
+        amount: 9999,
+      };
+
+      await expect(service.updateTransaction(userAId, dto)).rejects.toThrow(
+        NotFoundException,
+      );
+
+      // The userId must be the requesting user's, not something inferred
+      // from the dto — protects against a future regression where the
+      // service overwrites user from the dto payload.
+      const updateArgs = (repo.update as jest.Mock).mock.calls[0];
+      expect(updateArgs[1]).toBe(userAId);
+    });
+
+    it('deleteAllTransactions: only userA-owned ids are forwarded to the repo', async () => {
+      // Seed: userA's transactions include an id we know is theirs,
+      // plus a "foreign" id that we should NOT pass to delete.
+      const userATxId = 42;
+      const userBTxId = 99; // happens to be in the request payload — must be ignored
+
+      // Mock `findByUser` to return userA's owned-transactions list,
+      // filtered (this is what the real repo does via the `user: {id}`
+      // relation).
+      (repo.findByUser as jest.Mock).mockResolvedValue({
+        id: userAId,
+        email: 'a@test.com',
+        transactions: [{ id: userATxId }],
+      });
+      (repo.delete as jest.Mock).mockResolvedValue(true);
+
+      // Caller asks to delete both — but only userATxId is in the user's
+      // ownership list, so userBTxId is silently dropped.
+      await service.deleteAllTransactions(userAId, {
+        transactions: [userATxId, userBTxId],
+      });
+
+      // The repo's `delete` was called only for the owned id.
+      const deletedIds = (repo.delete as jest.Mock).mock.calls.map(
+        (c) => c[0],
+      );
+      expect(deletedIds).toEqual([userATxId]);
+      // And every `delete` call must include userAId as the scope.
+      for (const call of (repo.delete as jest.Mock).mock.calls) {
+        expect(call[1]).toBe(userAId);
+      }
     });
   });
 });

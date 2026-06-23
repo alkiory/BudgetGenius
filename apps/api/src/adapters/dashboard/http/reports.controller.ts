@@ -47,33 +47,38 @@ export class ReportsController {
   @ApiOperation({ summary: 'Monthly income vs expenses overview' })
   @ApiQuery({ name: 'year', required: true, example: 2025 })
   @ApiResponse({ status: 200, description: 'Overview data' })
-  getOverview(@Query('year') year: number) {
-    return this.svc.getOverview({ year });
+  getOverview(@Query('year') year: number, @Req() req) {
+    return this.svc.getOverview({ year, userId: req.user.userId });
   }
 
   @Get('categories')
   @ApiOperation({ summary: 'Expense breakdown by category' })
   @ApiQuery({ name: 'start' })
   @ApiQuery({ name: 'end' })
-  getByCategory(@Query('start') start: string, @Query('end') end: string) {
+  getByCategory(
+    @Query('start') start: string,
+    @Query('end') end: string,
+    @Req() req,
+  ) {
     return this.svc.getByCategory({
       start: new Date(start),
       end: new Date(end),
+      userId: req.user.userId,
     });
   }
 
   @Get('weekly')
   @ApiOperation({ summary: 'Weekly trend (last 7 days)' })
   @ApiResponse({ status: 200 })
-  getWeekly() {
-    return this.svc.getWeekly();
+  getWeekly(@Req() req) {
+    return this.svc.getWeekly({ userId: req.user.userId });
   }
 
   @Get('savings')
   @ApiOperation({ summary: 'Savings growth per month' })
   @ApiQuery({ name: 'year', required: true })
-  getSavings(@Query('year') year: number) {
-    return this.svc.getSavings({ year });
+  getSavings(@Query('year') year: number, @Req() req) {
+    return this.svc.getSavings({ year, userId: req.user.userId });
   }
 
   @Get('insights')
@@ -81,8 +86,11 @@ export class ReportsController {
   @ApiQuery({ name: 'year', required: true })
   @ApiResponse({ status: 200, description: 'Text insights' })
   getInsights(@Query('year') year: number, @Req() req) {
-    // TODO: Service temporarily disabled until we pay the bill
-    // return this.svc.getInsights({ year });
+    // TODO: Service temporarily disabled until we pay the bill. When
+    // re-enabled, MUST call `this.svc.getInsights({year, userId: req.user.userId})`
+    // — the service's `getInsights` signature requires `userId` after the
+    // cross-layer permission audit; passing only `{year}` would type-fail
+    // and un-scoped calls would leak aggregated data across users.
     return {
       data: {
         spent: 0,

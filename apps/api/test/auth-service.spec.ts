@@ -208,4 +208,84 @@ describe('AuthService', () => {
     );
     expect(result).toEqual({ message: '📨 Recovery link sent to your email' });
   });
+
+  // ─── Signup (idempotent + conflict on takeover) ─────────────────────────
+
+  it('should create a new user on signup when the email is brand new', async () => {
+    userRepository.findByEmail = jest.fn().mockResolvedValueOnce(null);
+    userRepository.createUser = jest.fn().mockResolvedValueOnce({
+      ...user,
+      id: 42,
+      email: 'new@user.com',
+    });
+
+    const result = await authService.signup({
+      name: 'New',
+      surname: 'User',
+      email: 'new@user.com',
+      password: 'whatever',
+      authProvider: 'email',
+      role: 'user',
+    });
+
+    expect(userRepository.createUser).toHaveBeenCalledTimes(1);
+    expect(result.isNewUser).toBe(true);
+    expect(result.user.email).toBe('new@user.com');
+    expect(result.accessToken).toBe('mock-access-token');
+    expect(result.refreshToken).toBe('mock-access-token');
+  });
+
+  it('should treat signup as an idempotent login when email+password match an existing user', async () => {
+    // Default mock returns the existing user, and beforeEach mocks
+    // bcrypt.compare to resolve true.
+    const result = await authService.signup({
+      name: user.name,
+      surname: user.surname,
+      email: user.email,
+      password: user.password,
+      authProvider: 'email',
+      role: user.role,
+    });
+
+    expect(userRepository.createUser).toBeUndefined();
+    expect(result.isNewUser).toBe(false);
+    expect(result.user.email).toBe(user.email);
+    expect(result.accessToken).toBeDefined();
+    expect(result.refreshToken).toBeDefined();
+  });
+
+  it('should reject signup with HTTP 409 when the email exists but the password does not match', async () => {
+    (bcrypt.compare as jest.Mock).mockImplementationOnce(() =>
+      Promise.resolve(false),
+    );
+
+    await expect(
+      authService.signup({
+        name: user.name,
+        surname: user.surname,
+        email: user.email,
+        password: 'wrong-password',
+        authProvider: 'email',
+        role: user.role,
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('should reject signup with HTTP 409 when the email exists without a password (social-only account)', async () => {
+    userRepository.findByEmail = jest.fn().mockResolvedValueOnce({
+      ...user,
+      password: undefined,
+    });
+
+    await expect(
+      authService.signup({
+        name: user.name,
+        surname: user.surname,
+        email: user.email,
+        password: 'whatever',
+        authProvider: 'email',
+        role: user.role,
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+  });
 });
