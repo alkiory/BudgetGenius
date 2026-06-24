@@ -438,27 +438,30 @@ export class AuthService {
 
     // FRONTEND_URL may carry multiple comma-separated origins; we use the
     // first (primary) to build the user-facing reset link.
+    //
+    // Defensive fallback: if FRONTEND_URL env var is unset (e.g., missing from
+    // the deployment config), fall back to the production Firebase Hosting URL
+    // rather than throwing a 500 that breaks the forgot-password flow entirely.
+    // This mirrors the same hardcoded default used in main.ts for CORS.
+    const FALLBACK_FRONTEND_URL =
+      this.configService.get<string>('NODE_ENV') === 'production'
+        ? 'https://budgetgeniusia.web.app'
+        : 'http://localhost:5173';
+
     const primaryFrontendUrl =
       this.configService
         .get<string>('FRONTEND_URL')
         ?.split(',')[0]
         ?.trim()
-        .replace(/\/+$/, '') ?? '';
+        .replace(/\/+$/, '') || FALLBACK_FRONTEND_URL;
 
-    // Hard-fail on missing OR malformed FRONTEND_URL: previous code would
-    // silently ship an email with a relative URL like
-    // `/auth/reset-password?token=…` which resolves against the mail
-    // client's origin (Google's webmail), not the app. A bare `not-a-url`
-    // would also pass the empty-string guard and produce a broken
-    // absolute URL — tighten to require an explicit http(s):// scheme.
-    // (`s` is optional so the dev `http://localhost:3001` fallback
-    // still passes the guard.)
-    if (
-      !primaryFrontendUrl ||
-      !/^https?:\/\//.test(primaryFrontendUrl)
-    ) {
+    // Validate that the URL starts with http:// or https:// to avoid
+    // shipping an email with a broken relative link. The fallback URL
+    // already satisfies this check, so this guard only fires if the env
+    // var is set to something malformed like `not-a-url`.
+    if (!/^https?:\/\//.test(primaryFrontendUrl)) {
       this.logger.error(
-        '🚨 FRONTEND_URL is missing or malformed; aborting password reset email',
+        `🚨 FRONTEND_URL is malformed ("${primaryFrontendUrl}"); aborting password reset email`,
       );
       throw new InternalServerErrorException(
         'FRONTEND_URL is misconfigured; cannot build the reset link.',
