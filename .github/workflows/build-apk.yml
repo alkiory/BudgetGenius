@@ -9,6 +9,10 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    env:
+      HAS_FIREBASE_SECRET: ${{ secrets.FIREBASE_SERVICES_BASE64 }}
+      HAS_KEYSTORE_SECRET: ${{ secrets.KEYSTORE_BASE64 }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -61,7 +65,7 @@ jobs:
 
       # ── Inject Firebase Services Configuration ───────────────────────────
       - name: Inject Firebase google-services.json
-        if: secrets.FIREBASE_SERVICES_BASE64 != ''
+        if: ${{ env.HAS_FIREBASE_SECRET != '' }}
         run: |
           echo "${{ secrets.FIREBASE_SERVICES_BASE64 }}" | base64 --decode > apps/mobile/android/app/google-services.json
 
@@ -82,7 +86,7 @@ jobs:
 
       # ── (Optional) Build release APK on push to main ─────────────────────
       - name: Build release APK
-        if: github.ref == 'refs/heads/main' && secrets.KEYSTORE_BASE64 != ''
+        if: ${{ github.ref == 'refs/heads/main' && env.HAS_KEYSTORE_SECRET != '' }}
         run: |
           # Decode the keystore from a base64-encoded secret
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > keystore.jks
@@ -94,7 +98,7 @@ jobs:
             -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
 
       - name: Upload release APK
-        if: github.ref == 'refs/heads/main' && secrets.KEYSTORE_BASE64 != ''
+        if: ${{ github.ref == 'refs/heads/main' && env.HAS_KEYSTORE_SECRET != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: budgetgenius-release
