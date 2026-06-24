@@ -10,5 +10,4 @@ export interface AuthRepository {
   refreshToken: (refreshToken: string) => Promise<Auth>;
   googleLogin: () => Promise<void>;
   googleAuthRedirect: (code: string) => Promise<Auth>;
-  githubLogin: () => Promise<void>;
 }

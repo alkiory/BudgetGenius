@@ -10,6 +10,13 @@ import { ThemeProvider } from "@adapters/hooks/themeContext";
 import { store } from "@adapters/store/rootStore";
 import "./infrastructure/i18n/i18n";
 import { app, analytics } from "@infrastructure/firebaseConfig";
+// Explicitly import @capacitor/core so Vite keeps it in the bundle even when
+// no other module imports it from the main entry. The Capacitor native bridge
+// injects `window.Capacitor` before our scripts run, but only if `@capacitor/
+// core` is actually present in the bundle. Without this, the platform detection
+// fallback in `@infrastructure/platform` kicks in (URL + UA heuristics) which
+// works but is less robust than querying `Capacitor.isNativePlatform()`.
+import "@capacitor/core";
 
 const queryClient = new QueryClient();
 
