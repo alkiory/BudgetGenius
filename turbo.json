@@ -9,6 +9,11 @@
       "outputs": ["dist/**"],
       "outputLogs": "new-only"
     },
+    "mobile:build": {
+      "dependsOn": ["^build"],
+      "outputs": ["android/app/build/outputs/**"],
+      "outputLogs": "new-only"
+    },
     "check-types": {
       "dependsOn": ["^check-types"]
     },

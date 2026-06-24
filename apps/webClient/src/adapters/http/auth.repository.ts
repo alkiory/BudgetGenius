@@ -3,8 +3,7 @@ import { store } from "@adapters/store/rootStore";
 import { AuthRepository } from "@domain/auth/AuthRepository";
 import { User } from "@domain/index";
 import api from "@infrastructure/api.config";
-import { app as firebaseApp } from "@infrastructure/firebaseConfig";
-import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { createGoogleLoginStrategy } from "@adapters/auth";
 
 export const authRepository: AuthRepository = {
   async login(email: string, password: string) {
@@ -48,30 +47,13 @@ export const authRepository: AuthRepository = {
   },
 
   async googleLogin() {
-    // Guard against Firebase not being configured (missing env vars). Without
-    // this, `getAuth()` would throw "Installations: Missing App configuration
-    // value: projectId" and surface as an unhandled popup error.
-    if (!firebaseApp) {
-      throw new Error(
-        "Google login is not available: Firebase is not configured.",
-      );
-    }
+    // Strategy Pattern: selecciona automáticamente la implementación adecuada
+    // según la plataforma (web popup vs plugin nativo Capacitor).
+    const strategy = createGoogleLoginStrategy();
+    const { idToken } = await strategy.login();
 
-    const auth = getAuth(firebaseApp);
-    const provider = new GoogleAuthProvider();
-
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      const idToken = await user.getIdToken(); // Token JWT de Firebase
-
-      const response = await api.post("/auth/firebase-login", { idToken });
-
-      return response.data;
-    } catch (error) {
-      console.error("Error during Google login:", error);
-      throw error;
-    }
+    const response = await api.post("/auth/firebase-login", { idToken });
+    return response.data;
   },
 
   async googleAuthRedirect(code: string) {

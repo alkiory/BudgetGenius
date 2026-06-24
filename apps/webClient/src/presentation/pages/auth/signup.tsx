@@ -105,7 +105,7 @@ export default function SignupPage() {
     <div className="flex min-h-screen items-center justify-center">
       <Button
         variant="default"
-        className="absolute left-4 top-4 md:left-8 md:top-8 animate-shake"
+        className="absolute left-4 top-[max(env(safe-area-inset-top),1rem)] md:left-8 md:top-8 animate-shake"
         onClick={() => navigate(RoutePaths.Home)}
       >
         {t("auth.goBack")}

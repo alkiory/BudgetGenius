@@ -8,7 +8,23 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private client: Redis;
 
   async onModuleInit() {
-    await this.connect();
+    try {
+      await this.connect();
+    } catch (error) {
+      const isDev = process.env.NODE_ENV !== 'production';
+      if (isDev) {
+        this.logger.warn(
+          '⚠️ Redis not available in development — API will run without Redis. ' +
+            'Rate limiting and refresh tokens will use safe defaults.',
+        );
+        // Create a no-op client so that method calls don't crash with
+        // "Cannot read properties of undefined". Each public method
+        // checks `this.client` and returns a safe default when falsy.
+        this.client = null as unknown as Redis;
+      } else {
+        throw error;
+      }
+    }
   }
 
   async onModuleDestroy() {
@@ -76,18 +92,28 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** Guard: returns true when the client is available */
+  private isConnected(): boolean {
+    if (!this.client) {
+      this.logger.warn('⚠️ Redis not available — call skipped');
+      return false;
+    }
+    return true;
+  }
+
   async set(
     key: string,
     value: string | object,
     ttlSeconds?: number,
   ): Promise<void> {
+    if (!this.isConnected()) return;
     try {
       const stringValue =
         typeof value === 'object' ? JSON.stringify(value) : value;
       if (ttlSeconds) {
-        await this.client.setex(key, ttlSeconds, stringValue);
+        await this.client!.setex(key, ttlSeconds, stringValue);
       } else {
-        await this.client.set(key, stringValue);
+        await this.client!.set(key, stringValue);
       }
     } catch (error) {
       this.logger.error(`⚠️ Error setting key ${key} in Redis`, error.stack);
@@ -96,8 +122,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async get(key: string): Promise<string | null> {
+    if (!this.isConnected()) return null;
     try {
-      return await this.client.get(key);
+      return await this.client!.get(key);
     } catch (error) {
       this.logger.error(`⚠️ Error getting key ${key} from Redis`, error.stack);
       throw error;
@@ -105,8 +132,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getJson<T>(key: string): Promise<T | null> {
+    if (!this.isConnected()) return null;
     try {
-      const value = await this.client.get(key);
+      const value = await this.client!.get(key);
       return value ? JSON.parse(value) : null;
     } catch (error) {
       this.logger.error(
@@ -118,8 +146,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async delete(key: string): Promise<number> {
+    if (!this.isConnected()) return 0;
     try {
-      return await this.client.del(key);
+      return await this.client!.del(key);
     } catch (error) {
       this.logger.error(`⚠️ Error deleting key ${key} from Redis`, error.stack);
       throw error;
@@ -134,10 +163,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * Returns the new count value.
    */
   async incr(key: string, ttlSeconds?: number): Promise<number> {
+    if (!this.isConnected()) return 0;
     try {
-      const count = await this.client.incr(key);
+      const count = await this.client!.incr(key);
       if (ttlSeconds && count === 1) {
-        await this.client.expire(key, ttlSeconds);
+        await this.client!.expire(key, ttlSeconds);
       }
       return count;
     } catch (error) {
@@ -150,8 +180,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async keys(pattern: string): Promise<string[]> {
+    if (!this.isConnected()) return [];
     try {
-      return await this.client.keys(pattern);
+      return await this.client!.keys(pattern);
     } catch (error) {
       this.logger.error(
         `⚠️ Error getting keys with pattern ${pattern}`,
@@ -162,8 +193,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async flushAll(): Promise<void> {
+    if (!this.isConnected()) return;
     try {
-      await this.client.flushall();
+      await this.client!.flushall();
     } catch (error) {
       this.logger.error('Error flushing Redis', error.stack);
       throw error;

@@ -19,6 +19,8 @@ const DEV_DEFAULT_ORIGINS = [
   'http://127.0.0.1:5173',
   'http://localhost:3001',
   'http://127.0.0.1:3001',
+  // Android emulator → host alias (Capacitor dev mode via server.url)
+  'http://10.0.2.2:5173',
 ];
 
 /**

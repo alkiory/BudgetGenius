@@ -75,12 +75,16 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
         totalAllocated: 0,
         totalSpent: 0,
       });
+      // Bug fix (#NaN-total): initialize amounts to 0 (not `undefined`) so
+      // the totalAllocated / totalSpent reduce below never produces NaN.
+      // The number input still renders blank when value === 0 because of the
+      // `value={category.allocated ?? ""}` fallback in the JSX.
       setCategories([
         {
           budgetId: 0,
           name: "",
-          allocated: undefined as unknown as number,
-          spent: undefined as unknown as number,
+          allocated: 0,
+          spent: 0,
         },
       ]);
     }
@@ -100,12 +104,12 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
   ) => {
     setCategories((prev) => {
       const updated = [...prev];
+      // Bug fix (#NaN-total): empty input maps to 0 (not `undefined`) so the
+      // totals reducer never goes to NaN.
       const currentValue =
         typeof value === "string" &&
         (field === "allocated" || field === "spent")
-          ? value === ""
-            ? (undefined as unknown as number)
-            : Number(value) || 0
+          ? Number(value) || 0
           : value;
       updated[index] = { ...updated[index], [field]: currentValue };
       return updated;
@@ -118,8 +122,8 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
       {
         budgetId: budget?.id ?? 0,
         name: "",
-        allocated: undefined as unknown as number,
-        spent: undefined as unknown as number,
+        allocated: 0,
+        spent: 0,
       },
     ]);
   };
@@ -130,16 +134,20 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Bug fix (#currency-edit-mangling): previously each amount was
+    // converted from the user's display currency to USD via
+    // `currencyService.normalizeAmount`, which means a user entering 2000
+    // EUR would store ~2150 USD — and on edit, the form would re-display
+    // 2150 with the user's currency symbol glued back on. Round-trip was
+    // only preserved when exchange rates did not shift between sessions.
+    // Now amounts are persisted as the user entered them in their
+    // configured currency; display reads (in `EditableBudgetCategory`
+    // and the BudgetSummary) already treat the value as a no-op
+    // identity conversion (source = targetCurrency).
     const normalizedCategories = categories.map((cat) => ({
       ...cat,
-      allocated: currencyService.normalizeAmount(
-        Number(cat.allocated) || 0,
-        targetCurrency,
-      ),
-      spent: currencyService.normalizeAmount(
-        Number(cat.spent) || 0,
-        targetCurrency,
-      ),
+      allocated: Number(cat.allocated) || 0,
+      spent: Number(cat.spent) || 0,
     }));
     onSubmit({ ...formData, categories: normalizedCategories });
   };

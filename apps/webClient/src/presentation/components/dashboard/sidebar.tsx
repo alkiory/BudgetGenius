@@ -127,9 +127,8 @@ export function DashboardSidebar() {
     <>
       {/* Botón de toggle para móvil */}
       <button
-        onClick={toggleSidebar}
-        className={`
-          fixed bottom-4 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-purple-600 text-white shadow-lg transition-all duration-300 md:hidden
+        onClick={toggleSidebar}          className={`
+          fixed bottom-[max(env(safe-area-inset-bottom),1rem)] right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-purple-600 text-white shadow-lg transition-all duration-300 md:hidden
           ${isOpen ? "rotate-90" : "rotate-0"}
           `}
       >
@@ -147,7 +146,7 @@ export function DashboardSidebar() {
       >
         <div
           className={`
-            flex items-center border-b border-slate-200 px-4 py-5 dark:border-slate-800
+            flex items-center border-b border-slate-200 px-4 pb-5 pt-[max(env(safe-area-inset-top),1.25rem)] dark:border-slate-800
             ${isCollapsed ? "justify-center" : "justify-between"}
             `}
         >
