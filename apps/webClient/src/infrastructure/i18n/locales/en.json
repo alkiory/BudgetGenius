@@ -293,7 +293,11 @@
     "healthcare": "Healthcare",
     "income": "Income",
     "other": "Other",
-    "gifts": "Gifts"
+    "gifts": "Gifts",
+    "freelance": "Freelance",
+    "investments": "Investments",
+    "rental": "Rental",
+    "business": "Business"
   },
   "incomeCategories": {
     "all": "All",

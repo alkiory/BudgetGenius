@@ -60,7 +60,7 @@ export default function ContactSalesPage() {
   };
 
   return (
-    <div className="container py-12 md:p-5 text-primary dark:text-neutral">
+    <div className="container pt-[max(env(safe-area-inset-top),3rem)] pb-[max(env(safe-area-inset-bottom),3rem)] md:p-5 text-primary dark:text-neutral">
       <div className="mb-8 flex items-center justify-between">
         <Link
           to={RoutePaths.Home}

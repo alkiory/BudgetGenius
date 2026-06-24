@@ -14,9 +14,13 @@ import {
   UpdateBudgetCategoryDto,
   UpdateBudgetDto,
 } from '../dto/update-budget.dto';
-import { BudgetCategory } from '@domain/dashboard/budget-category.entity';
+import {
+  BUDGET_CATEGORY_UNIQUE_CONSTRAINT_NAME,
+  BudgetCategory,
+} from '@domain/dashboard/budget-category.entity';
 import { User } from '@domain/user/user.entity';
 import { LoggingService } from '@infrastructure/log/logger.service';
+import { QueryFailedError } from 'typeorm';
 
 @Injectable()
 export class BudgetService {
@@ -89,17 +93,30 @@ export class BudgetService {
     await this.repo.findById(budgetId, userId);
 
     // DB-based uniqueness check for duplicate category names under the
-    // same parent budget. The previous eager-load check was removed
-    // because it raced; this query reads the actual table, so it
-    // catches concurrent inserts only if a DB-level UNIQUE constraint
-    // is also added — see the post-MVP cleanup task list for that
-    // migration. Until then, two simultaneous POSTs from the same user
-    // could create two categories with the same name; the application-
-    // level check still protects against the common-path replay case.
+    // same parent budget. This query reads the actual table on every
+    // request, so it catches the common-path replay case (a single
+    // client sending two POSTs back-to-back before the first returns).
+    //
+    // Bug fix (#EntityPropertyNotFoundError): `BudgetCategory` does NOT
+    // have a `user` relation (the user is reachable transitively only
+    // through `BudgetCategory.budget -> Budget.user`). Filtering by a
+    // flat `user: { id: userId }` clause throws
+    // `EntityPropertyNotFoundError: Property "user" was not found in
+    // "BudgetCategory"`. Scope through the budget relation chain so
+    // both ownership and the duplicate-name lookup are honoured.
+    //
+    // Bug fix (#concurrent-insert): the in-app check above is racy
+    // — two concurrent POSTs can both pass it and both INSERT. The
+    // migration `BudgetCategoryUniqueName1800000000003` adds the
+    // storage-layer UNIQUE constraint
+    // `UQ_budget_categories_budgetId_name` so the race path fails
+    // atomically with `QueryFailedError` (SQLSTATE `23505`). The
+    // `try/catch` below translates that driver error into the same
+    // `BadRequestException` the in-app check throws, so the API
+    // contract is identical for both paths.
     const existing = await this.repo.findCategotyQuery({
       where: {
-        budget: { id: budgetId },
-        user: { id: userId },
+        budget: { id: budgetId, user: { id: userId } },
         name: dto.name,
       },
     });
@@ -114,7 +131,34 @@ export class BudgetService {
       budget: { id: budgetId } as Budget,
     };
 
-    return this.repo.createBudgetCategory(newCategory);
+    try {
+      return await this.repo.createBudgetCategory(newCategory);
+    } catch (err) {
+      // Storage-layer referee (migration 1800000000003) caught a race
+      // the in-app check missed. Surface the same `BadRequestException`
+      // the synchronous path would have produced so callers cannot tell
+      // the two apart from the API response. Anything else re-throws
+      // untouched (FK violations, connection drops, etc.).
+      //
+      // The constraint name lives in `budget-category.entity.ts` as the
+      // runtime-side authority; the migration owns the matching DDL
+      // literal but cannot import from the entity (migrations are loaded
+      // by file path). If you rename it on either side, rename in lockstep.
+      if (
+        err instanceof QueryFailedError &&
+        (err as any).code === '23505' &&
+        (err as any).constraint === BUDGET_CATEGORY_UNIQUE_CONSTRAINT_NAME
+      ) {
+        this.logger.warn(
+          `[concurrent-insert] duplicate category name "${dto.name}" ` +
+            `for budget ${budgetId} caught at DB layer`,
+        );
+        throw new BadRequestException(
+          `Category "${dto.name}" already exists for this budget`,
+        );
+      }
+      throw err;
+    }
   }
 
   async getBudgets(userId: number): Promise<Budget[]> {
@@ -168,9 +212,15 @@ export class BudgetService {
       throw new NotFoundException(`This budget does not exist`);
     }
 
-    const where: any = { user: { id: filters.userId } };
+    // Bug fix (#EntityPropertyNotFoundError): same root cause as
+    // `createBudgetCategory` above. `BudgetCategory` has no direct user
+    // relation; scope user-scoping through the `budget` relation chain.
+    // The optional `budgetId` is folded into the same `budget` clause so
+    // the resulting WHERE has the shape
+    // `{ budget: { user: { id }, [id]: ... }, [name]: ... }`.
+    const where: any = { budget: { user: { id: filters.userId } } };
     if (filters.budgetId) {
-      where.budget = { id: filters.budgetId };
+      where.budget = { ...where.budget, id: filters.budgetId };
     }
 
     if (filters.name) {

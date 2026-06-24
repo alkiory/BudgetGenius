@@ -10,7 +10,7 @@ export default function AuthLayout() {
         particleCount={50} // Personaliza el número de partículas
       />
 
-      <main className="relative z-10 flex-grow flex items-center justify-center">
+      <main className="relative z-10 flex-grow flex items-center justify-center pb-[max(env(safe-area-inset-bottom),1rem)]">
         <Outlet />
       </main>
     </div>

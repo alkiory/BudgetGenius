@@ -7,7 +7,6 @@ import {
 } from "@domain/dashboard/budgets/budget.entity";
 import Loader from "@presentation/components/loader";
 import { Button } from "@presentation/components/ui/button";
-import { Currency, currencyService } from "@presentation/utils/currencyService";
 import {
   successToast,
   errorToast,
@@ -46,11 +45,13 @@ export function BudgetDetail({
 
   const activeBudget = selectedBudget?.id;
 
+  // Bug fix (#NaN-total): initialize amounts to 0 (not `undefined`) so
+  // the totals reducer in BudgetForm / Display never produces NaN.
   const [newCategory, setNewCategory] = useState<BudgetCategory>({
     budgetId: 0,
     name: "",
-    allocated: undefined as unknown as number,
-    spent: undefined as unknown as number,
+    allocated: 0,
+    spent: 0,
   });
   const [isAddingCategory, setIsAddingCategory] = useState(false);
 
@@ -75,11 +76,12 @@ export function BudgetDetail({
       3000,
       "budget-category-add",
     );
+    // Bug fix (#NaN-total): reset amounts to 0 (not `undefined`).
     setNewCategory({
       budgetId: activeBudget ?? 0,
       name: "",
-      allocated: undefined as unknown as number,
-      spent: undefined as unknown as number,
+      allocated: 0,
+      spent: 0,
     });
     invalidate();
     refetchBudgets?.();
@@ -170,13 +172,13 @@ export function BudgetDetail({
   // Handlers optimizados con useCallback
   const onUpdateSpent = useCallback(
     (categoryId: number, spent: number) => {
-      // Normalize from display currency to USD before saving
-      const targetCurrency = (userSettings?.settings?.currency ||
-        "USD") as Currency;
-      const normalizedSpent = currencyService.normalizeAmount(
-        spent,
-        targetCurrency,
-      );
+      // Bug fix (#currency-edit-mangling): persist the user-entered amount
+      // as-is. The previous flow converted display currency → USD before
+      // saving, which broke round-trip on re-edit (2000 EUR → 2150 USD
+      // stored, then re-displayed as 2150 regardless of the user's display
+      // choice). Display paths read the value as a no-op identity
+      // conversion (source = targetCurrency).
+      const normalizedSpent = spent;
 
       // Check if new spent exceeds allocated & show friendly warning
       const category = categoryBudgets?.find((c) => c.id === categoryId);
@@ -209,13 +211,14 @@ export function BudgetDetail({
   const handleNewCategoryChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const { name, value } = e.target;
+      // Bug fix (#NaN-total): empty input maps to 0 (not `undefined`) so
+      // the totals computation never goes to NaN. The number input still
+      // renders blank because of `value={allocated ?? ""}` in the JSX.
       setNewCategory((prev) => ({
         ...prev,
         [name]:
           name === "allocated" || name === "spent"
-            ? value === ""
-              ? (undefined as unknown as number)
-              : Number(value) || 0
+            ? Number(value) || 0
             : value,
       }));
     },
@@ -227,20 +230,13 @@ export function BudgetDetail({
 
     if (newCategory.name.trim() === "" || !newCategory.allocated) return;
 
-    const targetCurrency = (userSettings?.settings?.currency ||
-      "USD") as Currency;
-
+    // Bug fix (#currency-edit-mangling): persist amount as-entered. See
+    // the matching comment in `BudgetForm.handleSubmit`.
     addBudgetCategory({
       ...newCategory,
       budgetId: activeBudget,
-      allocated: currencyService.normalizeAmount(
-        Number(newCategory.allocated) || 0,
-        targetCurrency,
-      ),
-      spent: currencyService.normalizeAmount(
-        Number(newCategory.spent) || 0,
-        targetCurrency,
-      ),
+      allocated: Number(newCategory.allocated) || 0,
+      spent: Number(newCategory.spent) || 0,
     });
   }, [user, activeBudget, newCategory, addBudgetCategory, userSettings]);
 

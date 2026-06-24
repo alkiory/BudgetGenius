@@ -47,9 +47,15 @@ export const EditableBudgetCategory: React.FC<Props> = ({
 
   const targetCurrency = (settings?.currency || "USD") as Currency;
 
+  // Bug fix (#currency-edit-mangling): previously the source currency was
+  // hardcoded to "USD" on the assumption that all amounts were normalized
+  // to USD at write-time. After un-normalizing the writes so the value is
+  // stored in the user's configured currency, the read path must read
+  // from `targetCurrency` (i.e. a no-op identity conversion that just
+  // formats the number in the user's locale).
   const formattedSpent = currencyService.formatCurrency(
     category.spent,
-    "USD" as Currency,
+    targetCurrency,
     targetCurrency,
     false,
   );

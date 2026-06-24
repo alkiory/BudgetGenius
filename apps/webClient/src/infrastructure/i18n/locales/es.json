@@ -282,7 +282,11 @@
     "healthcare": "Salud",
     "income": "Ingreso",
     "other": "Otro",
-    "gifts": "Regalos"
+    "gifts": "Regalos",
+    "freelance": "Freelance",
+    "investments": "Inversiones",
+    "rental": "Alquiler",
+    "business": "Negocio"
   },
   "incomeCategories": {
     "all": "Todas",

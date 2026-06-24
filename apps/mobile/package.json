@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "^7.5.0",
-    "@capacitor/core": "^7.6.7"
+    "@capacitor/core": "^7.6.7",
+    "@capacitor/status-bar": "^7.0.6"
   },
   "devDependencies": {
     "@capacitor/android": "^7.6.7",

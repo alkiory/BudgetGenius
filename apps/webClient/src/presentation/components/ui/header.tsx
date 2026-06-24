@@ -28,8 +28,8 @@ export default function HeaderComponent() {
     }
   };
   return (
-    <header className="border-b bg-slate-50 dark:bg-slate-800">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+    <header className="border-b bg-slate-50 dark:bg-slate-800 pt-[max(env(safe-area-inset-top),0rem)]">
+      <div className="container mx-auto flex min-h-16 items-center justify-between px-4">
         <div
           onClick={handleBack}
           className="flex items-center gap-2 cursor-pointer"

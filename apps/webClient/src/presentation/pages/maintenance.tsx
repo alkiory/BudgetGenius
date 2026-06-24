@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 export default function MaintenancePage() {
   const { t } = useTranslation();
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-12">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 pt-[max(env(safe-area-inset-top),3rem)] pb-[max(env(safe-area-inset-bottom),3rem)]">
       <div className="max-w-md text-center">
         <div className="mb-6 flex justify-center">
           <div className="rounded-full bg-purple-100 p-6">

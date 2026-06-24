@@ -21,6 +21,17 @@ const config: CapacitorConfig = {
       skipNativeAuth: false,
       providers: ['google.com'],
     },
+    // StatusBar: ensure the WebView extends behind the OS status bar so
+    // `env(safe-area-inset-*)` resolves to the correct inset on notched
+    // devices. The webClient must honor `env(safe-area-inset-top)` in
+    // its sticky header (and `safe-area-inset-bottom` in the mobile FAB).
+    // `DEFAULT` follows the OS theme; the webClient does not call
+    // `StatusBar.setStyle()` from JS yet, so a programmatic theme sync
+    // (dark/light) is still a TODO.
+    StatusBar: {
+      overlaysWebView: true,
+      style: 'DEFAULT',
+    },
   },
 };
 

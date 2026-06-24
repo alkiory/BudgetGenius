@@ -15,7 +15,7 @@ export default function HowItWorksPage() {
   return (
     <div className="min-h-screen bg-background text-primary">
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-12 bg-background">
+      <main className="container mx-auto px-4 pt-[max(env(safe-area-inset-top),3rem)] pb-[max(env(safe-area-inset-bottom),3rem)] bg-background">
         <div className="mb-8 grid md:flex items-center justify-between">
           <div>
             <Button variant="ghost" size="sm" className="mb-2">
