@@ -60,9 +60,4 @@ export const authRepository: AuthRepository = {
     return await api.get("/auth/google-callback", { params: { code } });
     // return response.data;
   },
-
-  async githubLogin() {
-    const response = await api.get("/auth/github-login");
-    return response.data;
-  },
 };

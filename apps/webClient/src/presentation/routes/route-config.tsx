@@ -5,7 +5,7 @@ import { Route, Routes } from "react-router";
 
 import LoadingPage from "@presentation/pages/loading";
 import NotFoundPage from "@presentation/pages/notFound";
-import CTAPage from "@presentation/pages/cta";
+import { RootRoute } from "@presentation/pages/splash";
 import { RoutePaths } from "@presentation/utils/routes";
 
 import ProtectedRoute from "./protected-route";
@@ -90,8 +90,10 @@ const ContactSalesPage = lazy(
 const RouteConfig = () => {
   return (
     <Routes>
-      {/* Rutas públicas */}
-      <Route path={RoutePaths.Home} element={<CTAPage />} />
+      {/* Rutas públicas. RootRoute renders either the animated SplashPage
+          (Capacitor native cold start) or the marketing CTAPage (web + every
+          subsequent visit inside the same session). */}
+      <Route path={RoutePaths.Home} element={<RootRoute />} />
       <Route element={<LandingLayout />}>
         <Route path={RoutePaths.HowItWorks} element={<HowItWorksPage />} />
         <Route

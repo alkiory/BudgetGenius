@@ -3,7 +3,6 @@ import { googleLogin } from "@application/auth/auth.service";
 import { RoutePaths } from "@presentation/utils/routes";
 import { errorToast, successToast } from "@presentation/utils/toast";
 import { useMutation } from "@tanstack/react-query";
-import { Github } from "lucide-react";
 import { useState } from "react";
 import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router";
@@ -15,7 +14,9 @@ export function SocialLoginButtons() {
 
   const [loading, setLoading] = useState(false);
 
-  // Login component
+  // The previous version of this component rendered a "GitHub" button
+  // that triggered the *same* Google mutation. GitHub login was unused
+  // and confusing, so the surface has been removed.
   const { mutate: signInWithGoogle } = useMutation({
     mutationKey: ["google-auth"],
     mutationFn: googleLogin,
@@ -43,14 +44,6 @@ export function SocialLoginButtons() {
     }
   };
 
-  const handleLoginWithGithub = () => {
-    try {
-      signInWithGoogle();
-    } catch (error) {
-      console.error("Github auth error:", error);
-    }
-  };
-
   if (loading) {
     return (
       <div className="w-full h-full flex items-center justify-center">
@@ -71,7 +64,7 @@ export function SocialLoginButtons() {
           <path
             className="opacity-75"
             fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2.93 6.364A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3.93-1.574zM12 20a8 8 0 008-8h4c0 5.627-4.373 10-10 10v-4zm6.364-2.93A7.962 7.962 0 0120 12h4c0 3.042-1.135 5.824-3 7.938l-3.636-1.868zM12 4a8 8 0 00-8 8H0c0-5.627 4.373-10 10-10v4zm2.93-.636A7.962 7.962 0 0112 4V0c3.042 0 5.824 1.135 7.938 3l-1.574 3.93z"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2.93 6.364A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3.93-1.574zM12 20a8 8 0 008-8h4c0 5.627-4.373 10-10 10v-4zm6.364-2.93A7.962 7.962 0 0120 12h4c0 3.042 1.135 5.824-3 7.938l-3.636-1.868zM12 4a8 8 0 00-8 8H0c0-5.627 4.373-10 10-10v4zm2.93-.636A7.962 7.962 0 0112 4V0c3.042 0 5.824 1.135 7.938 3l-1.574 3.93z"
           ></path>
         </svg>
       </div>
@@ -79,11 +72,11 @@ export function SocialLoginButtons() {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="flex">
       <Button
         onClick={handleLoginWithGoogle}
         variant="outline"
-        className="bg-white"
+        className="bg-white w-full"
       >
         <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
           <path
@@ -105,14 +98,6 @@ export function SocialLoginButtons() {
           <path d="M1 1h22v22H1z" fill="none" />
         </svg>
         Google
-      </Button>
-      <Button
-        onClick={handleLoginWithGithub}
-        variant="outline"
-        className="bg-white"
-      >
-        <Github className="mr-2 h-4 w-4" />
-        GitHub
       </Button>
     </div>
   );

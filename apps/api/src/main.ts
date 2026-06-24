@@ -12,6 +12,16 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 const PRODUCTION_DEFAULT_ORIGINS = [
   'https://budgetgeniusia.web.app',
   'https://budgetgeniusia.firebaseapp.com',
+  // Capacitor mobile APK origins.
+  //   - https://localhost: Capacitor 4+ with androidScheme: 'https' (current default in
+  //     apps/mobile/capacitor.config.ts). The Android WebView origin is the host loopback.
+  //   - capacitor://localhost: legacy Capacitor 2/3 scheme kept for safety in case a
+  //     future build drops back to it. We deliberately do NOT include the
+  //     cleartext `http://localhost` in production — cleartext traffic is
+  //     disabled in `apps/mobile/capacitor.config.ts` and adding it here would
+  //     let a network observer spoof a cookie-bearing request.
+  'https://localhost',
+  'capacitor://localhost',
 ];
 
 const DEV_DEFAULT_ORIGINS = [
@@ -21,6 +31,12 @@ const DEV_DEFAULT_ORIGINS = [
   'http://127.0.0.1:3001',
   // Android emulator → host alias (Capacitor dev mode via server.url)
   'http://10.0.2.2:5173',
+  // Capacitor dev modes that use the live-reload server. The native
+  // WebView origin is the host loopback under whatever scheme Capacitor
+  // picks via `server.androidScheme` (defaults to https in Capacitor 4+).
+  'https://localhost',
+  'http://localhost',
+  'capacitor://localhost',
 ];
 
 /**
