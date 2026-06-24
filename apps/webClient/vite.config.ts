@@ -13,6 +13,10 @@ import { resolve } from "path";
 // config keeps Recharts itself out of the main entry so the main bundle
 // drops below 500kB.
 export default defineConfig({
+  // base: './' es REQUERIDO para Capacitor. Los assets del build deben usar
+  // rutas relativas en lugar de absolutas porque el WebView nativo carga desde
+  // el filesystem local (file://), no desde un servidor HTTP.
+  base: './',
   plugins: [react()],
   server: {
     proxy: {
