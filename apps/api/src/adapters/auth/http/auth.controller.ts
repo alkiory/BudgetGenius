@@ -85,12 +85,34 @@ export class AuthController {
       // Tokens are passed in the URL so the Capacitor WebView can set them
       // as cookies (the httpOnly cookies set here belong to the Chrome
       // Custom Tab's cookie jar, not the WebView).
-      // Use 302 (Found) instead of 301 (Moved Permanently) because:
-      // 1. Chrome Custom Tabs may cache 301 redirects and skip intent
-      //    filter processing on subsequent requests.
-      // 2. Custom scheme redirects should never be cached as permanent.
+      //
+      // Instead of raw HTTP 302 (which Chrome Custom Tabs may not forward
+      // to the intent filter reliably), return a minimal HTML page that
+      // uses JavaScript to trigger the custom-scheme redirect.  The
+      // client-side `window.location.replace()` reliably triggers Android's
+      // intent resolution for the `bgg://` scheme, which hands off to the
+      // Capacitor app through the intent filter in AndroidManifest.xml.
       const redirectUrl = `bgg://auth/success?accessToken=${encodeURIComponent(accessToken)}&refreshToken=${encodeURIComponent(refreshToken)}`;
-      return res.redirect(302, redirectUrl);
+      return res
+        .status(200)
+        .type('text/html')
+        .send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redirecting to BudgetGenius…</title>
+<meta http-equiv="refresh" content="0;url=${redirectUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}">
+<style>
+  body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+  p { font-size: 1.1rem; opacity: 0.8; }
+</style>
+</head>
+<body>
+<p>Redirecting back to BudgetGenius…</p>
+<script>window.location.replace('${redirectUrl}');</script>
+</body>
+</html>`);
     } catch (error) {
       this.logger.error(`🚨 Falló el OAuth de Google: ${error.message}`);
       const fallbackUrl = this.configService.get<string>('NODE_ENV') === 'production'

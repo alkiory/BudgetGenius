@@ -10,12 +10,25 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     private readonly authService: AuthService,
     configService: ConfigService,
   ) {
+    // PUBLIC_API_URL is the externally-reachable base URL of this API server.
+    // It is used as the Google OAuth callback URL — Google redirects the user's
+    // browser here after authentication. Must be a URL that the end-user's device
+    // can resolve (a public domain or IP, NOT localhost/0.0.0.0) because the
+    // browser will try to reach it after the OAuth flow completes.
+    //
+    // Falls back to HOST for backward compatibility (though HOST is typically
+    // localhost and should not be used in production).
+    const publicApiUrl =
+      configService.get<string>('PUBLIC_API_URL') ||
+      configService.get<string>('HOST') ||
+      'http://localhost:3000';
+
+    const callbackURL = `${publicApiUrl}/api/auth/google-callback`;
+
     super({
       clientID: configService.get<string>('GOOGLE_CLIENT_ID'),
       clientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET'),
-      callbackURL: `${configService.get<string>(
-        'HOST',
-      )}/api/auth/google-callback`,
+      callbackURL,
       scope: ['email', 'profile'],
       // Disable built-in CSRF state to avoid session requirement.
       // We don't use sessions in this app (JWT-only).
