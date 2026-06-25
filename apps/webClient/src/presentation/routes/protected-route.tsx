@@ -1,46 +1,47 @@
 import { RootState } from "@adapters/store/rootStore";
 import MainLayout from "@presentation/layouts/main";
+import LoadingPage from "@presentation/pages/loading";
 import { RoutePaths } from "@presentation/utils/routes";
-import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
-import { Navigate, useLocation } from "react-router";
+import { Navigate } from "react-router";
 
 /**
- * A component that acts as a protected route, ensuring that only authenticated users
- * can access certain parts of the application. It checks the authentication status
- * and user information from the Redux store. If the user is not authenticated and
- * the loading state is false, it redirects to the login page. Otherwise, it renders
- * the main layout of the application.
+ * Guards `/app/*` routes.
  *
- * @returns {JSX.Element} - The main layout if authenticated, or a redirect to the login page.
+ * Two prior bugs surfaced in production:
+ * 1. A 1-second `loading` timeout that fired before `/auth/verify` could
+ *    return — slow networks bounced logged-in users to /auth/login on
+ *    refresh.
+ * 2. A polarity-bugged `if (token)` check that read
+ *    `localStorage.getItem("accessToken")` and redirected to login when
+ *    the token WAS present. The backend has long since moved tokens into
+ *    HTTP-only cookies (see api/src/infrastructure/config/cookie.service.ts
+ *    + app.module.ts cookieOptions), so the localStorage branch was dormant
+ *    but still incorrect.
+ *
+ * The new implementation waits on `state.auth.authReady`, which
+ * `useRestoreSession` flips in its `finally` block regardless of whether
+ * /auth/verify succeeded or failed. While the slice is still warming up
+ * we render the existing `LoadingPage` chrome so the dashboard never
+ * flashes an empty Outlet.
  */
 const ProtectedRoute = () => {
-  const isAuthenticated = useSelector(
-    (state: RootState) => state.auth.isAuthenticated,
+  const { isAuthenticated, user, authReady } = useSelector(
+    (state: RootState) => state.auth,
   );
-  const user = useSelector((state: RootState) => state.auth.user);
-  const [loading, setLoading] = useState(true);
-  const token = localStorage.getItem("accessToken");
-  const location = useLocation();
 
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      setLoading(false);
-    }, 1000);
-
-    return () => clearTimeout(timeout);
-  }, []);
-
-  if (!location.pathname.includes(RoutePaths.Auth || RoutePaths.App)) {
-    return <MainLayout />;
-  }
-  if (token) {
-    console.debug("No token found, redirecting to login");
-    return <Navigate to={RoutePaths.Auth + "/" + RoutePaths.Login} replace />;
+  // While the auth slice is still restoring the session, show the loading
+  // chrome instead of flashing an empty Outlet or bouncing prematurely.
+  if (!authReady) {
+    return <LoadingPage />;
   }
 
-  if (!isAuthenticated && !user && !loading) {
-    return <Navigate to={RoutePaths.Auth + "/" + RoutePaths.Login} replace />;
+  // The slice is settled — auth resolution is final. If neither
+  // `isAuthenticated` nor a cached user profile survived, redirect.
+  if (!isAuthenticated && !user) {
+    return (
+      <Navigate to={`${RoutePaths.Auth}/${RoutePaths.Login}`} replace />
+    );
   }
 
   return <MainLayout />;
