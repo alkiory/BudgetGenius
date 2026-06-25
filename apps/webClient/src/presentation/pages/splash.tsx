@@ -6,7 +6,7 @@ import { RoutePaths } from "@presentation/utils/routes";
 import { Sparkles, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router";
 
 /** Total time the splash is visible before auto-redirecting. */
@@ -25,6 +25,13 @@ export default function SplashPage() {
   const authReady = useSelector(
     (state: { auth: { authReady: boolean } }) => state.auth.authReady,
   );
+  // `dispatch` is needed to drive the auth slice from the cold-start verify:
+  // setUser + loginAction on 200, setAuthReady in finally so the splash
+  // navigation no longer has to wait the AUTH_READY_FALLBACK_MS.
+  // Without this binding the splash threw `ReferenceError: dispatch is not
+  // defined` on mobile cold start, and the ErrorBoundary then showed the
+  // ErrorPage (the "stuck on error page" symptom reported in production).
+  const dispatch = useDispatch();
 
   // Stage of the entrance animation so we can compose multiple delays.
   // 0 = pre-mount (logo hidden), 1 = logo in, 2 = tagline in, 3 = complete.
