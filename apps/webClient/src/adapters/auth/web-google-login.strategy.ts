@@ -1,12 +1,7 @@
 import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
 import { app as firebaseApp } from "@infrastructure/firebaseConfig";
 import { isNativePlatform } from "@infrastructure/platform";
-import {
-  getAuth,
-  getRedirectResult,
-  GoogleAuthProvider,
-  signInWithPopup,
-} from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import type { GoogleLoginStrategy } from "./google-login-strategy";
 
 export class WebGoogleLoginStrategy implements GoogleLoginStrategy {
@@ -17,16 +12,19 @@ export class WebGoogleLoginStrategy implements GoogleLoginStrategy {
       );
     }
 
-    // 1. SI ES UNA PLATAFORMA NATIVA (Android/iOS)
-    if (isNativePlatform()) {
+    // Doble validación: Usamos tu función nativa o verificamos si existe la interfaz global de Capacitor
+    const isMobileWebView =
+      isNativePlatform() ||
+      (typeof window !== "undefined" &&
+        (window as any).Capacitor?.isNativePlatform());
+
+    // 1. ENTORNO NATIVO (Android / iOS)
+    if (isMobileWebView) {
       try {
-        // Leemos el Web Client ID de las variables de entorno de Vite de forma segura
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
         if (!clientId) {
-          throw new Error(
-            "Falta la variable de entorno VITE_GOOGLE_CLIENT_ID",
-          );
+          throw new Error("Falta la variable de entorno VITE_GOOGLE_CLIENT_ID");
         }
 
         const result = await FirebaseAuthentication.signInWithGoogle({
@@ -46,7 +44,7 @@ export class WebGoogleLoginStrategy implements GoogleLoginStrategy {
       }
     }
 
-    // 2. ENTORNO WEB STANDARD
+    // 2. ENTORNO WEB STANDARD (Fallback)
     const auth = getAuth(firebaseApp);
     const provider = new GoogleAuthProvider();
 

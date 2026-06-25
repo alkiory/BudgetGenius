@@ -57,7 +57,7 @@ jobs:
 
       # ── Build webClient with production API URL ──────────────────────────
       - name: Build web assets
-        run: pnpm --filter frontend-web build
+        run: pnpm --filter frontend-web build --no-cache
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_APP_VERSION: ${{ steps.version.outputs.version }}

@@ -24,7 +24,7 @@ jobs:
 
       - name: Build
         # Inyectamos variables de entorno durante el build
-        run: pnpm --filter frontend-web build
+        run: pnpm --filter frontend-web build --no-cache
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_APP_VERSION: ${{ steps.version.outputs.version }}

@@ -8,14 +8,17 @@ const config: CapacitorConfig = {
   appId: 'com.budgetgenius.mobile',
   appName: 'BudgetGenius',
   webDir: '../webClient/dist',
+  android: {
+    allowMixedContent: true,
+  },
   server: DEV_MODE
     ? {
-        url: 'http://10.0.2.2:5173',
-        cleartext: true,
-      }
+      url: 'http://10.0.2.2:5173',
+      cleartext: true,
+    }
     : {
-        androidScheme: 'https',
-      },
+      androidScheme: 'https',
+    },
   plugins: {
     FirebaseAuthentication: {
       skipNativeAuth: false,
