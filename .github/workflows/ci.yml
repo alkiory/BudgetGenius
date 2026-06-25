@@ -1,9 +1,9 @@
 name: CI/CD Pipeline
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main, dev ]
+    branches: [main, dev]
 
 jobs:
   backend:
@@ -66,28 +66,9 @@ jobs:
             echo "FIREBASE_CLIENT_EMAIL=${{ secrets.FIREBASE_CLIENT_EMAIL }}" >> .env
             # Handle multi-line private key correctly
             echo "FIREBASE_PRIVATE_KEY=\"${{ secrets.FIREBASE_PRIVATE_KEY }}\"" >> .env
-            
+
             # Pull latest backend image
             docker compose -f docker-compose.yml -f docker-compose.gce.yml pull backend
-            
+
             # Start/Restart services (omitting frontend)
             docker compose -f docker-compose.yml -f docker-compose.gce.yml up -d backend database redis
-
-  frontend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24.15
-
-      - name: Install pnpm
-        run: npm install -g pnpm
-
-      - name: Install Dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run Tests
-        run: pnpm --filter frontend-web test

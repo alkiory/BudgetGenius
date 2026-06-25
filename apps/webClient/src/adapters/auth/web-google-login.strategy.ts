@@ -12,13 +12,14 @@ export class WebGoogleLoginStrategy implements GoogleLoginStrategy {
       );
     }
 
-    // Doble validación: Usamos tu función nativa o verificamos si existe la interfaz global de Capacitor
+    // Validación definitiva: Forzada por entorno estático o detección dinámica por fallback
     const isMobileWebView =
+      import.meta.env.VITE_IS_MOBILE_BUILD === "true" ||
       isNativePlatform() ||
       (typeof window !== "undefined" &&
         (window as any).Capacitor?.isNativePlatform());
 
-    // 1. ENTORNO NATIVO (Android / iOS)
+    // 1. ENTORNO NATIVO APK (Si se cumple cualquiera de las condiciones)
     if (isMobileWebView) {
       try {
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -27,6 +28,7 @@ export class WebGoogleLoginStrategy implements GoogleLoginStrategy {
           throw new Error("Falta la variable de entorno VITE_GOOGLE_CLIENT_ID");
         }
 
+        // Invocamos el puente 100% nativo de Android
         const result = await FirebaseAuthentication.signInWithGoogle({
           clientId,
         });
@@ -44,7 +46,7 @@ export class WebGoogleLoginStrategy implements GoogleLoginStrategy {
       }
     }
 
-    // 2. ENTORNO WEB STANDARD (Fallback)
+    // 2. ENTORNO WEB STANDARD
     const auth = getAuth(firebaseApp);
     const provider = new GoogleAuthProvider();
 

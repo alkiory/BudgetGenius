@@ -55,9 +55,9 @@ jobs:
         id: version
         run: echo "version=$(git describe --tags --always --dirty 2>/dev/null || git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
-      # ── Build webClient with production API URL ──────────────────────────
-      - name: Build web assets
-        run: pnpm --filter frontend-web build
+      # ── Build mobile assets with production API URL ─────────────────────
+      - name: Build mobile assets
+        run: pnpm --filter frontend-mobile build
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_APP_VERSION: ${{ steps.version.outputs.version }}
@@ -71,6 +71,7 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_MEASURENT_ID: ${{ secrets.VITE_FIREBASE_MEASURENT_ID }}
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          VITE_IS_MOBILE_BUILD: "true"
 
       # ── Sync Capacitor (copies dist/ → android/) ─────────────────────────
       - name: Sync Capacitor

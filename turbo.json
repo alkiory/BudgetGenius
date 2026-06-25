@@ -14,7 +14,8 @@
         "VITE_API_URL",
         "VITE_FIREBASE_API_KEY",
         "VITE_FIREBASE_PROJECT_ID",
-        "VITE_GOOGLE_CLIENT_ID"
+        "VITE_GOOGLE_CLIENT_ID",
+        "VITE_IS_MOBILE_BUILD"
       ]
     },
     "mobile:build": {

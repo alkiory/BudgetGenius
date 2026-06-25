@@ -444,40 +444,48 @@ export class AuthService {
       };
     }
 
-    const token = randomBytes(32).toString('hex');
-    await this.passwordResetRepository.saveToken(user.email, token);
+    // Strict FRONTEND_URL contract: a missing or malformed env var is a
+    // deployment misconfiguration and any reset email we ship would
+    // link users to the wrong (or broken) origin. Surface a 500 so an
+    // operator notices during deploy instead of silently emailing
+    // unclickable links or relying on a hardcoded fallback we can't
+    // trust across environments (mobile, web, Capacitor WebViews…).
+    // This runs BEFORE `saveToken` so a misconfigured deployment does
+    // NOT leave dangling reset tokens in the DB that cannot be redeemed
+    // (no email was ever sent).
+    const rawFrontendUrl = this.configService.get<string>('FRONTEND_URL');
 
-    // FRONTEND_URL may carry multiple comma-separated origins; we use the
-    // first (primary) to build the user-facing reset link.
-    //
-    // Defensive fallback: if FRONTEND_URL env var is unset (e.g., missing from
-    // the deployment config), fall back to the production Firebase Hosting URL
-    // rather than throwing a 500 that breaks the forgot-password flow entirely.
-    // This mirrors the same hardcoded default used in main.ts for CORS.
-    const FALLBACK_FRONTEND_URL =
-      this.configService.get<string>('NODE_ENV') === 'production'
-        ? 'https://budgetgeniusia.web.app'
-        : 'http://localhost:5173';
-
-    const primaryFrontendUrl =
-      this.configService
-        .get<string>('FRONTEND_URL')
-        ?.split(',')[0]
-        ?.trim()
-        .replace(/\/+$/, '') || FALLBACK_FRONTEND_URL;
-
-    // Validate that the URL starts with http:// or https:// to avoid
-    // shipping an email with a broken relative link. The fallback URL
-    // already satisfies this check, so this guard only fires if the env
-    // var is set to something malformed like `not-a-url`.
-    if (!/^https?:\/\//.test(primaryFrontendUrl)) {
+    if (!rawFrontendUrl) {
       this.logger.error(
-        `🚨 FRONTEND_URL is malformed ("${primaryFrontendUrl}"); aborting password reset email`,
+        `🚨 FRONTEND_URL env var is missing while handling reset for ${dto.email}`,
       );
       throw new InternalServerErrorException(
-        'FRONTEND_URL is misconfigured; cannot build the reset link.',
+        'Reset link cannot be generated at this time.',
       );
     }
+
+    // FRONTEND_URL may carry multiple comma-separated origins; we use
+    // the first (primary) to build the user-facing reset link.
+    const primaryFrontendUrl = rawFrontendUrl
+      .split(',')[0]
+      .trim()
+      .replace(/\/+$/, '');
+
+    // Validate that the URL starts with http:// or https:// to avoid
+    // shipping an email with a broken relative link. This catches
+    // misconfigured values like `not-a-url` that would otherwise pass
+    // the empty-string guard.
+    if (!/^https?:\/\//.test(primaryFrontendUrl)) {
+      this.logger.error(
+        `🚨 FRONTEND_URL is malformed ("${primaryFrontendUrl}") while handling reset for ${dto.email}`,
+      );
+      throw new InternalServerErrorException(
+        'Reset link cannot be generated at this time.',
+      );
+    }
+
+    const token = randomBytes(32).toString('hex');
+    await this.passwordResetRepository.saveToken(user.email, token);
 
     const resetUrl = `${primaryFrontendUrl}/auth/reset-password?token=${token}`;
 
