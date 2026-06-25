@@ -6,25 +6,45 @@
       "cache": false
     },
     "build": {
-      "outputs": ["dist/**"],
-      "outputLogs": "new-only"
+      "outputs": [
+        "dist/**"
+      ],
+      "outputLogs": "new-only",
+      "env": [
+        "VITE_API_URL",
+        "VITE_FIREBASE_API_KEY",
+        "VITE_FIREBASE_PROJECT_ID",
+        "VITE_GOOGLE_CLIENT_ID"
+      ]
     },
     "mobile:build": {
-      "dependsOn": ["^build"],
-      "outputs": ["android/app/build/outputs/**"],
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "android/app/build/outputs/**"
+      ],
       "outputLogs": "new-only"
     },
     "check-types": {
-      "dependsOn": ["^check-types"]
+      "dependsOn": [
+        "^check-types"
+      ]
     },
     "test": {
-      "dependsOn": ["^test"]
+      "dependsOn": [
+        "^test"
+      ]
     },
     "test:e2e": {
-      "dependsOn": ["^test:e2e"]
+      "dependsOn": [
+        "^test:e2e"
+      ]
     },
     "test:cov": {
-      "dependsOn": ["^test:cov"]
+      "dependsOn": [
+        "^test:cov"
+      ]
     }
   }
 }
