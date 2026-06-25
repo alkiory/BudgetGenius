@@ -1,5 +1,14 @@
 # BudgetGenius Changelog
 
+## [v1.1.1] — 2026-06-25
+
+### Fixed
+- **CI build failure** — Rollup failed to resolve `@capacitor/app` from `useBackendOAuthReturn.ts`. Added `@capacitor/app` and `@capacitor/browser` to `rollupOptions.external` in `apps/webClient/vite.config.ts` so these Capacitor-native plugins (only present at runtime in the WebView) are not resolved during the web build.
+- **Mobile Google login — app not re-opening after OAuth** — `@capacitor/app` was missing from `apps/mobile/package.json`, so `App.addListener('appUrlOpen')` silently failed and the app never received the `bgg://auth/success` deep link redirect. Added `@capacitor/app@^7.1.2` and pinned `@capacitor/browser` from `^8.0.3` (incompatible with `@capacitor/core` v7) to `^7.0.5`.
+- **Google OAuth redirect HTTP status** — Changed `res.redirect(301, …)` → `res.redirect(302, …)` in `apps/api/src/adapters/auth/http/auth.controller.ts`. Chrome Custom Tabs can cache 301 redirects, causing subsequent auth attempts to skip the intent filter that re-opens the app.
+
+---
+
 ## [v1.1.0] — 2026-06-25
 
 > Session: Bug fixes & Mobile FAB — June 2026

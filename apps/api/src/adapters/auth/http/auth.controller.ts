@@ -85,8 +85,12 @@ export class AuthController {
       // Tokens are passed in the URL so the Capacitor WebView can set them
       // as cookies (the httpOnly cookies set here belong to the Chrome
       // Custom Tab's cookie jar, not the WebView).
+      // Use 302 (Found) instead of 301 (Moved Permanently) because:
+      // 1. Chrome Custom Tabs may cache 301 redirects and skip intent
+      //    filter processing on subsequent requests.
+      // 2. Custom scheme redirects should never be cached as permanent.
       const redirectUrl = `bgg://auth/success?accessToken=${encodeURIComponent(accessToken)}&refreshToken=${encodeURIComponent(refreshToken)}`;
-      return res.redirect(301, redirectUrl);
+      return res.redirect(302, redirectUrl);
     } catch (error) {
       this.logger.error(`🚨 Falló el OAuth de Google: ${error.message}`);
       const fallbackUrl = this.configService.get<string>('NODE_ENV') === 'production'

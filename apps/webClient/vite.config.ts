@@ -58,6 +58,13 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 500,
     rollupOptions: {
+      // Capacitor native plugins are only available inside the Capacitor
+      // WebView at runtime — they are not installed in the webClient's
+      // node_modules. Mark them as external so Rollup leaves the dynamic
+      // import() calls as-is instead of failing to resolve them.
+      // At runtime, isNativePlatform() guards ensure these imports are
+      // only executed in the Capacitor context where the plugins exist.
+      external: ["@capacitor/app", "@capacitor/browser"],
       output: {
         manualChunks(id) {
           if (id.includes("/recharts/")) {
