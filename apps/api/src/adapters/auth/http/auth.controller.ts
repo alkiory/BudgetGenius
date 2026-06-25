@@ -30,6 +30,9 @@ import {
 import { LoginDto } from '@application/auth/dto/login.dto';
 import { CookieService } from '@infrastructure/config/cookie.service';
 
+/** 7 días en milisegundos — coincide con el JWT expiry del refreshToken. */
+const REFRESH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
@@ -64,7 +67,9 @@ export class AuthController {
         await this.authService.oauthLogin(firebaseUser);
 
       this.cookieService.setCookie(res, 'accessToken', accessToken);
-      this.cookieService.setCookie(res, 'refreshToken', refreshToken);
+      this.cookieService.setCookie(res, 'refreshToken', refreshToken, {
+        maxAge: REFRESH_COOKIE_MAX_AGE,
+      });
 
       this.logger.log(
         `🔓 Login con Firebase exitoso para: ${firebaseUser.email}`,
@@ -120,8 +125,9 @@ export class AuthController {
         role: signupDTO.role ?? 'user',
       });
 
-    this.cookieService.setCookie(res, 'accessToken', accessToken);
-    this.cookieService.setCookie(res, 'refreshToken', refreshToken);
+    this.cookieService.setCookie(res, 'accessToken', accessToken);      this.cookieService.setCookie(res, 'refreshToken', refreshToken, {
+        maxAge: REFRESH_COOKIE_MAX_AGE,
+      });
 
     if (isNewUser) {
       this.logger.log(`🪪 Registering new user: ${signupDTO.email}`);
@@ -193,8 +199,9 @@ export class AuthController {
   ) {
     const result = await this.authService.login(body.email, body.password);
 
-    this.cookieService.setCookie(res, 'accessToken', result.accessToken);
-    this.cookieService.setCookie(res, 'refreshToken', result.refreshToken);
+    this.cookieService.setCookie(res, 'accessToken', result.accessToken);    this.cookieService.setCookie(res, 'refreshToken', result.refreshToken, {
+        maxAge: REFRESH_COOKIE_MAX_AGE,
+      });
 
     return {
       user: result.user,
@@ -282,7 +289,9 @@ export class AuthController {
       );
 
       this.cookieService.setCookie(res, 'accessToken', newAccessToken);
-      this.cookieService.setCookie(res, 'refreshToken', token);
+      this.cookieService.setCookie(res, 'refreshToken', token, {
+        maxAge: REFRESH_COOKIE_MAX_AGE,
+      });
 
       return { success: true };
     } catch (error) {
