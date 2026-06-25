@@ -3,6 +3,7 @@ import { useMobile } from "@adapters/hooks/useMobile";
 import { logoutAction } from "@adapters/slices/auth/authSlice";
 import { RootState } from "@adapters/store/rootStore";
 import { logout } from "@application/auth/auth.service";
+import { AddTransactionModal } from "@presentation/components/dashboard/transaction/add-transaction-modal";
 import { RoutePaths } from "@presentation/utils/routes";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -11,6 +12,7 @@ import {
   DollarSign,
   Home,
   PieChart,
+  Plus,
   Settings,
   Wallet,
   LogOut,
@@ -125,6 +127,19 @@ export function DashboardSidebar() {
 
   return (
     <>
+      {/* FAB — botón flotante "+" para agregar transacción (solo móvil) */}
+      {isMobile && (
+        <div className="fixed bottom-[calc(max(env(safe-area-inset-bottom),1rem)+4.5rem)] right-4 z-40 md:hidden">
+          <AddTransactionModal
+            trigger={
+              <button className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-purple-600 to-fuchsia-600 text-white shadow-xl transition-all duration-200 hover:shadow-2xl hover:scale-105 active:scale-95">
+                <Plus className="h-7 w-7" strokeWidth={2.5} />
+              </button>
+            }
+          />
+        </div>
+      )}
+
       {/* Botón de toggle para móvil */}
       <button
         onClick={toggleSidebar}          className={`
@@ -195,6 +210,7 @@ export function DashboardSidebar() {
                   to={item.href}
                   className={getLinkClasses(item, isActive)}
                   title={isCollapsed ? label : ""}
+                  onClick={closeSidebar}
                 >
                   <item.icon
                     className={getIconClasses(item, isActive)}

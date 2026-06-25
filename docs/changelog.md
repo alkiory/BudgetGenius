@@ -1,5 +1,125 @@
 # BudgetGenius Changelog
 
+> Session: Bug fixes & Mobile FAB — June 2026
+
+---
+
+## Overview
+
+Bug-fix and mobile UX session covering four production bugs, a `base` config regression, and two mobile-sidebar enhancements.
+
+| Front | Outcome |
+|-------|---------|
+| `ReferenceError: Cannot access 'O' before initialization` | TDZ in `useLoadUser.tsx` — Promise referenced itself inside its own executor |
+| Google logo SVG corruption | Yellow stripe in the Google button rendered as a broken path (`143.35` → `1.43`) |
+| Page refresh blank (MIME type error) | `base: './'` caused deep-link refreshes to resolve assets to wrong paths |
+| Usuario null tras login | `login.tsx` ignored `data.user` in `onSuccess`, leaving `state.auth.user = null` |
+| Mobile FAB | Floating "+" button for Add Transaction, positioned above the sidebar toggle on mobile |
+| Sidebar auto-hide on link click | Navigation links now call `closeSidebar()` so mobile sidebar closes on navigation |
+| `AddTransactionModal trigger` bug | Modal never rendered when using the `trigger` prop — affected both the new FAB and the existing `incomePage.tsx` |
+
+---
+
+## Bug fixes
+
+### 1. TDZ in useRestoreSession (`Cannot access 'O' before initialization`)
+
+**File:** `apps/webClient/src/adapters/hooks/useLoadUser.tsx`
+
+The `verifyTimeout` Promise referenced itself via `(verifyTimeout as ...)._clear = ...` inside its own executor callback. Since `const` declarations are in the Temporal Dead Zone until the Promise constructor returns, and the executor runs synchronously inside the constructor, accessing the variable before initialization caused a `ReferenceError`. In production the minifier renamed `verifyTimeout` to `O`, producing the error `Cannot access 'O' before initialization`.
+
+**Fix:** Extracted the cleanup function to a separate `let clearVerifyTimeout` variable.
+
+### 2. Google logo SVG path corruption
+
+**File:** `apps/webClient/src/presentation/components/social-buttons-login.tsx`
+
+The third SVG path had `d="…s.13-143.35-2.09V7.07…"` — the intended value was `.13-1.43-2.09`. A collapsed newline merged `.13-1.43` into `.13-143.35`, breaking the yellow stripe of the Google logo.
+
+**Fix:** Corrected `143.35` → `1.43`.
+
+### 3. Page refresh blank — MIME type error on deep links
+
+**File:** `apps/webClient/vite.config.ts`
+
+The config used `base: './'` unconditionally. On a fresh page load at `/app/dashboard`, the browser resolved `./assets/index-xxx.js` relative to the current URL → `/app/dashboard/assets/index-xxx.js`. The server served HTML instead of JS, causing `Failed to load module script: Expected a JavaScript-or-Wasm module script but the server responded with a MIME type of "text/html"`.
+
+**Fix:** Changed to `base: process.env.VITE_CAPACITOR === 'true' ? './' : '/'`. Web builds (Vercel/nginx) use `'/'`; Capacitor builds use `'./'`.
+
+**Supporting changes:**
+- `apps/mobile/package.json` — build script now sets `VITE_CAPACITOR=true`
+- `.github/workflows/build-apk.yml` — CI build step sets `VITE_CAPACITOR: 'true'`
+
+### 4. Usuario null tras login email/password
+
+**File:** `apps/webClient/src/presentation/pages/auth/login.tsx`
+
+The backend `/auth/login` endpoint returns `{ user, message }`, but `onSuccess: () => { dispatch(loginAction()); … }` ignored the response data. Only `isAuthenticated` was flipped to `true`; `state.auth.user` stayed `null`. Dashboard components reading `state.auth.user` broke on a fresh login.
+
+**Fix:** Added `dispatch(setUser(data.user))` in `onSuccess`, mirroring the pattern used by `splash.tsx` and `useFirebaseRedirectReturn`.
+
+---
+
+## Mobile UX enhancements
+
+### 5. Floating Action Button (FAB) for Add Transaction
+
+**File:** `apps/webClient/src/presentation/components/dashboard/sidebar.tsx`
+
+Added a floating "+" button on mobile, positioned at the bottom-right, 4.5rem above the sidebar toggle button. Uses `AddTransactionModal` with a custom trigger styled as a large purple gradient circular button.
+
+Hidden on desktop; only visible on mobile via `isMobile` guard.
+
+### 6. Sidebar auto-hide on navigation link click
+
+**File:** `apps/webClient/src/presentation/components/dashboard/sidebar.tsx`
+
+Added `onClick={closeSidebar}` to every `<Link>` in the sidebar navigation. On desktop, `closeSidebar()` is a no-op (the context checks `isMobile` internally).
+
+### 7. Header hides its "+" on mobile
+
+**File:** `apps/webClient/src/presentation/components/dashboard/header.tsx`
+
+The `AddTransactionModal isHeader` is now wrapped in `<div className="hidden md:block">` so it does not appear alongside the FAB on small screens.
+
+---
+
+## Critical component bug fix
+
+### 8. AddTransactionModal — Modal never rendered with `trigger` prop
+
+**File:** `apps/webClient/src/presentation/components/dashboard/transaction/add-transaction-modal.tsx`
+
+The `<Modal>` component was rendered only inside the `!isHeader` and `isHeader` branches of the ternary. The `trigger` branch (added in Phase 3 T3.7) returned the cloned trigger element with an `onClick` that called `setIsOpen(true)`, but the Modal was never rendered — clicking the trigger silently set state with no visible effect.
+
+This bug affected both the new FAB `trigger` usage and the existing `incomePage.tsx` which had been using `<AddTransactionModal trigger={…}>` since Phase 3.
+
+**Fix:** Extracted the `<Modal>` outside the ternary so it renders whenever `isOpen=true`, regardless of which branch activated the state.
+
+---
+
+## Files changed
+
+| File | Change |
+|------|--------|
+| `apps/webClient/src/adapters/hooks/useLoadUser.tsx` | TDZ fix: self-referencing Promise → `let` variable |
+| `apps/webClient/src/presentation/components/social-buttons-login.tsx` | SVG path: `143.35` → `1.43` |
+| `apps/webClient/vite.config.ts` | `base:` conditional on `VITE_CAPACITOR` |
+| `apps/mobile/package.json` | Build script sets `VITE_CAPACITOR=true` |
+| `.github/workflows/build-apk.yml` | CI env adds `VITE_CAPACITOR: 'true'` |
+| `apps/webClient/src/presentation/pages/auth/login.tsx` | `dispatch(setUser(data.user))` in `onSuccess` |
+| `apps/webClient/src/presentation/components/dashboard/sidebar.tsx` | FAB added, `onClick={closeSidebar}` on nav links |
+| `apps/webClient/src/presentation/components/dashboard/header.tsx` | `hidden md:block` around header AddTransactionModal |
+| `apps/webClient/src/presentation/components/dashboard/transaction/add-transaction-modal.tsx` | Modal moved outside ternary (fixes `trigger` bug) |
+
+---
+
+## Quality gates
+
+- ✅ Frontend `tsc --noEmit` clean
+- 🟡 Backend untouched in this session
+- 🟡 Frontend Playwright — not re-run (changes are layout-only + TDZ; auth flow unchanged)
+
 > Session: MVP Launch Refactor — Phase 2, UI Deduplication & ESLint Cleanup — June 2026
 
 ---

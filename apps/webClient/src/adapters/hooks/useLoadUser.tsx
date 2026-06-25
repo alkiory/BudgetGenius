@@ -68,19 +68,23 @@ const useRestoreSession = () => {
           _retry: true,
           timeout: VERIFY_TIMEOUT_MS,
         });
+        // ⚠ DO NOT reference `verifyTimeout` inside its own executor — that
+        // creates a Temporal Dead Zone access. The `const` is not initialised
+        // until the Promise constructor returns, but the executor runs
+        // synchronously inside the constructor. In development this happens to
+        // work because V8 defers the ._clear assignment far enough; in
+        // production the minifier renames `verifyTimeout` to `O` and the TDZ
+        // access throws `ReferenceError: Cannot access 'O' before initialization`.
+        let clearVerifyTimeout: (() => void) | undefined;
         const verifyTimeout = new Promise<never>((_, reject) => {
           const t = setTimeout(
             () => reject(new Error("verify-session deadline exceeded")),
             VERIFY_TIMEOUT_MS + 1000,
           );
-          // The promise chain's own `.finally` clears the wall-clock timer.
-          // We don't await here; cleanup happens inside the try block.
-          (verifyTimeout as unknown as { _clear?: () => void })._clear = () =>
-            clearTimeout(t);
+          clearVerifyTimeout = () => clearTimeout(t);
         });
         const response = await Promise.race([verifyPromise, verifyTimeout]);
-        // Clear the wall-clock deadline now that the verify settled.
-        (verifyTimeout as unknown as { _clear?: () => void })._clear?.();
+        clearVerifyTimeout?.();
 
         if (response.status === 200) {
           const userProfile = await api.get("/user/profile", {

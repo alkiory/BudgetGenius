@@ -60,13 +60,17 @@ export function AddTransactionModal({
     });
   };
 
+  const modalTitle = !trigger && !isHeader
+    ? ""
+    : t("transactions.addNewTransaction");
+
   return (
     <>
       {trigger ? (
         // Phase 3 (T3.7): caller-provided trigger element (e.g. the
         // income-page "Add Income" button). Compose onClick rather
         // than overwrite so any pre-existing handler on the trigger
-        // element continues to fire \u2014 e.g. an analytics hook,
+        // element continues to fire — e.g. an analytics hook,
         // a parent anchor, or a future caller's own click target.
         isValidElement(trigger) ? (
           cloneElement(
@@ -91,46 +95,41 @@ export function AddTransactionModal({
           </Button>
         )
       ) : !isHeader ? (
-        <>
-          <Button
-            variant="primary"
-            onClick={() => setIsOpen(true)}
-            size="lg"
-            className="inline-flex items-center gap-2 px-6 py-2.5 text-base font-semibold shadow-md hover:shadow-lg transition-all"
-          >
-            <Plus className="h-5 w-5" />
-            {t("transactions.addTransaction")}
-          </Button>
-
-          <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="">
-            <AddTransactionForm
-              onSubmit={handleAddTransaction}
-              onCancel={() => setIsOpen(false)}
-            />
-          </Modal>
-        </>
+        <Button
+          variant="primary"
+          onClick={() => setIsOpen(true)}
+          size="lg"
+          className="inline-flex items-center gap-2 px-6 py-2.5 text-base font-semibold shadow-md hover:shadow-lg transition-all"
+        >
+          <Plus className="h-5 w-5" />
+          {t("transactions.addTransaction")}
+        </Button>
       ) : (
-        <>
-          <Button
-            variant="primary"
-            onClick={() => setIsOpen(true)}
-            size="icon"
-            className="rounded-full bg-purple-50 p-1 text-purple-600 hover:text-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:bg-slate-800 dark:text-purple-400 dark:hover:text-purple-300"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-          <Modal
-            isOpen={isOpen}
-            onClose={() => setIsOpen(false)}
-            title={t("transactions.addNewTransaction")}
-          >
-            <AddTransactionForm
-              onSubmit={handleAddTransaction}
-              onCancel={() => setIsOpen(false)}
-            />
-          </Modal>
-        </>
+        <Button
+          variant="primary"
+          onClick={() => setIsOpen(true)}
+          size="icon"
+          className="rounded-full bg-purple-50 p-1 text-purple-600 hover:text-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:bg-slate-800 dark:text-purple-400 dark:hover:text-purple-300"
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
       )}
+
+      {/* Modal — siempre renderizado cuando isOpen=true, independientemente
+          de qué branch (trigger / default / isHeader) abrió el estado. Sin
+          esto, usar el prop `trigger` activaba setIsOpen(true) pero el Modal
+          nunca aparecía porque solo se renderizaba dentro de los branches
+          !isHeader e isHeader. */}
+      <Modal
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        title={modalTitle}
+      >
+        <AddTransactionForm
+          onSubmit={handleAddTransaction}
+          onCancel={() => setIsOpen(false)}
+        />
+      </Modal>
     </>
   );
 }

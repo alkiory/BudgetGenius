@@ -5,7 +5,7 @@
   "type": "module",
   "author": "Alkiory",
   "scripts": {
-    "build": "pnpm --filter frontend-web build && npx cap sync",
+    "build": "VITE_CAPACITOR=true pnpm --filter frontend-web build && npx cap sync",
     "build:android": "npx cap sync && npx cap open android",
     "sync": "npx cap sync",
     "dev:android": "CAP_DEV=true npx cap sync"

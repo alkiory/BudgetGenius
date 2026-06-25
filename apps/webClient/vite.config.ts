@@ -2,21 +2,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import { resolve } from "path";
 
-// https://vite.dev/config/
-// Phase 6 (T6.7 + T6.8): the dashboard bundle was crossing Vite's
-// 500kB chunk-size warning because Recharts (~150kB minified) was
-// eagerly bundled into the main entry. Combined with the
-// `React.lazy()`-loaded ReportsPage in route-config.tsx, this
-// manualChunks split carves Recharts and Firebase out into vendor
-// chunks that load on demand. The T6.6 `React.lazy()` on ReportsPage
-// keeps the Reports tree out of the main entry; this manualChunks
-// config keeps Recharts itself out of the main entry so the main bundle
-// drops below 500kB.
 export default defineConfig({
-  // base: './' es REQUERIDO para Capacitor. Los assets del build deben usar
-  // rutas relativas en lugar de absolutas porque el WebView nativo carga desde
-  // el filesystem local (file://), no desde un servidor HTTP.
-  base: './',
+  base: process.env.VITE_CAPACITOR === 'true' ? './' : '/',
   plugins: [react()],
   server: {
     proxy: {
@@ -60,20 +47,9 @@ export default defineConfig({
     },
   },
   build: {
-    // Phase 6.8: with every protected/auth/public-chrome route now
-    // lazy-loaded (route-config.tsx), the main entry's remaining
-    // weight lives in the state/router/i18n libs. Carving each one
-    // into its own vendor chunk drops the main entry below 500 kB and
-    // restores the threshold as a real regression signal.
     chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
-        // Phase 6 (T6.8): explicit vendor splitting so heavy 3rd-party
-        // modules don't inflate the main bundle. The substring match
-        // works for both flat `node_modules/<pkg>/...` and the pnpm
-        // isolated layout `node_modules/.pnpm/<pkg>@x.y/node_modules/
-        // <pkg>/...` because the resolved `id` always contains the
-        // actual package directory.
         manualChunks(id) {
           if (id.includes("/recharts/")) {
             return "vendor-recharts";

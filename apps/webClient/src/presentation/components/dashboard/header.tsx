@@ -15,7 +15,9 @@ export function DashboardHeader() {
     <header className="sticky top-0 z-10 flex min-h-16 pt-[max(env(safe-area-inset-top),0.5rem)] md:pt-0 flex-shrink-0 border-b bg-white dark:bg-slate-950 dark:border-slate-800">
       <div className="flex flex-1 justify-end px-4">
         <div className="flex items-center gap-3">
-          <AddTransactionModal isHeader />
+          <div className="hidden md:block">
+            <AddTransactionModal isHeader />
+          </div>
           <div className="ml-3">
             <ThemeToggle />
           </div>

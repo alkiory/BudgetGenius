@@ -1,4 +1,4 @@
-import { loginAction } from "@adapters/slices/auth/authSlice";
+import { loginAction, setUser } from "@adapters/slices/auth/authSlice";
 import { login } from "@application/auth/auth.service";
 import { SocialLoginButtons } from "@presentation/components/social-buttons-login";
 import { Button } from "@presentation/components/ui/button";
@@ -33,7 +33,13 @@ export default function LoginPage() {
   const { mutate: loginMutation } = useMutation({
     mutationKey: ["login"],
     mutationFn: login,
-    onSuccess: () => {
+    onSuccess: (data: any) => {
+      // The backend returns `{ user, message }` from /auth/login.
+      // Populate the store immediately so dashboard components don't
+      // break while useRestoreSession's /user/profile is still in-flight.
+      if (data?.user) {
+        dispatch(setUser(data.user));
+      }
       dispatch(loginAction());
       setLoading(true);
       setTimeout(() => {
