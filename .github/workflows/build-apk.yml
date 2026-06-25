@@ -87,11 +87,11 @@ jobs:
           cd apps/mobile/android
           ./gradlew assembleDebug
 
-      # ── Upload APK as artifact ───────────────────────────────────────────
-      - name: Upload APK
+      # ── Upload APK as artifact (name includes version) ─────────────────
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: budgetgenius-debug
+          name: budgetgenius-debug-${{ steps.version.outputs.version }}
           path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
           if-no-files-found: error
@@ -113,7 +113,7 @@ jobs:
         if: ${{ github.ref == 'refs/heads/main' && env.HAS_KEYSTORE_SECRET != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: budgetgenius-release
+          name: budgetgenius-release-${{ steps.version.outputs.version }}
           path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
           if-no-files-found: warn
