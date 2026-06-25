@@ -402,6 +402,72 @@ All routes use the `RoutePaths` enum from `presentation/utils/routes.ts`. New ro
 2. Add route definition to `route-config.tsx`
 3. Place under `ProtectedRoute` for authenticated, `PremiumRoute` for premium
 
+### 6.8 react-redux Pitfalls (read before touching any `useSelector`)
+
+**The bug class.** React-Redux v9 (`useSelector`) is backed by React 19's
+`useSyncExternalStore`, which compares the selector's current result to the
+previous one via `Object.is`. If the selector returns a fresh reference on
+every call (a new object, array, or anything `!==` the prior value),
+React's "getSnapshot should be cached" guard fires and the component falls
+into a render loop (or renders nothing under StrictMode). This bug bit us
+in `apps/webClient/src/presentation/routes/protected-route.tsx` on 2026-06
+after a rewrite that combined three auth slice fields into one selector —
+production symptom was that `/app/*` routes simply stopped painting on
+hard refresh.
+
+**Rule of thumb.** When you need more than one field from the same slice,
+default to one leaf selector per field. Only fall back to a single object
+select when you genuinely cannot split it, and in that case pass
+`shallowEqual` as the second argument to `useSelector`.
+
+```tsx
+// ❌ WRONG — returns a fresh object every render; trips StrictMode.
+const { isAuthenticated, user, authReady } = useSelector(
+  (state: RootState) => state.auth,
+);
+
+// ❌ WRONG — inline object literal; same "new ref every render" failure.
+const view = useSelector((state: RootState) => ({
+  user: state.auth.user,
+  locale: state.userSettings.settings.locale,
+}));
+
+// ✅ RIGHT — three leaf selectors; each is `===`-stable until its own
+// field mutates, so unrelated dispatches don't trigger re-renders.
+const isAuthenticated = useSelector(
+  (state: RootState) => state.auth.isAuthenticated,
+);
+const user = useSelector((state: RootState) => state.auth.user);
+const authReady = useSelector((state: RootState) => state.auth.authReady);
+
+// ✅ ALSO RIGHT — when grouping > ~3 fields is unavoidable, opt in to
+// shallow comparison so a value-equality update triggers re-render.
+import { shallowEqual, useSelector } from "react-redux";
+const view = useSelector(
+  (state: RootState) => ({
+    user: state.auth.user,
+    locale: state.userSettings.settings.locale,
+    currency: state.userSettings.settings.currency,
+  }),
+  shallowEqual,
+);
+```
+
+**What is *not* a bug.** Whole-slice selectors like
+`useSelector((state) => state.userSettings)` followed by a destructure
+(`const { settings } = userSetting`) are safe in this codebase because
+Redux Toolkit uses Immer, which preserves a slice's reference until a
+mutation actually touches that path. The ~15 call sites in
+`apps/webClient/src/presentation/components/**` that read
+`userSettings` and pull out `.settings` (then `.currency`, `.locale`,
+etc.) follow this pattern and are fine — they re-render only when
+something inside that slice genuinely changes.
+
+**Lint hook (TODO).** There is no ESLint rule yet that flags inline
+object literals inside `useSelector`. Adding `react-redux/no-new-object-selectors`
+(or a hand-rolled `no-restricted-syntax` AST rule) would catch this in CI
+before it ships — see the open follow-up.
+
 ---
 
 ## 7. Development Workflow
@@ -700,6 +766,7 @@ Ambiguity → [Research] → [Plan] → [Implement] → Outcome
 - `finance.entity.ts` is referenced in the project tree but no longer exists
 - Test coverage is limited (3 backend unit spec files + 3 frontend E2E spec files, 30 total tests) — all existing tests pass
 - No database seed data for development (only a `UserSeederService` placeholder)
+- **Protected-route infinite-render outage (2026-06):** a rewrite of `apps/webClient/src/presentation/routes/protected-route.tsx` collapsed three auth slice fields into a single `useSelector((s) => s.auth)` and React 19 + StrictMode tripped React's `getSnapshot should be cached` guard, leaving `/app/*` routes blank on hard refresh. Fixed by splitting into three leaf selectors; codified as §6.8 so the next combined-slice selector gets caught pre-merge.
 
 ---
 
@@ -732,5 +799,5 @@ Your first task is ONLY the Research phase. Analyze the codebase to clarify scop
 
 ---
 
-*Last updated: 2026-06-12*
+*Last updated: 2026-06-25*
 *Maintainers: Alkiory, Sergio Campbell*

@@ -287,4 +287,113 @@ The constraint mirrors the in-app check exactly: `name: dto.name` is a case-sens
 
 `down()` drops the constraint **only**, not the duplicate rows removed by step 1. Postgres has no audit trail of which rows the dedupe removed, so reverting cannot restore the typo-duplicates a user already saw disappear. Recovery path: re-apply the migration upward (+ succeed) or make a manual DML pass to recreate the rows from a backup. This is the correct trade-off because `migration:revert` is intended as a schema recovery tool, not a data-time-machine.
 
+---
+
+# Auth Slice + Splash + Protected-Route Hardening — June 2026
+
+> Predecessor session: Budget Category Name Uniqueness — Storage Layer (above). This entry consolidates the production-bug cycle that closed two mobile APK outages (cold-start white screen; mobile Google login unavailable) and a web refresh outage (`/app/*` blank on hard refresh), plus the meta-deliverable that prevents the worst of those from re-recurring.
+
+## Root causes (four production bugs, one bad assumption)
+
+| # | Symptom | Root cause |
+|---|---------|------------|
+| 1 | Mobile cold-start shows the marketing landing page instantly; returning users with valid refresh cookies land on `/auth/login` because the splash routed before `/auth/verify` returned | `RootRoute` did not exist; `/` mapped directly to `<CTAPage />`. Combined with no `authReady` flag in the auth slice, the splash had no signal to wait on. |
+| 2 | Mobile webview never authenticates with Google — `"No Credentials available"` (Capacitor native plugin error) | `NativeGoogleLoginStrategy` calls `FirebaseAuthentication.signInWithGoogle()`. The plugin requires `google-services.json` + SHA fingerprints in the Android project; none were committed, so the native SDK rejects every credential. |
+| 3 | Web `window.location.href` redirect after 401+refresh-fail races the React render tree — under React 19 StrictMode some screens render empty | `api.config.ts` interceptor's `_retry` guard only stops the *first* 401/refresh cycle; `useRestoreSession` was calling `/auth/verify` without `_retry: true`, so the cascade entered an infinite pre-redirect loop on protected routes. |
+| 4 | After the v1 fix for #3, `protected-route.tsx` sometimes painted blank on hard refresh; production screenshot looked like a hard-coded `null` | `useSelector((state) => state.auth)` returned a freshly destructured `{isAuthenticated, user, authReady}` on every render. React 19's `useSyncExternalStore` does `Object.is` on the prior snapshot; the new reference tripped React's `getSnapshot should be cached` guard and the component bailed out of rendering under StrictMode. |
+
+The fifth item is a *style* defect, not a bug, but it's the reason #4 resurfaced during a fix cycle and shipped — there was no documented convention that whole-slice destructures vs leaf selectors are *not* equivalent under react-redux 9.x + React 19. That gap is closed by §6.8 below.
+
+## Fixes by front
+
+### Mobile splash on cold start (`isNativePlatform()` branch of RootRoute)
+
+| File | Change |
+|------|--------|
+| `apps/webClient/src/infrastructure/platform.ts` | **NEW** helper exporting `isNativePlatform()` — checks (in order) `window.Capacitor?.isNativePlatform?.()`, then a URL-scheme + Android-UA fallback for Capacitor 4+ with `androidScheme: 'https'`. Vite tree-shake concern motivates the redundant fallback so `useNativePlatform()` keeps working even when `@capacitor/core` is tree-shaken from the main entry. |
+| `apps/webClient/src/presentation/pages/splash.tsx` | **NEW** `SplashPage` with 3-stage logo entrance (`stage` 0→1→2→3 at 60/320/1800 ms transitions) and an auto-redirect effect. **NEW** named export `RootRoute` — returns `<SplashPage />` only when `isNativePlatform() === true` AND `sessionStorage.mobile.splash.shown !== "1"`; otherwise `<CTAPage />`. Returning a JSON property from `RootRoute` instead of gating CTAPage gives cold-start users the brand-marked loading chrome but skips it on every subsequent visit (and on web). |
+| `apps/webClient/src/presentation/routes/route-config.tsx` | `/` route mapped to `<RootRoute />` instead of `<CTAPage />`. |
+
+### CORS for Capacitor mobile origins
+
+| File | Change |
+|------|--------|
+| `apps/api/src/main.ts` | `PRODUCTION_DEFAULT_ORIGINS` now includes `https://localhost`, `capacitor://localhost`, plus the Firebase-Hosting hostnames (`budgetgeniusia.web.app`, `budgetgeniusia.firebaseapp.com`). DEV-side mirror added to `DEV_DEFAULT_ORIGINS`. **Explicitly NOT** `http://localhost` in production — Capacitor's `androidScheme: 'https'` means the WebView origin is `https://localhost`, and cleartext `http://localhost` would weaken the production CSP. |
+
+### Capacitor tree-shake guard
+
+| File | Change |
+|------|--------|
+| `apps/webClient/src/main.tsx` | Added `import "@capacitor/core";` as a side-effect-only import. Without it, Vite's prod bundle does not include `@capacitor/core` (no module imports it transitively from the entry), so the native bridge never injects `window.Capacitor` before userland scripts run. The native-first `isNativePlatform()` check then falls through to the URL/UA fallback. The explicit import keeps `@capacitor/core` in the prod bundle and is the canonical incantation documented by the Capacitor team. |
+
+### Mobile Google login — fall-through to web SDK
+
+| File | Change |
+|------|--------|
+| `apps/webClient/src/adapters/auth/web-google-login.strategy.ts` | **Three branches** in `login()`: (1) pending redirect result → `getRedirectResult(auth)` exchanges the OAuth response hash for a credential; (2) `isNativePlatform()` → `signInWithRedirect(auth, provider)` (the Capacitor WebView is a Chrome tab on `https://localhost`, which is in Firebase Auth's default authorized-domains list, and popups are blocked by WebView chrome so `signInWithPopup` does NOT work inside the WebView); (3) standard browser → fast `signInWithPopup`. The redirect-initiation path uses `await new Promise<never>(() => {})` so React Query's `onError` is not invoked with a network 'navigation-aborted' error before the page actually moves. |
+| `apps/webClient/src/adapters/auth/index.ts` | `createGoogleLoginStrategy()` always returns `new WebGoogleLoginStrategy()`. `NativeGoogleLoginStrategy` is still re-exported from the module so consumers using it by name continue to compile (and so it can be re-enabled once devops adds `google-services.json` + SHA fingerprints). |
+| `apps/webClient/src/adapters/auth/native-google-login.strategy.ts` | Marked as devops-blocked fallback; class body unchanged. |
+| `apps/webClient/src/adapters/hooks/useFirebaseRedirectReturn.ts` | **NEW.** Single-mount guard via `useRef` so StrictMode double-mount does not run the redirect-consume flow twice. On mount: `getRedirectResult(auth)` → if a credential was returned, POST idToken to `/auth/firebase-login`, fetch `/user/profile` (best-effort), dispatch `setUser` + `loginAction` + `setAuthReady` in order, navigate `/app/dashboard`. Silent when there is no pending redirect (`auth/no-redirect-result` is the common case for fresh tab opens). |
+| `apps/webClient/src/App.tsx` | `useFirebaseRedirectReturn()` invoked alongside `useRestoreSession()` at root mount. |
+
+### `authReady` slice flag (the missing signal in #1)
+
+| File | Change |
+|------|--------|
+| `apps/webClient/src/adapters/slices/auth/authSlice.ts` | Added `authReady: boolean` to `AuthState` (initial value `false`). New action `setAuthReady` flips it to `true`. `loginAction` / `logoutAction` also flip `authReady` because they are explicit conclusions of the auth state ("we now know"). |
+| `apps/webClient/src/presentation/pages/splash.tsx` | Navigating effect waits on `state.auth.authReady || state.auth.isAuthenticated`; a 3000 ms `AUTH_READY_FALLBACK_MS` timer is the safety net for a verify that never settles (e.g. backend unreachable in a CI/restricted network). After either signal, navigate `/app/dashboard` (if authenticated) or `/auth/login`; `navigated` flag prevents double-navigation when both signals resolve. |
+| `apps/webClient/src/adapters/hooks/useLoadUser.tsx` | `verifySession` now passes `_retry: true` to `/auth/verify` so the api interceptor's recursion guard short-circuits on a 401. `setAuthReady` always dispatched in `finally`, regardless of verify outcome. Belt-and-suspenders: axios `timeout: VERIFY_TIMEOUT_MS` (8000 ms) **AND** `Promise.race` against a wall-clock deadline (`VERIFY_TIMEOUT_MS + 1000`) that hard-rejects even if axios itself never errors (TCP never responds on a poorly-roamed cellular network). The deadline-timer `clear` is called on the early-resolve path so the wall-clock timer never leaks. `SKIP_VERIFY_ROUTES` list now includes `Home` + every `/auth/*` sub-path so public/auth chrome pages do not probe verify and never enter the recursion cascade in the first place. |
+
+### `protected-route.tsx` rewrite (root cause of #4)
+
+| File | Change |
+|------|--------|
+| `apps/webClient/src/presentation/routes/protected-route.tsx` | Removed the 1-second `loading` timeout (it raced `/auth/verify` on slow networks and bounced logged-in users on refresh) and the polarity-bugged `if (token)` early-return that read `localStorage.getItem("accessToken")` (vestigial since the backend moved tokens to HTTP-only cookies). Now waits on `state.auth.authReady` and renders `<LoadingPage />` until the slice settles. **Critical**: THREE separate `useSelector((s) => state.auth.<leaf>)` calls instead of one combined selector — each returns a leaf (boolean / User / null) so the `Object.is` snapshot comparison is stable. The combined-destructure pattern that produced bug #4 is documented in §6.8 below. |
+
+### Mobile UI surface — hide Google when Firebase is unconfigured
+
+| File | Change |
+|------|--------|
+| `apps/webClient/src/presentation/components/social-buttons-login.tsx` | Early `return null` when `import { app as firebaseApp }` from `@infrastructure/firebaseConfig` is null (i.e. `VITE_FIREBASE_API_KEY` / `VITE_FIREBASE_PROJECT_ID` / `VITE_FIREBASE_APP_ID` were missing at `vite build`). The previous behaviour was to render the button and then `web-google-login.strategy.ts` rejected with a toast (`"Google login is not available: Firebase is not configured"`) — production users saw that error and *also* thought email/password was broken (it wasn't). Hiding the button is the cleaner UX. |
+
+## Meta-deliverable: §6.8 in `knowledge.md`
+
+Because bug #4 originated from a doc gap (no explanation of why combined-slice destructures are not equivalent to leaf selectors under react-redux 9.x + React 19), this session adds the new subsection **§6.8 react-redux Pitfalls** to `knowledge.md`, a one-line entry to **§13.3 Known Technical Debt** referencing §6.8, and bumps the `Last updated` line to `2026-06-25`.
+
+§6.8 covers:
+
+- **The mechanism**: react-redux v9's `useSelector` is built on React 19's `useSyncExternalStore`, which compares snapshots via `Object.is`. A selector that returns a fresh reference on every call (inline object literal, combined-slice destructure that re-runs each render, etc.) trips React's `getSnapshot should be cached` guard and pushes the component into a render-halt that looks like a blank page to the user.
+- **The rule**: when you need more than one field from the same slice, default to one leaf selector per field. Combine with `shallowEqual` from `react-redux` only when grouping > ~3 fields is truly unavoidable.
+- **What is NOT a bug**: whole-slice selectors like `useSelector((s) => s.userSettings)` followed by `const { settings } = userSetting` are safe because Redux Toolkit + Immer preserve a slice's `Object.is` reference until a path inside it mutates. The ~15 call sites that read `userSettings` that way across `apps/webClient/src/presentation/components/**` are explicitly called out in §6.8 as a non-issue, so a future cleanup agent does not refactor them back into the bug.
+- **Lint hook (TODO)**: §6.8 ends with a TODO pointing at a future `react-redux/no-new-object-selectors` ESLint rule (or hand-rolled `no-restricted-syntax` AST rule) so the bug class can be caught pre-merge.
+
+## Files changed in webClient (per-bug summary)
+
+| Bug | Files |
+|-----|-------|
+| Mobile splash | `infrastructure/platform.ts` (NEW) · `presentation/pages/splash.tsx` (NEW: SplashPage + RootRoute) · `presentation/routes/route-config.tsx` |
+| Mobile CORS | `apps/api/src/main.ts` |
+| Capacitor tree-shake | `apps/webClient/src/main.tsx` |
+| Mobile Google login | `adapters/auth/web-google-login.strategy.ts` · `adapters/auth/native-google-login.strategy.ts` · `adapters/auth/index.ts` · `adapters/hooks/useFirebaseRedirectReturn.ts` (NEW) · `App.tsx` |
+| Auth slice + authReady | `adapters/slices/auth/authSlice.ts` · `adapters/hooks/useLoadUser.tsx` |
+| Protected-route blank-out | `presentation/routes/protected-route.tsx` |
+| Mobile UI surface | `presentation/components/social-buttons-login.tsx` |
+| Docs refresh | `knowledge.md` (§6.8 new, §13.3 entry new, `Last updated` bumped to `2026-06-25`) · `apps/mobile/capacitor.config.ts` (plugin block referenced as canonical example by §6.7 RPI framework) |
+
+## Quality gates
+
+- ✅ Backend `tsc --noEmit` clean — `apps/api`
+- ✅ Frontend `tsc --noEmit` clean — `apps/webClient`
+- 🟡 Frontend Playwright — covers `home.spec.ts`, `auth.spec.ts`, `i18n.spec.ts`, `currency-conversion.spec.ts`, `offline-queue.spec.ts`, `transaction-form.spec.ts`, `income-merger.spec.ts`. The `auth.spec.ts` mock-layer pattern (mocking `/auth/verify` and `/user/profile`) is forward-compatible with the new protected-route guard because the verify mock returns 200, which fires `setAuthReady` → `setUser` + `loginAction` → and ProtectedRoute happily renders `<MainLayout />` instead of its predecessor's fragile 1s timeout path.
+- 🟡 ESLint — gitignore of the three no-explicit-any offenders in `social-buttons-login.tsx` (`onSuccess: (data: any) =>`) carries over; flagged for follow-up but not regressed by this cycle.
+
+## Out of scope (TODO, tracked separately)
+
+- **Lint enforcement** of the rule §6.8 codifies. §6.8 ends with an explicit `react-redux/no-new-object-selectors` placeholder; installing/configuring that rule (or a `no-restricted-syntax` AST equivalent) and gating CI on it is the single most valuable next step.
+- **Playwright regression** that pins the protected-route behaviour: simulate a 30 s `/auth/verify` delay (longer than the 8 s timeout) and assert the page renders within a settle window instead of parking on `<LoadingPage />` forever.
+- **Devops-driven reactivation of `NativeGoogleLoginStrategy`**: when `google-services.json` and SHA fingerprints are added to the Firebase project for `apps/mobile/android/app/`, the native plugin will return real credentials. At that point `createGoogleLoginStrategy()` can be flipped to prefer the native path on `isNativePlatform()`, with `useFirebaseRedirectReturn` as the web-side fallback.
+- **`auth.spec.ts` localStorage cleanup**: the Playwright mocks set `localStorage.accessToken` (a vestigial pattern from before the backend moved tokens into HTTP-only cookies). Removing the localStorage token priming in the test body would future-proof against a developer "fixing" the localStorage check back into `protected-route.tsx` and watching the mocks illuminate the path.
+
+
+
 

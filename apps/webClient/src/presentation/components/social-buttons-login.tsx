@@ -1,5 +1,6 @@
 import { loginAction } from "@adapters/slices/auth/authSlice";
 import { googleLogin } from "@application/auth/auth.service";
+import { app as firebaseApp } from "@infrastructure/firebaseConfig";
 import { RoutePaths } from "@presentation/utils/routes";
 import { errorToast, successToast } from "@presentation/utils/toast";
 import { useMutation } from "@tanstack/react-query";
@@ -14,9 +15,18 @@ export function SocialLoginButtons() {
 
   const [loading, setLoading] = useState(false);
 
-  // The previous version of this component rendered a "GitHub" button
-  // that triggered the *same* Google mutation. GitHub login was unused
-  // and confusing, so the surface has been removed.
+  // Skip the Google button entirely when the Firebase web SDK never
+  // initialised — i.e. `VITE_FIREBASE_API_KEY` / `VITE_FIREBASE_PROJECT_ID`
+  // / `VITE_FIREBASE_APP_ID` were missing at build time. The previous
+  // version rendered the button unconditionally and then the strategy
+  // threw "Firebase is not configured" via react-hot-toast — which
+  // confused users into thinking email/password was broken too (it isn't).
+  // We render nothing in that case; the email/password form above already
+  // covers the full sign-in flow.
+  if (!firebaseApp) {
+    return null;
+  }
+
   const { mutate: signInWithGoogle } = useMutation({
     mutationKey: ["google-auth"],
     mutationFn: googleLogin,
@@ -40,6 +50,7 @@ export function SocialLoginButtons() {
     try {
       signInWithGoogle();
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error("Google auth error:", error);
     }
   };
@@ -88,7 +99,7 @@ export function SocialLoginButtons() {
             fill="#34A853"
           />
           <path
-            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-143.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
             fill="#FBBC05"
           />
           <path

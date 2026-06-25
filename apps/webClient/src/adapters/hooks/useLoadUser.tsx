@@ -22,6 +22,15 @@ const SKIP_VERIFY_ROUTES = [
   `${RoutePaths.Auth}/${RoutePaths.ResetPassword}`,
 ];
 
+/**
+ * Maximum time we wait for /auth/verify to settle before we flip
+ * `authReady` regardless. Without this a hung TCP connection (the host
+ * accepts the SYN but never responds, or the cellular network drops the
+ * session silently mid-flight) could leave `authReady=false` for tens of
+ * seconds and keep ProtectedRoute parked on its infinite LoadingPage.
+ */
+const VERIFY_TIMEOUT_MS = 8 * 1000;
+
 const useRestoreSession = () => {
   const dispatch = useDispatch();
   const location = useLocation();
@@ -51,11 +60,32 @@ const useRestoreSession = () => {
       lastVerifyCallRef.current = now;
 
       try {
-        const response = await api.get("/auth/verify", { _retry: true });
+        // Belt-and-suspenders: axios timeout (server is reachable but
+        // slow) plus a Promise.race against a hard wall-clock deadline
+        // (TCP never responds). Either trigger lets the `finally` block
+        // dispatch `setAuthReady`.
+        const verifyPromise = api.get("/auth/verify", {
+          _retry: true,
+          timeout: VERIFY_TIMEOUT_MS,
+        });
+        const verifyTimeout = new Promise<never>((_, reject) => {
+          const t = setTimeout(
+            () => reject(new Error("verify-session deadline exceeded")),
+            VERIFY_TIMEOUT_MS + 1000,
+          );
+          // The promise chain's own `.finally` clears the wall-clock timer.
+          // We don't await here; cleanup happens inside the try block.
+          (verifyTimeout as unknown as { _clear?: () => void })._clear = () =>
+            clearTimeout(t);
+        });
+        const response = await Promise.race([verifyPromise, verifyTimeout]);
+        // Clear the wall-clock deadline now that the verify settled.
+        (verifyTimeout as unknown as { _clear?: () => void })._clear?.();
 
         if (response.status === 200) {
           const userProfile = await api.get("/user/profile", {
             _retry: true,
+            timeout: VERIFY_TIMEOUT_MS,
           });
           const profile = userProfile?.data;
           if (profile) {
@@ -64,6 +94,7 @@ const useRestoreSession = () => {
           }
         }
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error("🔴 Error validating sesion:", error);
       } finally {
         dispatch(setAuthReady());

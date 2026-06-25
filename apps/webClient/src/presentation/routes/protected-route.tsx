@@ -8,36 +8,38 @@ import { Navigate } from "react-router";
 /**
  * Guards `/app/*` routes.
  *
- * Two prior bugs surfaced in production:
- * 1. A 1-second `loading` timeout that fired before `/auth/verify` could
- *    return — slow networks bounced logged-in users to /auth/login on
- *    refresh.
- * 2. A polarity-bugged `if (token)` check that read
- *    `localStorage.getItem("accessToken")` and redirected to login when
- *    the token WAS present. The backend has long since moved tokens into
- *    HTTP-only cookies (see api/src/infrastructure/config/cookie.service.ts
- *    + app.module.ts cookieOptions), so the localStorage branch was dormant
- *    but still incorrect.
+ * Prior bugs that shaped this implementation:
+ * 1. A 1-second `loading` timeout that fired before `/auth/verify` resolved
+ *    — slow connections bounced logged-in users to /auth/login on refresh.
+ * 2. A polarity-bugged `localStorage.getItem("accessToken")` check that
+ *    redirected to login when the token WAS present (dormant now that
+ *    tokens live in HTTP-only cookies, but still incorrect).
+ * 3. A combined `useSelector((s) => s.auth)` that destructured to a fresh
+ *    object every render. react-redux's default `===` comparison sees a
+ *    new reference on every store subscription notify and, under React 19
+ *    StrictMode, gets stuck in a render loop — the route never paints.
  *
- * The new implementation waits on `state.auth.authReady`, which
- * `useRestoreSession` flips in its `finally` block regardless of whether
- * /auth/verify succeeded or failed. While the slice is still warming up
- * we render the existing `LoadingPage` chrome so the dashboard never
- * flashes an empty Outlet.
+ * The current implementation:
+ *   - Uses THREE separate `useSelector` calls so each one returns a leaf
+ *     (boolean | User | null). Leaf comparisons via `===` are stable.
+ *   - Waits on `state.auth.authReady` (flipped in useRestoreSession's
+ *     `finally`, with an 8-second axios timeout backstop).
+ *   - Renders `LoadingPage` while the slice is still warming up so the
+ *     Outlet never flashes empty.
  */
 const ProtectedRoute = () => {
-  const { isAuthenticated, user, authReady } = useSelector(
-    (state: RootState) => state.auth,
+  // Three separate selectors — each returns a leaf value, so react-redux
+  // compares via `===` instead of detecting a fresh object every render.
+  const isAuthenticated = useSelector(
+    (state: RootState) => state.auth.isAuthenticated,
   );
+  const user = useSelector((state: RootState) => state.auth.user);
+  const authReady = useSelector((state: RootState) => state.auth.authReady);
 
-  // While the auth slice is still restoring the session, show the loading
-  // chrome instead of flashing an empty Outlet or bouncing prematurely.
   if (!authReady) {
     return <LoadingPage />;
   }
 
-  // The slice is settled — auth resolution is final. If neither
-  // `isAuthenticated` nor a cached user profile survived, redirect.
   if (!isAuthenticated && !user) {
     return (
       <Navigate to={`${RoutePaths.Auth}/${RoutePaths.Login}`} replace />
