@@ -251,6 +251,12 @@ importers:
       '@capacitor-firebase/authentication':
         specifier: ^7.5.0
         version: 7.5.0(@capacitor/core@7.6.7)(firebase@11.8.0)
+      '@capacitor/app':
+        specifier: ^7.1.2
+        version: 7.1.2(@capacitor/core@7.6.7)
+      '@capacitor/browser':
+        specifier: ^7.0.5
+        version: 7.0.5(@capacitor/core@7.6.7)
       '@capacitor/core':
         specifier: ^7.6.7
         version: 7.6.7

@@ -58,13 +58,18 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 500,
     rollupOptions: {
-      // Capacitor native plugins are only available inside the Capacitor
-      // WebView at runtime — they are not installed in the webClient's
-      // node_modules. Mark them as external so Rollup leaves the dynamic
-      // import() calls as-is instead of failing to resolve them.
-      // At runtime, isNativePlatform() guards ensure these imports are
-      // only executed in the Capacitor context where the plugins exist.
-      external: ["@capacitor/app", "@capacitor/browser"],
+      // Capacitor native plugins (@capacitor/app, @capacitor/browser) are only
+      // available inside the Capacitor WebView at runtime. For web builds
+      // (VITE_CAPACITOR is not set), mark them as external so Rollup leaves
+      // the dynamic import() calls as-is — isNativePlatform() guards ensure
+      // they're never executed in a browser.
+      // For Capacitor APK builds (VITE_CAPACITOR=true), DON'T externalize —
+      // the WebView needs these modules bundled, otherwise it tries to resolve
+      // the bare specifier "@capacitor/browser" as a native ES module and fails
+      // with "Failed to resolve module specifier".
+      external: process.env.VITE_CAPACITOR === 'true'
+        ? []
+        : ["@capacitor/app", "@capacitor/browser"],
       output: {
         manualChunks(id) {
           if (id.includes("/recharts/")) {

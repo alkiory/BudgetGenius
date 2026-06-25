@@ -281,6 +281,20 @@ export class AuthController {
           `Error al añadir token a la blacklist: ${error.message}`,
         );
       }
+
+      // Also invalidate the refresh token in Redis so a stale cookie
+      // (e.g. in a Capacitor WebView where cookie clearing may not
+      // propagate immediately) cannot be used to silently re-auth.
+      try {
+        const userData = this.jwtService.decode(token);
+        if (userData && userData['id']) {
+          await this.authService.invalidateRefreshToken(userData['id']);
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Could not invalidate refresh token during logout: ${error.message}`,
+        );
+      }
     }
 
     this.cookieService.clearCookie(res, 'accessToken');
@@ -341,6 +355,12 @@ export class AuthController {
 
     try {
       const payload = this.jwtService.verify(token);
+
+      // Check Redis to ensure the refresh token hasn't been revoked
+      // (e.g. by a logout that deleted it from Redis).
+      const userId = payload['id'] || payload['sub'];
+      await this.authService.refreshToken(userId, token);
+
       // ... generar nuevo accessToken y setearlo en cookie
       const newAccessToken = this.jwtService.sign(
         { ...payload },

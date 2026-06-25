@@ -380,6 +380,17 @@ export class AuthService {
     return { accessToken, refreshToken, userEntity };
   }
 
+  /**
+   * Deletes the refresh token from Redis so it cannot be reused.
+   * Called on logout to ensure a stale cookie cannot silently re-auth
+   * the user (particularly important in Capacitor WebViews where cookie
+   * clearing may not propagate immediately).
+   */
+  async invalidateRefreshToken(userId: number): Promise<void> {
+    await this.redisService.delete(`refreshToken:${userId}`);
+    this.logger.log(`🗑️ Refresh token invalidated for user ${userId}`);
+  }
+
   async addTokenToBlacklist(token: string) {
     const userData = this.jwtService.decode(token);
     if (!userData) throw new Error('Invalid token');
