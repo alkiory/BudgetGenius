@@ -22,6 +22,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Captura el redirect de Firebase Auth tras signInWithRedirect.
+                 Cuando el usuario se autentica en el navegador, Firebase
+                 redirect a https://localhost/__/auth/handler?.... Este
+                 intent filter intercepta esa URL y abre la app para que
+                 useFirebaseRedirectReturn pueda consumir el resultado
+                 via getRedirectResult(). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https"
+                      android:host="localhost"
+                      android:pathPrefix="/__/auth/" />
+            </intent-filter>
+
         </activity>
 
         <provider
