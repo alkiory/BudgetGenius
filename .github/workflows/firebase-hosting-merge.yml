@@ -38,13 +38,14 @@ jobs:
           VITE_FIREBASE_MEASURENT_ID: ${{ secrets.VITE_FIREBASE_MEASURENT_ID }}
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
 
-      - uses: FirebaseExtended/action-hosting-deploy@v1
+      - uses: FirebaseExtended/action-hosting-deploy@v0.11.0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BUDGETGENIUSIA }}
           channelId: live
           projectId: budgetgeniusia
-          # Pin firebase-tools to 15.20.0 (pre-15.22.2, which started
-          # returning `Premature close` on oauth2 token refresh). @v1
-          # exposes this; @v0 silently fetched `@latest`. Bump with care.
+          # Pin BOTH the action (specific v0.11.0 — the floating @v0
+          # tag can drift to a future v0.x release) AND firebase-tools
+          # (15.20.0, pre-15.22.2 which started returning `Premature
+          # close` on oauth2 token refresh). Bump either with care.
           firebaseToolsVersion: '15.20.0'
