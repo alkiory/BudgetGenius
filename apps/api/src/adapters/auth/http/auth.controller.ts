@@ -19,6 +19,7 @@ import { SkipThrottle, Throttle, hours } from '@nestjs/throttler';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { ForgotPasswordDto } from '../../../application/auth/dto/forgot-password.dto';
 import { ResetPasswordDto } from '../../../application/auth/dto/reset-password.dto';
+import { ConfigService } from '@nestjs/config';
 import * as admin from 'firebase-admin';
 import {
   ApiBearerAuth,
@@ -29,6 +30,8 @@ import {
 } from '@nestjs/swagger';
 import { LoginDto } from '@application/auth/dto/login.dto';
 import { CookieService } from '@infrastructure/config/cookie.service';
+import { AuthGuard } from '@nestjs/passport';
+import { User } from '@domain/user/user.entity';
 
 /** 7 días en milisegundos — coincide con el JWT expiry del refreshToken. */
 const REFRESH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
@@ -42,7 +45,59 @@ export class AuthController {
     private readonly jwtService: JwtService,
     private readonly logger: LoggingService,
     private readonly cookieService: CookieService,
+    private readonly configService: ConfigService,
   ) { }
+
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  @ApiOperation({ summary: 'Iniciar OAuth con Google (redirect)' })
+  async googleAuth() {
+    // AuthGuard('google') handles the redirect to Google's OAuth page.
+    // This endpoint never reaches the handler body — the guard sends a 302.
+  }
+
+  @Get('google-callback')
+  @UseGuards(AuthGuard('google'))
+  @ApiOperation({ summary: 'Callback de Google OAuth' })
+  async googleCallback(
+    @Req() req,
+    @Res() res: Response,
+  ) {
+    try {
+      const user = req.user as User;
+
+      const { accessToken, refreshToken, userEntity } =
+        await this.authService.oauthLogin({
+          email: user.email,
+          name: user.name || user.email,
+        });
+
+      this.cookieService.setCookie(res, 'accessToken', accessToken);
+      this.cookieService.setCookie(res, 'refreshToken', refreshToken, {
+        maxAge: REFRESH_COOKIE_MAX_AGE,
+      });
+
+      this.logger.log(
+        `🔓 Google OAuth exitoso para: ${user.email}`,
+      );
+
+      // Redirect to custom scheme for Capacitor app.
+      // Tokens are passed in the URL so the Capacitor WebView can set them
+      // as cookies (the httpOnly cookies set here belong to the Chrome
+      // Custom Tab's cookie jar, not the WebView).
+      const redirectUrl = `bgg://auth/success?accessToken=${encodeURIComponent(accessToken)}&refreshToken=${encodeURIComponent(refreshToken)}`;
+      return res.redirect(301, redirectUrl);
+    } catch (error) {
+      this.logger.error(`🚨 Falló el OAuth de Google: ${error.message}`);
+      const fallbackUrl = this.configService.get<string>('NODE_ENV') === 'production'
+        ? 'https://budgetgeniusia.web.app'
+        : 'http://localhost:5173';
+      const frontendUrl =
+        this.configService.get<string>('FRONTEND_URL')?.split(',')[0]?.trim() ||
+        fallbackUrl;
+      return res.redirect(301, `${frontendUrl}/auth/login?error=google_auth_failed`);
+    }
+  }
 
   @Post('firebase-login')
   @ApiOperation({ summary: 'Autenticar con Firebase' })
@@ -297,6 +352,25 @@ export class AuthController {
     } catch (error) {
       throw new UnauthorizedException('Invalid refresh token');
     }
+  }
+
+  @Post('set-cookies')
+  @ApiOperation({ summary: 'Establecer cookies JWT desde el WebView de Capacitor' })
+  @ApiResponse({ status: 200, description: 'Cookies seteadas correctamente' })
+  async setCookies(
+    @Body() body: { accessToken: string; refreshToken: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!body.accessToken || !body.refreshToken) {
+      throw new UnauthorizedException('Access token and refresh token are required');
+    }
+
+    this.cookieService.setCookie(res, 'accessToken', body.accessToken);
+    this.cookieService.setCookie(res, 'refreshToken', body.refreshToken, {
+      maxAge: REFRESH_COOKIE_MAX_AGE,
+    });
+
+    return { success: true, message: 'Cookies set successfully' };
   }
 
   @Get('verify')

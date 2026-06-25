@@ -223,6 +223,9 @@ importers:
       '@capacitor-firebase/authentication':
         specifier: ^7.5.0
         version: 7.5.0(@capacitor/core@7.6.7)(firebase@11.8.0)
+      '@capacitor/browser':
+        specifier: ^8.0.3
+        version: 8.0.3(@capacitor/core@7.6.7)
       '@capacitor/core':
         specifier: ^7.6.7
         version: 7.6.7
@@ -561,6 +564,11 @@ packages:
     resolution: {integrity: sha512-YXJoXhjgVTczgwJrcm0b2ZTdAOYgY7UXRYgsOZtpA6CHJQFRcssEdXnzPkfaMYkK4AqfzrlDqDxe5UeZT7ZS4w==}
     peerDependencies:
       '@capacitor/core': ^7.6.0
+
+  '@capacitor/browser@8.0.3':
+    resolution: {integrity: sha512-WJWPHEPbweiFoHYmVlCbZf5yrqJ2Rchx2Xvbmd+3Lf+Zkpq3nXBThThY2CF69lYEg1NINGF9BcHThIOEU1gZlQ==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
 
   '@capacitor/cli@7.6.7':
     resolution: {integrity: sha512-nV9j1+431/rsiabGs1UK0SbETrl2JfAf3SSlsM9RbMMjAL7WmruxnlJcbB9IXPoa6L99GljSO5q/9UCNvYz6Ag==}
@@ -6524,6 +6532,10 @@ snapshots:
       firebase: 11.8.0
 
   '@capacitor/android@7.6.7(@capacitor/core@7.6.7)':
+    dependencies:
+      '@capacitor/core': 7.6.7
+
+  '@capacitor/browser@8.0.3(@capacitor/core@7.6.7)':
     dependencies:
       '@capacitor/core': 7.6.7
 

@@ -17,6 +17,9 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         'HOST',
       )}/api/auth/google-callback`,
       scope: ['email', 'profile'],
+      // Disable built-in CSRF state to avoid session requirement.
+      // We don't use sessions in this app (JWT-only).
+      state: false,
     });
   }
 

@@ -3,7 +3,7 @@ import { store } from "@adapters/store/rootStore";
 import { AuthRepository } from "@domain/auth/AuthRepository";
 import { User } from "@domain/index";
 import api from "@infrastructure/api.config";
-import { createGoogleLoginStrategy } from "@adapters/auth";
+import { createGoogleLoginStrategy, isNativePlatform } from "@adapters/auth";
 
 export const authRepository: AuthRepository = {
   async login(email: string, password: string) {
@@ -47,8 +47,21 @@ export const authRepository: AuthRepository = {
   },
 
   async googleLogin() {
-    // Strategy Pattern: selecciona automáticamente la implementación adecuada
-    // según la plataforma (web popup vs plugin nativo Capacitor).
+    // Capacitor native: use the backend's own OAuth flow via @capacitor/browser
+    // instead of Firebase Auth's signInWithRedirect (which opens the system
+    // browser and doesn't return to the app).
+    if (isNativePlatform()) {
+      const { initiateCapacitorGoogleLogin } = await import(
+        "@adapters/auth/backend-google-login"
+      );
+      await initiateCapacitorGoogleLogin();
+      // The initiate function sets cookies, fetches profile, and dispatches
+      // the auth state. Just return a successful result — the Redux store
+      // is already updated.
+      return { message: "🔓 Google login successful" };
+    }
+
+    // Web: use Firebase Auth (signInWithPopup for snappy UX).
     const strategy = createGoogleLoginStrategy();
     const { idToken } = await strategy.login();
 

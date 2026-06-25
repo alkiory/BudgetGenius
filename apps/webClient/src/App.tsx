@@ -1,3 +1,4 @@
+import { useBackendOAuthReturn } from "@adapters/hooks/useBackendOAuthReturn";
 import { useFirebaseRedirectReturn } from "@adapters/hooks/useFirebaseRedirectReturn";
 import useRestoreSession from "@adapters/hooks/useLoadUser";
 import ErrorBoundary from "@infrastructure/errorBoundary";
@@ -9,6 +10,7 @@ import RouteConfig from "@presentation/routes/route-config";
 function App() {
   useRestoreSession();
   useFirebaseRedirectReturn();
+  useBackendOAuthReturn();
   return (
     <div className="App">
       <OfflineIndicator />
