@@ -35,7 +35,6 @@ jobs:
       - name: Build and Push Docker Image
         if: github.ref == 'refs/heads/main'
         run: |
-          # Build usando el contexto del monorepo
           docker build -t ${{ secrets.DOCKER_USERNAME }}/finance-api:latest -f ./apps/api/Dockerfile .
           docker push ${{ secrets.DOCKER_USERNAME }}/finance-api:latest
 

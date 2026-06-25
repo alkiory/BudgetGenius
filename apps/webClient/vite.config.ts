@@ -2,8 +2,17 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import { resolve } from "path";
 
+import { readFileSync } from "fs";
+
+// Inject build version from env var (CI) or fall back to package.json version + git hash
+const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf-8"));
+const appVersion = process.env.VITE_APP_VERSION || `${pkg.version}-dev`;
+
 export default defineConfig({
   base: process.env.VITE_CAPACITOR === 'true' ? './' : '/',
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   plugins: [react()],
   server: {
     proxy: {

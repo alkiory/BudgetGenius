@@ -799,5 +799,84 @@ Your first task is ONLY the Research phase. Analyze the codebase to clarify scop
 
 ---
 
+---
+
+## 16. Release Workflow — Versioning & Changelog
+
+> **Mandatory steps after every push to `main`** (or when a set of changes is ready for release).
+
+### 16.1 When to bump the version
+
+| Change type | Version bump | Example |
+|-------------|-------------|---------|
+| Bug fix / small tweak | Patch (`1.1.0` → `1.1.1`) | Hotfix, typo, CSS fix |
+| New feature / refactor | Minor (`1.1.0` → `1.2.0`) | New page, new API endpoint, UI overhaul |
+| Breaking API change / big rewrite | Major (`1.0.0` → `2.0.0`) | Database schema change, auth flow redesign |
+
+The version lives in the **root `package.json`** (`"version": "1.1.0"`). Update only that field — the individual workspace `package.json` files are not consumed by the build pipeline.
+
+### 16.2 Update `docs/changelog.md`
+
+Every release must add a changelog entry **above** the previous entries (reverse chronological).
+
+#### Template
+
+```markdown
+---
+
+## [vX.Y.Z] — YYYY-MM-DD
+
+### Added
+- New feature X
+
+### Fixed
+- Bug Y
+
+### Changed
+- Refactor Z
+```
+
+#### Rules
+
+1. **One entry per release.** If multiple changes shipped together, group them under one version header.
+2. **Link to the git tag.** Use `[vX.Y.Z]` matching the tag name (e.g. `[v1.1.0]`).
+3. **Date format:** `YYYY-MM-DD`.
+4. **Categorise changes** under `### Added`, `### Fixed`, `### Changed`, `### Removed`.
+5. **Reference files** when the change is in a specific module: `\`apps/webClient/src/…\`.`
+
+### 16.3 Create and push the git tag
+
+```bash
+# Bump version in root package.json first, then:
+git add package.json docs/changelog.md
+git commit -m "chore: bump version to vX.Y.Z"
+
+# Create an annotated tag (matches the version header in changelog)
+git tag -a vX.Y.Z -m "vX.Y.Z — Brief description"
+
+# Push everything (including the tag)
+git push origin main --tags
+```
+
+> **Why annotated tags (`-a`)?** `git describe` ignores lightweight tags by default in some configurations. Annotated tags also carry a message for the release log.
+
+### 16.4 CI auto-versioning reminder
+
+The CI workflows (`firebase-hosting-merge.yml`, `build-apk.yml`, `firebase-pull-request.yml`) already inject `VITE_APP_VERSION` from `git describe --tags --always --dirty`. Once the tag exists, the version badge in the web UI and APK will display the correct version automatically.
+
+### 16.5 Full release checklist
+
+```markdown
+- [ ] Bump version in root `package.json`
+- [ ] Update `docs/changelog.md` with release notes
+- [ ] Commit: `chore: bump version to vX.Y.Z`
+- [ ] Create annotated tag: `git tag -a vX.Y.Z -m "vX.Y.Z — ..."`
+- [ ] Push: `git push origin main --tags`
+- [ ] Verify CI/CD completes successfully
+- [ ] Confirm version badge in web UI shows the new version
+```
+
+---
+
 *Last updated: 2026-06-25*
 *Maintainers: Alkiory, Sergio Campbell*

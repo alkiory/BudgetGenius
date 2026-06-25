@@ -24,6 +24,7 @@ import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useLocation } from "react-router";
 import { Logo } from "../logo";
+import { VersionBadge } from "../version-badge";
 // Phase 6 (T6.1 + T6.5): every primary nav entry now resolves its
 // label through the canonical `routes.app.dashboard.<key>` namespace
 // (single source of truth for sidebar + route-config + breadcrumb +
@@ -257,6 +258,15 @@ export function DashboardSidebar() {
               )}
             </div>
           </button>
+        </div>
+
+        {/* Version badge — always visible at the bottom of the sidebar */}
+        <div
+          className={`flex flex-shrink-0 border-t border-slate-200 px-4 py-2 dark:border-slate-800 ${
+            isCollapsed ? "justify-center" : "justify-center"
+          }`}
+        >
+          <VersionBadge />
         </div>
       </div>
 

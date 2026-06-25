@@ -50,11 +50,17 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
+      # ── Generate build version from git ───────────────────────────────────
+      - name: Generate build version
+        id: version
+        run: echo "version=$(git describe --tags --always --dirty 2>/dev/null || git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
       # ── Build webClient with production API URL ──────────────────────────
       - name: Build web assets
         run: pnpm --filter frontend-web build
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_APP_VERSION: ${{ steps.version.outputs.version }}
           VITE_CAPACITOR: 'true'
           # Firebase env vars (needed for Google Login bundle)
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}

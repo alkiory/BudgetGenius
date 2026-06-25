@@ -8,6 +8,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Generate build version
+        id: version
+        run: echo "version=$(git describe --tags --always --dirty 2>/dev/null || git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Install pnpm
         run: npm install -g pnpm
 
@@ -19,6 +23,7 @@ jobs:
         run: pnpm --filter frontend-web build
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_APP_VERSION: ${{ steps.version.outputs.version }}
           # Firebase — necesario para Google Login con Firebase JS SDK
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
