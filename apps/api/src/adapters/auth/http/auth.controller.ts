@@ -63,11 +63,10 @@ export class AuthController {
     try {
       const user = req.user as User;
 
-      const { accessToken, refreshToken, userEntity } =
-        await this.authService.oauthLogin({
-          email: user.email,
-          name: user.name || user.email,
-        });
+      const { accessToken, refreshToken } = await this.authService.oauthLogin({
+        email: user.email,
+        name: user.name || user.email,
+      });
 
       this.cookieService.setCookie(res, 'accessToken', accessToken);
       this.cookieService.setCookie(res, 'refreshToken', refreshToken, {
@@ -138,6 +137,8 @@ export class AuthController {
       'per-endpoint.',
     schema: {
       example: {
+        accessToken: 'jwt-access-token',
+        refreshToken: 'jwt-refresh-token',
         message: '\ud83d\udd13 Login successful',
         user: {
           id: 1,
@@ -195,6 +196,15 @@ export class AuthController {
         // destructure in apps/webClient/src/adapters/http/auth.repository
         // .ts; with the unified contract, callers can read `data.user`
         // identically regardless of which endpoint issued the tokens.
+        //
+        // v1.3.0 — also surface accessToken + refreshToken in the body
+        // so non-cookie clients (e.g. Capacitor Android WebView where
+        // Android System WebView blocks third-party cookies) can
+        // persist them client-side. The Set-Cookie path remains for
+        // same-site browsers; both channels are emitted on every
+        // successful auth response. See rpi/mobile-cookies-persistence/.
+        accessToken,
+        refreshToken,
         user: userEntity,
       };
     } catch (error) {
@@ -320,6 +330,8 @@ export class AuthController {
       'per-endpoint.',
     schema: {
       example: {
+        accessToken: 'jwt-access-token',
+        refreshToken: 'jwt-refresh-token',
         message: '\ud83d\udd13 Login successful',
         user: {
           id: 1,
@@ -355,6 +367,11 @@ export class AuthController {
     });
 
     return {
+      // v1.3.0 — surface tokens in body so non-cookie clients can persist
+      // them client-side (Capacitor Android WebView bug). Cookies also
+      // set above for same-site browsers. See rpi/mobile-cookies-persistence/.
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
       user: result.user,
       message: '🔓 Login successful',
     };
@@ -436,13 +453,63 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @ApiOperation({
+    summary:
+      'Rotar el accessToken a partir del refreshToken en cookie (o body)',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Nuevo accessToken rotado (v1.3.0 — tambi\u00e9n expuesto en el body para ' +
+      'clientes sin cookies, e.g. Capacitor Android WebView). cookies ' +
+      'HttpOnly; Secure; SameSite=None re-emitidas con el mismo refresh ' +
+      'token y el nuevo accessToken.',
+    schema: {
+      example: {
+        success: true,
+        accessToken: 'jwt-rotated-access-token',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Refresh token inválido o ausente.',
+  })
+  // v1.3.0 — refresh is on a known cadence (≤ 1 per access-token
+  // lifetime, i.e. at worst once per 30 minutes if the accessToken
+  // cookie default is exceeded). The global ThrottlerModule's 4-rps
+  // cap was a UX hazard for cold-starts AND for CGNAT mobile users
+  // where a single shared egress IP would randomly 429. The
+  // defensive countermeasure (X-Device-Id bucket isolation added in
+  // app.module.ts) covers the shared-IP case, but the
+  // per-user-cadence argument is the primary reason to exempt this
+  // route: a legitimate refresh is never user-spammed. See
+  // rpi/mobile-cookies-persistence/plan.md T4.1 for the RPI
+  // rationale and Risk Mitigation table.
+  @SkipThrottle()
   async refreshToken(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    // Intentar leer de la cookie en lugar del @Body
-    const token = req.cookies?.refreshToken;
+    // v1.3.0 — refresh token can come from THREE places, in priority order:
+    //   1. `req.cookies?.refreshToken`  (the original path; same-site browser)
+    //   2. `req.body?.refreshToken`      (mobile WebView path; cookie blocked)
+    //   3. `Authorization: Bearer ...`   (header path; mirrors the accessToken's
+    //                                     request flow, see jwt.strategy.ts)
+    // The Capacitor Android WebView bug (third-party cookie policy blocks
+    // Set-Cookie from cross-origin responses) leaves the cookie path silently
+    // broken on mobile, so accepting the token via body/header is the
+    // v1.3.0 fix. See rpi/mobile-cookies-persistence/.
+    const cookieToken = req.cookies?.refreshToken;
+    const bodyToken = (req.body as { refreshToken?: string } | undefined)
+      ?.refreshToken;
+    const authHeader = req.headers?.authorization;
+    const headerToken =
+      typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+        ? authHeader.slice('Bearer '.length).trim()
+        : undefined;
 
+    const token = cookieToken || bodyToken || headerToken;
     if (!token) throw new UnauthorizedException('No refresh token provided');
 
     try {
@@ -464,7 +531,12 @@ export class AuthController {
         maxAge: REFRESH_COOKIE_MAX_AGE,
       });
 
-      return { success: true };
+      // v1.3.0 — also return the new accessToken in the body so
+      // non-cookie clients (Capacitor Android WebView third-party cookie
+      // block) can persist it via localStorage / CapacitorCookies.set.
+      // The refresh-token cookie is unchanged on this call so we don't
+      // re-emit it. See rpi/mobile-cookies-persistence/.
+      return { success: true, accessToken: newAccessToken };
     } catch (error) {
       throw new UnauthorizedException('Invalid refresh token');
     }

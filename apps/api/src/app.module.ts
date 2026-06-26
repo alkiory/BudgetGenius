@@ -164,7 +164,14 @@ export class AppModule {
       httpOnly: true,
       secure: isProduction,
       sameSite: isProduction ? ('none' as const) : ('lax' as const),
-      maxAge: 15 * 60 * 1000, // 15 minutos
+      // v1.3.0 — bumped from 15 to 30 minutes. See
+      // rpi/mobile-cookies-persistence/research.md §"5. ⚠ The 15-min
+      // default cookieOptions.maxAge is short for the WebView's
+      // refresh-window" + plan.md T1.5. Keeps refresh cadence inside
+      // the 4-rps ThrottlerModule window even on slower CGNAT
+      // connections. JWT `expiresIn: '1h'` (auth.service.ts:114-120)
+      // remains the authoritative timeout.
+      maxAge: 30 * 60 * 1000, // 30 minutos
       domain: configService.get<string>('COOKIE_DOMAIN'),
       path: '/',
     };

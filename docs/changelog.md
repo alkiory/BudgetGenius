@@ -1,5 +1,63 @@
 # BudgetGenius Changelog
 
+---
+
+## [v1.3.0] — 2026-06-26
+
+> Session: Capacitor Android APK third-party cookie outage — body-token + Authorization-header defense-in-depth, no native cookies plugin (npm 404 fallback). RPI artifacts at `rpi/mobile-cookies-persistence/`.
+
+### Added
+
+- **`/auth/{login, signup, firebase-login, refresh}` now return `{accessToken, refreshToken, user, ...}` in the body.** Symmetric contract across all auth-issuing routes — the existing `/auth/login` and `/auth/firebase-login` (which previously returned only `{user, message}`) now also surface tokens. `/auth/refresh` returns `{success: true, accessToken}` so non-cookie clients can persist the rotated token client-side. Cookies continue to be emitted alongside (Set-Cookie: HttpOnly; Secure; SameSite=None), so the same-site browser path is unchanged.
+- **`/auth/refresh` reads the refresh token from cookie · req.body.refreshToken · `Authorization: Bearer …`** (priority order). The Capacitor Android WebView bug (Android System WebView silently drops `Set-Cookie` from cross-origin responses under its third-party cookie policy) was breaking the cookie path end-to-end on real APK installs — users couldn't refresh and were bounced back to `/auth/login`. The body+header paths let the WebView persist the token in `localStorage` and replay it on the next call. See `rpi/mobile-cookies-persistence/research.md` and `auth.controller.ts:436–480`.
+- **`X-Device-Id` request header.** Per-install stable id generated on first page load via `crypto.randomUUID()` (fallback to `crypto.getRandomValues` for older WebViews), persisted in `localStorage.bgDeviceId`. Emitted by `apps/webClient/src/infrastructure/api.config.ts` request interceptor. Backend `ThrottlerModule.getTracker()`, app.module.ts:60–63, reads it FIRST in priority order — so a shared public IP (mobile CGNAT) no longer folds two unrelated devices into one throttle bucket.
+- **`apps/webClient/src/infrastructure/device-id.ts` [NEW].** Tiny helper exposing `getDeviceId()` + `resetDeviceIdForTesting()`; uses `crypto.randomUUID` / `getRandomValues` polyfill ladder documented in-file.
+- **`Authorization: Bearer ${localStorage.accessToken}`** attached to every outgoing `axios` request. Backend already allowlists `Authorization` in CORS (`apps/api/src/main.ts:99`).
+
+### Changed
+
+- **AuthController response interceptor persists tokens on every successful auth response** — `apps/webClient/src/infrastructure/api.config.ts` writes `data.accessToken`/`data.refreshToken` to BOTH `localStorage` AND `document.cookie` so the next outgoing request's request interceptor has fresh values regardless of which channel survived.
+- **`AuthController.refreshToken` is exempt from the global 4-rps ThrottlerModule** (`@SkipThrottle()` decorator, mirrors the existing `@SkipThrottle()` on `/auth/logout`). Refresh is on a known cadence (≤ 1 per access-token lifetime); the global cap was a UX hazard for mobile CGNAT and slowed legitimate refresh storm-recovery. The new `X-Device-Id` bucket isolation addresses the shared-IP-collation case; the decorator drops the per-user-cadence noise. See `rpi/mobile-cookies-persistence/plan.md T4.1`.
+- **`cookieOptions.maxAge` bumped from 15 → 30 minutes** in `apps/api/src/app.module.ts:161–170`. Aligned with the v1.3.0 defense-in-depth: between two consecutive refreshes, the access-token now survives twice as long without re-auth, which keeps the burst inside the (already-lifted) throttle window for slow CGNAT connections.
+- **`getCurrentUser` toast on refresh-fail no longer hard-redirects to `/auth/login`.** Previously `apps/webClient/src/infrastructure/api.config.ts:71–74` issued `window.location.href = …` immediately on a refresh failure, racing the toast render and producing the "blanco con 429" symptom from the user's trace. The toast now shows, and React Router's `ProtectedRoute` re-evaluates against the cleared auth state on the next mount.
+
+### Fixed
+
+- **PRODUCTION: APK users unable to retain session past the first access-token expiry.** Triage: trace showed `https://api-budgetgenius.alkiory.com/api/auth/firebase-login` → 200 with body tokens, then `/api/auth/refresh` returns 401 + subsequent 429s, then redirect to `/auth/login`. Root cause: Android System WebView silently drops cross-origin `Set-Cookie`. Fix: every layer above emits the contract the broken layer needs. Defense-in-depth = body tokens + Authorization header + body-input refresh + per-device throttle bucket.
+- **PRODUCTION: `/auth/refresh` 401 on mobile even after successful login.** Cookie path collapsed on Android WebView; backend now reads the refresh token from body or `Authorization: Bearer ...` so the WebView can replay it from `localStorage`.
+- **PRODUCTION: 429 storm after a single failed mobile refresh.** `@SkipThrottle()` on `/auth/refresh` + `X-Device-Id` bucket isolation decouples refresh from the global 4-rps limit.
+
+### Out of scope (TODO, tracked separately)
+
+- **`@capacitor-community/cookies` plugin install path was retired.** The RPI called for v1.3.0 to install `@capacitor-community/cookies@^6.0.0`, which Capgo published in the post-Capacitor-4 era. At install time, the npm registry returns E404 for both `@capacitor-community/cookies@^6.0.0` AND `@capacitor-community/cookies@^7.0.0` — see `rpi/mobile-cookies-persistence/plan.md §Risk Mitigation`. The body-token + Authorization-header path is the documented fallback and is sufficient to fix the bug. If a future native-store cookies plugin (e.g. a fork, or `@capacitor/core` itself adding `CapacitorCookies` in a later major) becomes available, re-evaluate it as an optimization rather than a bug fix.
+- **Playwright regression specs T3.7 + T3.8 + T4.5** — extending `apps/webClient/tests/auth.spec.ts` + new `apps/webClient/tests/cookies-persistence.spec.ts` (running with `--disable-web-security` to simulate the WebView's third-party cookie block) plus `apps/api/test/auth-throttle.e2e-spec.ts` per-device case. The backend specs (`auth-cookie-bridge.spec.ts` T1.7) cover the controller contract end-to-end for body+header+cookie input/output channels. The frontend Playwright regression specs are queued for a follow-up PR alongside device smoke (T5.3 manual on-device).
+- **Manual device smoke T5.3** — build APK on a real Android device, log in, kill via Settings → Apps → BG, relaunch, confirm user lands on Dashboard (not Login). Sandbox does not run gradle; defer to CI / on-device run.
+
+### Files modified (this entry)
+
+| Front | Files |
+|-------|-------|
+| Backend | `apps/api/src/adapters/auth/http/auth.controller.ts` (T1.1–T1.4 + T4.1) · `apps/api/src/app.module.ts` (T1.5 + T4.3 inline comment) · `apps/api/test/auth-cookie-bridge.spec.ts` (T1.7 NEW + body/header refresh cases) |
+| Frontend | `apps/webClient/src/infrastructure/api.config.ts` (T3.1–T3.3 + T3.6) · `apps/webClient/src/infrastructure/device-id.ts` (T3.5 NEW) |
+| Release | `package.json` (root, version 1.2.0 → 1.3.0) · `docs/changelog.md` (this entry) · `knowledge.md` (existing §13.3 entry appended) |
+
+### Why a minor-bump not a patch
+
+Per `knowledge.md §16.1`: (1) New response-body contract on four auth routes — additive to existing `{user, message}` shape, but consumers reading `/docs` see new fields. (2) New plugin contract attempted but E404'd; documented fallback (Authorization header + localStorage). (3) `@SkipThrottle()` change is a behavioural change on the global ThrottlerModule. (4) New `X-Device-Id` request header emitted by the webClient. Combined: minor bump `1.2.0 → 1.3.0`.
+
+### Quality gates
+
+- ✅ Backend `tsc --noEmit -p tsconfig.json` clean
+- ✅ Backend `prettier --check` clean on all touched files
+- ✅ Backend `eslint` clean on touched files
+- ✅ Backend `jest test/auth-cookie-bridge.spec.ts` — 6 tests passing (firebaseLogin + login + refresh + 401-no-cookie + body-input refresh + header-input refresh)
+- ✅ Backend `jest test/auth-service.spec.ts` — 21 tests pass (no regression on existing login/signup/forgot-password/reset-password tests)
+- ✅ Backend `pnpm --filter mobile sync` — 4 plugins registered (no cookie plugin per documented fallback); `MainActivity.java` untouched
+- 🟡 Frontend Playwright — `auth.spec.ts` extended coverage queued for follow-up PR (see "Out of scope" above)
+- 🟡 Native `./gradlew assembleRelease` — not executed in sandbox; follow-up CI / on-device smoke queued
+
+---
+
 ## [v1.2.0] — 2026-06-26
 
 ### Changed
