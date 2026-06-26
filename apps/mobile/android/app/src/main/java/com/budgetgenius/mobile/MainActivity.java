@@ -53,4 +53,10 @@ public class MainActivity extends BridgeActivity
       ((SocialLoginPlugin) plugin).handleGoogleLoginIntent(requestCode, data);
     }
   }
+
+  // This method is required by the `ModifiedMainActivityForSocialLoginPlugin` interface.
+  @Override
+  public void IHaveModifiedTheMainActivityForTheUseWithSocialLoginPlugin() {
+      // This method is intentionally left empty. Its presence serves as a marker to indicate that the MainActivity has been modified to support the SocialLogin plugin.
+  }
 }
