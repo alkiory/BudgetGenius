@@ -11,11 +11,11 @@
     "dev:android": "CAP_DEV=true npx cap sync"
   },
   "dependencies": {
-    "@capacitor-firebase/authentication": "^7.5.0",
     "@capacitor/app": "^7.1.2",
     "@capacitor/browser": "^7.0.5",
     "@capacitor/core": "^7.6.7",
-    "@capacitor/status-bar": "^7.0.6"
+    "@capacitor/status-bar": "^7.0.6",
+    "@capgo/capacitor-social-login": "^7.20.0"
   },
   "devDependencies": {
     "@capacitor/android": "^7.6.7",

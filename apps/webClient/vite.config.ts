@@ -58,18 +58,46 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 500,
     rollupOptions: {
-      // Capacitor native plugins (@capacitor/app, @capacitor/browser) are only
-      // available inside the Capacitor WebView at runtime. For web builds
-      // (VITE_CAPACITOR is not set), mark them as external so Rollup leaves
-      // the dynamic import() calls as-is — isNativePlatform() guards ensure
-      // they're never executed in a browser.
-      // For Capacitor APK builds (VITE_CAPACITOR=true), DON'T externalize —
-      // the WebView needs these modules bundled, otherwise it tries to resolve
-      // the bare specifier "@capacitor/browser" as a native ES module and fails
-      // with "Failed to resolve module specifier".
+      // === Web-build-only external list ===
+      //
+      // Capacitor-native plugins only resolve at runtime inside the
+      // Capacitor WebView, which injects a module map. Three cases:
+      //
+      // (1) `VITE_CAPACITOR === "true"` → bundling for an APK.
+      //     We MUST bundle the plugins because the WebView doesn't
+      //     have an import-map for them and the bundled JS would throw
+      //     `Failed to resolve module specifier '@capacitor/...'`
+      //     at module-evaluation time.
+      //
+      // (2) `VITE_CAPACITOR !== "true"` (web build for Vercel / Firebase).
+      //     No Capacitor runtime in the browser. Calling code is
+      //     guarded by `isNativePlatform()` (early-returns `false`),
+      //     so the imported symbols are never invoked. Marking the
+      //     specifier as `external` keeps Rollup from bundling the
+      //     (unused) module — but the bare specifier is still emitted
+      //     unless the *call sites* also use dynamic `await import()`.
+      //     All three plugins below are therefore imported dynamically
+      //     (see adapters/auth/native-google-login.strategy.ts and the
+      //     @capacitor/app / @capacitor/browser consumers).
+      //
+      // (3) If you add a new Capacitor-native plugin, add it to this
+      //     web-build external list AND audit its call sites to use
+      //     dynamic imports.
       external: process.env.VITE_CAPACITOR === 'true'
         ? []
-        : ["@capacitor/app", "@capacitor/browser"],
+        : [
+            "@capacitor/app",
+            "@capacitor/browser",
+            // @capgo/capacitor-social-login (v1.2.0) replaces
+            // @capacitor-firebase/authentication. The WebView's runtime
+            // resolves the bare specifier against the bundled APK; on
+            // web builds it would fail, so we keep it external — Vite
+            // leaves the dynamic import() call as-is and the
+            // isNativePlatform() guard in
+            // adapters/auth/native-google-login.strategy.ts prevents
+            // it from ever running.
+            "@capgo/capacitor-social-login",
+          ],
       output: {
         manualChunks(id) {
           if (id.includes("/recharts/")) {

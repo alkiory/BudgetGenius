@@ -42,6 +42,7 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_MEASURENT_ID: ${{ secrets.VITE_FIREBASE_MEASURENT_ID }}
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
 
       # ── Firebase Hosting preview (with retry) ─────────────────────────
       # Three-step retry chain around `FirebaseExtended/action-hosting-deploy@v0.11.0`

@@ -9,23 +9,49 @@ export { WebGoogleLoginStrategy } from "./web-google-login.strategy";
 export { NativeGoogleLoginStrategy } from "./native-google-login.strategy";
 
 /**
+ * Idempotent Google-plugin initializer. Call once at app startup (we
+ * wire it from `App.tsx` alongside `useRestoreSession`) so the
+ * Credential Manager UI shows up instantly on the first tap of the
+ * Google button — no "please wait while we initialize" delay.
+ *
+ * Safe to call multiple times: the first call kicks off
+ * `SocialLogin.initialize(...)` and stashes the promise at module
+ * scope in `native-google-login.strategy.ts`; subsequent calls
+ * (including from React StrictMode double-mounts) await the *same*
+ * promise instead of re-initializing and re-throwing the underlying
+ * GoogleAuthException for credential state.
+ *
+ * On non-native (web) builds this is a no-op so the dev server
+ * doesn't import a Capacitor-only module eagerly.
+ */
+export async function initializeGoogleAuth(): Promise<void> {
+  if (!isNativePlatform()) return;
+  const { ensureSocialLoginInitialized } = await import(
+    "./native-google-login.strategy"
+  );
+  await ensureSocialLoginInitialized();
+}
+
+/**
  * Hybrid strategy: the single source of truth for picking a
  * Google-login implementation by platform.
  *
  *   ┌────────────────────────────┬──────────────────────────────────────┐
- *   │ isNativePlatform() === true│ NativeGoogleLoginStrategy → @capacitor│
- *   │                            │  -firebase/authentication (Android SDK)│
- *   │                            │  Falls back to WebGoogleLoginStrategy │
- *   │                            │  (signInWithRedirect) when the plugin │
- *   │                            │  is unknown / throws a recognised     │
- *   │                            │  marker (see "Fallback ladder" below).│
+ *   │ isNativePlatform() === true│ NativeGoogleLoginStrategy →          │
+ *   │                            │ @capgo/capacitor-social-login        │
+ *   │                            │ (Android Credential Manager,         │
+ *   │                            │ bottom sheet inside the app).        │
+ *   │                            │ Falls back to WebGoogleLoginStrategy │
+ *   │                            │ (signInWithRedirect) when the plugin │
+ *   │                            │ is unknown / throws a recognised     │
+ *   │                            │ marker (see "Fallback ladder" below).│
  *   ├────────────────────────────┼──────────────────────────────────────┤
  *   │ Standard browser tab       │ WebGoogleLoginStrategy →              │
  *   │                            │ signInWithPopup (snappy UX)          │
  *   └────────────────────────────┴──────────────────────────────────────┘
  *
  * Responsibilities are split so each strategy owns ONE concern:
- *   - `NativeGoogleLoginStrategy`  → only @capacitor-firebase/authentication.
+ *   - `NativeGoogleLoginStrategy`  → only @capgo/capacitor-social-login.
  *   - `WebGoogleLoginStrategy`     → only Firebase JS SDK (popup or redirect).
  *   - `HybridGoogleLoginStrategy`  → platform gatekeeper + fallback ladder.
  *
@@ -37,14 +63,10 @@ export { NativeGoogleLoginStrategy } from "./native-google-login.strategy";
  *   3. Web SDK redirect throws (any message)     → wrapped in
  *      `nativegoogle: signInWithRedirect failed: …` so this ladder
  *      treats it as a non-fatal fallback signal, NOT a hard error.
- *      Without this tag the redirect branch's failure would surface
- *      as an `auth/operation-not-supported-in-this-environment` etc.
- *      error to the React UI and give the user a hard failure with
- *      no recovery path.
  */
 class HybridGoogleLoginStrategy implements GoogleLoginStrategy {
   async login(): Promise<{ idToken: string }> {
-    // Native APK: prefer the Capacitor plugin; fall back to Web SDK
+    // Native APK: prefer the Credential Manager; fall back to Web SDK
     // (which will use signInWithRedirect internally).
     if (isNativePlatform()) {
       try {

@@ -22,30 +22,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Captura el redirect del flujo OAuth de Google cuando usamos
-                 @capacitor/browser + custom scheme bgg://auth. Después de que
-                 el backend completa la autenticación OAuth, redirect a
-                 bgg://auth/success con los tokens JWT en la URL. Android abre
-                 la app y Capacitor lo captura via App.addListener('appUrlOpen'). -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="bgg" android:host="auth" />
-            </intent-filter>
-
-            <!-- Captura el redirect de Firebase Auth signInWithRedirect.
-                 Cuando el Web SDK de Firebase completa el flujo OAuth con Google,
-                 redirect a https://localhost/__/auth/handler. Este intent filter
-                 captura esa URL y la entrega a Capacitor via onNewIntent, lo que
-                 permite que useFirebaseRedirectReturn consuma el resultado. -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="localhost" android:pathPrefix="/__/auth/" />
-            </intent-filter>
-
         </activity>
 
         <provider

@@ -3,7 +3,7 @@ import { store } from "@adapters/store/rootStore";
 import { AuthRepository } from "@domain/auth/AuthRepository";
 import { User } from "@domain/index";
 import api from "@infrastructure/api.config";
-import { createGoogleLoginStrategy, isNativePlatform } from "@adapters/auth";
+import { createGoogleLoginStrategy } from "@adapters/auth";
 
 export const authRepository: AuthRepository = {
   async login(email: string, password: string) {
@@ -47,21 +47,12 @@ export const authRepository: AuthRepository = {
   },
 
   async googleLogin() {
-    // Capacitor native: use the backend's own OAuth flow via @capacitor/browser
-    // instead of Firebase Auth's signInWithRedirect (which opens the system
-    // browser and doesn't return to the app).
-    if (isNativePlatform()) {
-      const { initiateCapacitorGoogleLogin } = await import(
-        "@adapters/auth/backend-google-login"
-      );
-      await initiateCapacitorGoogleLogin();
-      // The initiate function sets cookies, fetches profile, and dispatches
-      // the auth state. Just return a successful result — the Redux store
-      // is already updated.
-      return { message: "🔓 Google login successful" };
-    }
-
-    // Web: use Firebase Auth (signInWithPopup for snappy UX).
+    // Strategy Pattern: pick the right implementation for the platform
+    // automatically (Hybrid gatekeeper). Native → @capgo/capacitor-social-
+    // login's Credential Manager bottom sheet (no Chrome Custom Tab, no
+    // localhost redirect, no app re-launch). Web → Firebase JS SDK popup.
+    // The backend endpoint is identical in both cases — /auth/firebase-
+    // login verifies the Google idToken with Firebase Admin.
     const strategy = createGoogleLoginStrategy();
     const { idToken } = await strategy.login();
 

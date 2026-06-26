@@ -2,9 +2,6 @@
 include ':capacitor-android'
 project(':capacitor-android').projectDir = new File('../../../node_modules/.pnpm/@capacitor+android@7.6.7_@capacitor+core@7.6.7/node_modules/@capacitor/android/capacitor')
 
-include ':capacitor-firebase-authentication'
-project(':capacitor-firebase-authentication').projectDir = new File('../../../node_modules/.pnpm/@capacitor-firebase+authentication@7.5.0_@capacitor+core@7.6.7_firebase@11.8.0/node_modules/@capacitor-firebase/authentication/android')
-
 include ':capacitor-app'
 project(':capacitor-app').projectDir = new File('../../../node_modules/.pnpm/@capacitor+app@7.1.2_@capacitor+core@7.6.7/node_modules/@capacitor/app/android')
 
@@ -13,3 +10,10 @@ project(':capacitor-browser').projectDir = new File('../../../node_modules/.pnpm
 
 include ':capacitor-status-bar'
 project(':capacitor-status-bar').projectDir = new File('../../../node_modules/.pnpm/@capacitor+status-bar@7.0.6_@capacitor+core@7.6.7/node_modules/@capacitor/status-bar/android')
+
+// @capgo/capacitor-social-login — replaces @capacitor-firebase/authentication
+// (removed in v1.2.0, see docs/changelog.md). Path uses pnpm's content-
+// addressable store layout; if the SDK is upgraded the version before
+// `@7.x.x` must be bumped here AND in the matching capacitor.plugins.json.
+include ':capacitor-social-login'
+project(':capacitor-social-login').projectDir = new File('../../../node_modules/.pnpm/@capgo+capacitor-social-login@7.x.x_@capacitor+core@7.6.7/node_modules/@capgo/capacitor-social-login/android')

@@ -15,32 +15,33 @@ import type { GoogleLoginStrategy } from "./google-login-strategy";
  *
  * Two branches:
  *
- * 1. **Capacitor WebView (isNativePlatform === true)** — pop-ups are
- *    blocked by WebView chrome, so we use `signInWithRedirect`. The
- *    page navigates to Google, the user picks an account, Google
- *    returns the OAuth response to `${AUTH_DOMAIN}/__/auth/handler`
- *    (Firebase's standard handler URL). On Android, the
- *    `AndroidManifest.xml` intent filter for
- *    `https://localhost/__/auth/` re-opens the app's WebView with the
- *    response, and `useFirebaseRedirectReturn.ts` consumes
- *    `getRedirectResult(auth)` to extract the idToken.
+ * 1. **Capacitor WebView (isNativePlatform === true)** — VESTIGIAL
+ *    after the v1.2.0 migration to `@capgo/capacitor-social-login`.
+ *    The previous flow called `signInWithRedirect` and relied on an
+ *    Android intent filter + `useFirebaseRedirectReturn` hook to
+ *    capture the response once Google redirected back. Both were
+ *    removed in v1.2.0 because the Capacitor plugin now opens Google's
+ *    Credential Manager bottom sheet natively (via
+ *    `NativeGoogleLoginStrategy`) and returns the idToken directly,
+ *    bypassing the WebView redirect dance entirely.
  *
- *    WebView's `https://localhost` origin is in Firebase's default
- *    authorized-domain list (Firebase always whitelists `localhost`),
- *    so the redirect works without additional console configuration.
- *
- *    We return a never-resolving promise so React Query's
- *    `mutation.onError` is NOT invoked with a network-level
- *    `navigation-aborted` error during the cross-origin redirect.
- *    Resolving the promise would also fire `onSuccess` with no
- *    `idToken`, which would skip the `/auth/firebase-login` POST and
- *    leave the auth slice in an unauthenticated state — that path is
- *    owned exclusively by `useFirebaseRedirectReturn.ts` once the
- *    redirect completes and the WebView is back at `https://localhost`.
+ *    `signInWithRedirect` is still attempted as a fallback rung
+ *    (HybridGoogleLoginStrategy will swap here if the native plugin
+ *    is unavailable on a Capacitor build), and the never-resolving
+ *    promise below keeps React Query from firing `onError` with a
+ *    `navigation-aborted` during the cross-origin navigation. On
+ *    modern Android the redirect response will no longer be re-opened
+ *    in the WebView (no intent filter), so this branch hangs if
+ *    reached — in practice the native plugin succeeds first. If you
+ *    ever ship a Capacitor WebView + pure Firebase Web SDK combo
+ *    again, you'll need to re-add both the Android intent filter for
+ *    `https://localhost/__/auth/` AND a hook that drains
+ *    `getRedirectResult` on mount.
  *
  * 2. **Standard browser** — fast `signInWithPopup`.
  *    `signInWithRedirect` would also work, but a pop-up avoids the
- *    full-page navigation cost and keeps the user in the React app.
+ *    full-page navigation cost and keeps the user in the React app
+ *    while the user picks their Google account.
  */
 export class WebGoogleLoginStrategy implements GoogleLoginStrategy {
   async login(): Promise<{ idToken: string }> {
