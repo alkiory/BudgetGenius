@@ -7,7 +7,9 @@ android {
   }
 }
 
-apply from: "../capacitor-cordova-android-plugins/cordova.variables.gradle"
+// NOTE: 'apply from: "../capacitor-cordova-android-plugins/cordova.variables.gradle"'
+// was removed — see settings.gradle for the full rationale. The Capacitor
+// compat shim is no longer wired into the app's auto-generated build script.
 dependencies {
     implementation project(':capacitor-app')
     implementation project(':capacitor-browser')

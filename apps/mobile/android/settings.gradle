@@ -1,5 +1,40 @@
 include ':app'
-include ':capacitor-cordova-android-plugins'
-project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
 
+// NOTE: The ':capacitor-cordova-android-plugins' shim was removed in
+// 2026-06 because:
+//
+//   1. BudgetGenius has NO Cordova plugins installed — every native plugin
+//      (@capacitor/app, @capacitor/browser, @capacitor/core, @capacitor/
+//      status-bar, @capgo/capacitor-social-login) is a pure Capacitor 7
+//      plugin, so the Cordova compat bridge is dead weight.
+//
+//   2. Even with no Cordova plugins to compile, AGP 8.7.2's
+//      `processDebugResources` task on any module that carries the legacy
+//      Capacitor-Cordova namespace (`capacitor.android.plugins`) probes
+//      the host Android SDK via `sdkmanager` for two packages —
+//      `extras;android;m2repository` and `add-ons;addon-google_apis-google-24`
+//      — that Google removed from `sdkmanager --list` around 2023-2024.
+//      The build then dies with both:
+//
+//        > Could not find any matches for the following component/package
+//          combinations: extras;android;m2repository,
+//          add-ons;addon-google_apis-google-24
+//        > Tool/Gadget dependency error: Platform: android-35 requires
+//          the following missing components: extras;android;m2repository
+//
+//      Those probes fire BEFORE any actual `:capacitor-cordova-android-
+//      plugins:processDebugResources` work happens, so removing the
+//      module from the build graph (this file, app/build.gradle, and
+//      app/capacitor.build.gradle) is the only way to skip them.
+//
+// If `cap sync android` ever regenerates this directory (e.g., after a
+// Capacitor CLI version bump that re-introduces the compat shim by
+// default), the `Remove Capacitor Cordova compat shim (post-sync)` step
+// in `.github/workflows/build-apk.yml` runs AFTER sync and re-deletes it
+// (it MUST run after sync, not before — `cap sync` re-extracts
+// capacitor-cordova-android-plugins.tar.gz into this directory on every
+// run, see node_modules/@capacitor/cli/dist/android/update.js lines 144 /
+// 185 for the source). Better: don't add a Cordova plugin to
+// package.json — migrate to its Capacitor-only equivalent so the compat
+// shim never needs to exist.
 apply from: 'capacitor.settings.gradle'

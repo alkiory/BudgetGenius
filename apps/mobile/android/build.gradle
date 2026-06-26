@@ -40,16 +40,36 @@ allprojects {
     //
     // We substitute the module request itself — `dependencySubstitution`
     // operates below the version-constraint layer, so every reference to
-    // androidx.browser:browser (the direct 1.9.0 request, the strict
-    // transitive 1.4.0 request, AND the variant-from-androidbrowserhelper)
-    // is rewritten to use 1.9.0 at graph-resolution time, bypassing the
-    // `strictly` pin. Targeting 1.9.0 (not a higher version) keeps API
-    // compat with what @capgo/capacitor-social-login was authored against.
+    // androidx.browser:browser (the direct 1.9.0 request from the plugin,
+    // the strict-transitive 1.4.0 request from androidbrowserhelper, AND
+    // the 1.4.0 requirement on the runtime classpath) is rewritten to
+    // one target version at graph-resolution time, bypassing the
+    // `strictly` pin.
+    //
+    // Why 1.8.0 and not 1.9.0? @capgo/capacitor-social-login@7.20.0
+    // requests 1.9.0 directly, but androidx.browser:1.9.0's AAR
+    // metadata requires compileSdk 36 + AGP 8.9.1+. Our project is on
+    // compileSdk 35 + AGP 8.7.2 (Capacitor 7 defaults in variables.gradle
+    // and the root buildscript), which forces `:app:checkDebugAarMetadata`
+    // to fail. 1.8.0 is the highest stable release whose AAR metadata is
+    // satisfied by our current toolchain. Chrome Custom Tabs (the API
+    // @capgo uses for in-app Google login) is stable since 1.0.0, so the
+    // 1.8.0 → 1.9.0 deltas are not exercised by the plugin and the
+    // resolver is the only thing that cares.
     //
     // Reference: https://docs.gradle.org/current/userguide/resolution_rules.html#sec:dependency-substitution-rules
+    //
+    // REVERT when the project moves to compileSdk ≥ 36 AND AGP ≥ 8.9.1
+    // (bump both together, in variables.gradle and the root buildscript
+    // classpath respectively — also bump `build-tools;35.0.0` and
+    // `platforms;android-35` in .github/workflows/build-apk.yml to
+    // their 36.x equivalents, and bump gradle/wrapper/gradle-wrapper.properties
+    // if the AGP release you bump to requires a newer Gradle distribution).
+    // At that point delete this rule and let @capgo/capacitor-social-login
+    // request whatever it wants.
     configurations.all {
         resolutionStrategy.dependencySubstitution {
-            substitute module('androidx.browser:browser') using module('androidx.browser:browser:1.9.0') because 'force-upgrade to 1.9.0 to satisfy @capgo/capacitor-social-login direct dep and override strictly 1.4.0 transitive constraint from com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+            substitute module('androidx.browser:browser') using module('androidx.browser:browser:1.8.0') because 'pin to 1.8.0 to satisfy compileSdk 35 + AGP 8.7.2 AAR metadata while overriding strictly 1.4.0 transitive constraint from com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
         }
     }
 }

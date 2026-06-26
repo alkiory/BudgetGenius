@@ -94,8 +94,63 @@ jobs:
           VITE_IS_MOBILE_BUILD: "true"
 
       # ── Sync Capacitor (copies dist/ → android/) ─────────────────────────
+      # `cap sync android` re-extracts `capacitor-cordova-android-plugins.tar.gz`
+      # from @capacitor/cli into apps/mobile/android/capacitor-cordova-android-
+      # plugins/ ON EVERY RUN (see node_modules/@capacitor/cli/dist/android/
+      # update.js lines 144 / 185). That empty Cordova-compat shim's
+      # processDebugResources triggers AGP 8.7.2's sdkmanager auto-install
+      # probe, which tries to fetch `extras;android;m2repository` and
+      # `add-ons;addon-google_apis-google-24` (both gone since ~2024) and
+      # dies. We already delete the module in apps/mobile/android/settings.gradle
+      # + app/build.gradle + app/capacitor.build.gradle AND disable AGP's
+      # auto-download in gradle.properties (`android.builder.sdkDownload=false`)
+      # — but this step is the belt-and-suspenders cleanup right after
+      # sync re-creates the directory. See the long comment blocks in
+      # apps/mobile/android/settings.gradle + gradle.properties for full rationale.
       - name: Sync Capacitor
         run: pnpm --filter mobile sync
+
+      # ── Remove Capacitor Cordova compat shim (post-sync) ──────────────────
+      # Runs AFTER `pnpm --filter mobile sync` because cap sync re-extracts
+      # the shim from capacitor-cordova-android-plugins.tar.gz every time
+      # (see node_modules/@capacitor/cli/dist/android/update.js lines 144 / 185).
+      #
+      # Two separate steps (NOT one) so the `sed` ALWAYS runs even when cap
+      # sync regenerates `capacitor.build.gradle` without re-extracting the
+      # shim tarball — a real edge case in Capacitor 7's CLI.
+      #
+      # The `sed` regex is anchored to non-`/` lines (`^[^/]*apply from`) so
+      # the rationale comments in `capacitor.build.gradle` (which mention the
+      # string `apply from: "../capacitor-cordova-android-plugins/..."` as
+      # prose documentation) are NOT stripped — only the actual offending
+      # `apply from` line is removed.
+      - name: Remove Capacitor Cordova compat shim (post-sync)
+        if: hashFiles('apps/mobile/android/capacitor-cordova-android-plugins/build.gradle') != ''
+        run: rm -rf apps/mobile/android/capacitor-cordova-android-plugins
+
+      # Strip the auto-generated `apply from` line that @capacitor/cli re-emits
+      # into `capacitor.build.gradle` (line 155 of update.js template) every
+      # sync. If we left it in, Gradle would fail with `Build file
+      # '.../cordova.variables.gradle' not found`. Anchored to `^[^/]*`
+      # so the rationale comments in capacitor.build.gradle that mention the
+      # string in prose are left untouched (see the long commentary around
+      # the post-sync step above for context).
+      #
+      # The `test -f … && sed …` form scopes the no-op to the *missing-file*
+      # edge case only — a real sed failure (bad regex, permission denied,
+      # read-only filesystem) still surfaces as a workflow error, which is
+      # what we want for a CI safety net. `|| true` would have masked all
+      # such failures indiscriminately.
+      #
+      # NOTE — do NOT add `|| true` at the end of this `run:` block. Our
+      # shell semantics are deliberately: missing `capacitor.build.gradle`
+      # post-sync = upstream `pnpm --filter mobile sync` failed to write
+      # native config = CI should turn RED on that, not silently skip.
+      - name: Strip defunct apply-from line from capacitor.build.gradle (post-sync)
+        run: |
+          test -f apps/mobile/android/app/capacitor.build.gradle \
+              && sed -i '/^[^/]*apply from.*capacitor-cordova-android-plugins/d' \
+                  apps/mobile/android/app/capacitor.build.gradle
 
       # ── Inject Firebase Services Configuration ───────────────────────────
       - name: Inject Firebase google-services.json
