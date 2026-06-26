@@ -22,6 +22,36 @@ allprojects {
         google()
         mavenCentral()
     }
+
+    // ── Workaround: androidx.browser version conflict ─────────────────────────
+    // `@capgo/capacitor-social-login@7.20.0` (enabled via
+    // socialLogin.google.include=true / dependencyType=implementation in its
+    // own gradle.properties) declares a direct dep on
+    // androidx.browser:browser:1.9.0 *and* pulls in
+    // com.google.androidbrowserhelper:androidbrowserhelper:2.5.0, which
+    // transitively pins androidx.browser:browser `{strictly 1.4.0}`. Under
+    // Gradle 8's consistent resolution, that strict constraint cannot be
+    // reconciled with the direct 1.9.0 request and the build for
+    // `:capgo-capacitor-social-login:compileDebugJavaWithJavac` fails with:
+    //
+    //   Cannot find a version of 'androidx.browser:browser' that satisfies
+    //   the version constraints: 1.9.0 (direct) vs {strictly 1.4.0} (strict
+    //   transitive) because of consistent resolution
+    //
+    // We substitute the module request itself — `dependencySubstitution`
+    // operates below the version-constraint layer, so every reference to
+    // androidx.browser:browser (the direct 1.9.0 request, the strict
+    // transitive 1.4.0 request, AND the variant-from-androidbrowserhelper)
+    // is rewritten to use 1.9.0 at graph-resolution time, bypassing the
+    // `strictly` pin. Targeting 1.9.0 (not a higher version) keeps API
+    // compat with what @capgo/capacitor-social-login was authored against.
+    //
+    // Reference: https://docs.gradle.org/current/userguide/resolution_rules.html#sec:dependency-substitution-rules
+    configurations.all {
+        resolutionStrategy.dependencySubstitution {
+            substitute module('androidx.browser:browser') using module('androidx.browser:browser:1.9.0') because 'force-upgrade to 1.9.0 to satisfy @capgo/capacitor-social-login direct dep and override strictly 1.4.0 transitive constraint from com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+        }
+    }
 }
 
 task clean(type: Delete) {
