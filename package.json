@@ -12,7 +12,7 @@
     "test:e2e": "npx turbo test:e2e",
     "test:cov": "npx turbo test:cov",
     "bootstrap": "bash ./scripts/bootstrap.sh",
-    "icons:regenerate": "python3 apps/mobile/scripts/generate-launcher-icons.py"
+    "icons:regenerate": "python3 apps/mobile/scripts/resize-launcher-icons.py"
   },
   "author": "Alkiory",
   "license": "ISC",

@@ -50,6 +50,10 @@ export const authRepository: AuthRepository = {
     const { idToken } = await strategy.login();
 
     const response = await api.post("/auth/firebase-login", { idToken });
+    // Backend now returns `{ user, message }` symmetric with
+    // /auth/login and /auth/signup (see apps/api/src/adapters/auth/http/
+    // auth.controller.ts @Post('firebase-login')). No client-side
+    // reshaping needed — consumers read `data.user` directly.
     return response.data;
   },
 

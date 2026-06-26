@@ -131,7 +131,36 @@ export class AuthController {
   @ApiOperation({ summary: 'Autenticar con Firebase' })
   @ApiResponse({
     status: 200,
-    description: 'Token verificado y cookies seteadas',
+    description:
+      'ID token de Firebase verificado, cookies JWT seteadas y payload ' +
+      'del usuario en el cuerpo. Esquema sim\u00e9trico con /auth/login y ' +
+      '/auth/signup para que los consumidores no tengan que branching ' +
+      'per-endpoint.',
+    schema: {
+      example: {
+        message: '\ud83d\udd13 Login successful',
+        user: {
+          id: 1,
+          name: 'Sergio',
+          surname: 'Campbell',
+          email: 'sergio@example.com',
+          authProvider: 'google',
+          role: 'user',
+          isPremium: false,
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'ID token de Firebase inv\u00e1lido o expirado.',
+  })
+  // Surface the global ThrottlerModule bucket (4 rps) AND any future
+  // route-level @Throttle override via Swagger -- without this 429,
+  // consumers have to infer rate-limit behaviour from set-cookie headers.
+  @ApiResponse({
+    status: 429,
+    description: 'Demasiados intentos, intenta en unos minutos',
   })
   async firebaseLogin(
     @Body() body: { idToken: string },
@@ -160,7 +189,13 @@ export class AuthController {
 
       return {
         message: '🔓 Login successful',
-        userEntity,
+        // Symmetric with /auth/login ({ user, message }) and
+        // /auth/signup ({ user, ... }) — kept the source-of-truth on the
+        // server. The previous `userEntity` field forced a per-consumer
+        // destructure in apps/webClient/src/adapters/http/auth.repository
+        // .ts; with the unified contract, callers can read `data.user`
+        // identically regardless of which endpoint issued the tokens.
+        user: userEntity,
       };
     } catch (error) {
       this.logger.error(`🚨 Falló el login con Firebase: ${error.message}`);
@@ -193,6 +228,15 @@ export class AuthController {
     status: 409,
     description:
       'El correo ya está registrado. Si coincide con tu contraseña, se inicia sesión (idempotente); si no, devuelve conflicto.',
+  })
+  // Documents the global ThrottlerModule 4-rps limit on the signup
+  // path. There is no AuthService-level rate limit on signup (the
+  // existing per-email bucket is login-only), but the global nest
+  // throttle still triggers 429 under repeated automated signups from
+  // a single IP — Swagger should reflect that.
+  @ApiResponse({
+    status: 429,
+    description: 'Demasiados intentos, intenta en unos minutos',
   })
   async signup(
     @Body() signupDTO: CreateUserDto,
@@ -269,14 +313,36 @@ export class AuthController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Usuario autenticado exitosamente',
+    description:
+      'Usuario autenticado exitosamente, cookies JWT seteadas y payload ' +
+      'del usuario en el cuerpo. Esquema sim\u00e9trico con /auth/firebase-login ' +
+      'y /auth/signup para que los consumidores no tengan que branching ' +
+      'per-endpoint.',
     schema: {
       example: {
-        message: '🔓 Login successful',
+        message: '\ud83d\udd13 Login successful',
+        user: {
+          id: 1,
+          name: 'John',
+          surname: 'Doe',
+          email: 'john.doe@example.com',
+          authProvider: 'email',
+          role: 'user',
+          isPremium: false,
+        },
       },
     },
   })
-  @ApiResponse({ status: 401, description: 'Credenciales inválidas' })
+  @ApiResponse({ status: 401, description: 'Credenciales inv\u00e1lidas' })
+  // Documents BOTH the LOGIN_MAX_ATTEMPTS brute-force bucket in
+  // AuthService.login (HttpStatus.TOO_MANY_REQUESTS) AND the global
+  // 4-rps ThrottlerModule limit. Without this, Swagger hides the
+  // 429 path that the API actually emits when an account is
+  // hammered past 5 attempts in 15 minutes.
+  @ApiResponse({
+    status: 429,
+    description: 'Demasiados intentos, intenta en unos minutos',
+  })
   async login(
     @Body() body: LoginDto,
     @Res({ passthrough: true }) res: Response,
