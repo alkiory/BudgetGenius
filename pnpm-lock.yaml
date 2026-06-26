@@ -232,6 +232,9 @@ importers:
       '@capacitor/status-bar':
         specifier: ^7.0.6
         version: 7.0.6(@capacitor/core@7.6.7)
+      '@capgo/capacitor-social-login':
+        specifier: ^7.20.0
+        version: 7.20.0(@capacitor/core@7.6.7)
     devDependencies:
       '@capacitor/android':
         specifier: ^7.6.7
