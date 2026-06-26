@@ -1,4 +1,4 @@
-import { loginAction } from "@adapters/slices/auth/authSlice";
+import { loginAction, setUser } from "@adapters/slices/auth/authSlice";
 import { googleLogin } from "@application/auth/auth.service";
 import { app as firebaseApp } from "@infrastructure/firebaseConfig";
 import { RoutePaths } from "@presentation/utils/routes";
@@ -15,31 +15,27 @@ export function SocialLoginButtons() {
 
   const [loading, setLoading] = useState(false);
 
-  // Skip the Google button entirely when the Firebase web SDK never
-  // initialised — i.e. `VITE_FIREBASE_API_KEY` / `VITE_FIREBASE_PROJECT_ID`
-  // / `VITE_FIREBASE_APP_ID` were missing at build time. The previous
-  // version rendered the button unconditionally and then the strategy
-  // threw "Firebase is not configured" via react-hot-toast — which
-  // confused users into thinking email/password was broken too (it isn't).
-  // We render nothing in that case; the email/password form above already
-  // covers the full sign-in flow.
-  if (!firebaseApp) {
-    return null;
-  }
-
+  // useMutation MUST be called every render to satisfy the rules-of-hooks.
+  // Render-side gating of the button JSX happens below in the firebaseApp
+  // check: when firebaseApp is null, the button never paints so the mutate
+  // function is set up but never invoked, which is harmless. The previous
+  // shape had the early-return above the hook, which React flagged as a
+  // conditional hook call (build error: "React Hook 'useMutation' is called
+  // conditionally").
   const { mutate: signInWithGoogle } = useMutation({
     mutationKey: ["google-auth"],
     mutationFn: googleLogin,
     onSuccess: (data: any) => {
-      if (data && data.message) {
-        dispatch(loginAction());
-        successToast("Autenticación exitosa");
-        setLoading(true);
-        setTimeout(() => {
-          navigate(RoutePaths.App + "/" + RoutePaths.Dashboard);
-          setLoading(false);
-        }, 1000);
+      if (data?.user) {
+        dispatch(setUser(data.user));
       }
+      dispatch(loginAction());
+      successToast("Autenticación exitosa");
+      setLoading(true);
+      setTimeout(() => {
+        navigate(RoutePaths.App + "/" + RoutePaths.Dashboard);
+        setLoading(false);
+      }, 1000);
     },
     onError: (error) => {
       errorToast(error.message);

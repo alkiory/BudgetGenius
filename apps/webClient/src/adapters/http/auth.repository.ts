@@ -1,9 +1,9 @@
+import { createGoogleLoginStrategy } from "@adapters/auth";
 import { logoutAction } from "@adapters/slices/auth/authSlice";
 import { store } from "@adapters/store/rootStore";
 import { AuthRepository } from "@domain/auth/AuthRepository";
 import { User } from "@domain/index";
 import api from "@infrastructure/api.config";
-import { createGoogleLoginStrategy } from "@adapters/auth";
 
 export const authRepository: AuthRepository = {
   async login(email: string, password: string) {
@@ -20,7 +20,6 @@ export const authRepository: AuthRepository = {
   async logout() {
     await api.post("/auth/logout");
     store.dispatch(logoutAction());
-    window.location.href = "/login";
   },
 
   async signup(user: Omit<User, "id">) {
@@ -47,12 +46,6 @@ export const authRepository: AuthRepository = {
   },
 
   async googleLogin() {
-    // Strategy Pattern: pick the right implementation for the platform
-    // automatically (Hybrid gatekeeper). Native → @capgo/capacitor-social-
-    // login's Credential Manager bottom sheet (no Chrome Custom Tab, no
-    // localhost redirect, no app re-launch). Web → Firebase JS SDK popup.
-    // The backend endpoint is identical in both cases — /auth/firebase-
-    // login verifies the Google idToken with Firebase Admin.
     const strategy = createGoogleLoginStrategy();
     const { idToken } = await strategy.login();
 
