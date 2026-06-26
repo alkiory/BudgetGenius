@@ -413,8 +413,7 @@ export class AuthService {
     const jitter =
       RESET_TIMING_JITTER_MS_LO +
       Math.floor(
-        Math.random() *
-          (RESET_TIMING_JITTER_MS_HI - RESET_TIMING_JITTER_MS_LO),
+        Math.random() * (RESET_TIMING_JITTER_MS_HI - RESET_TIMING_JITTER_MS_LO),
       );
     await sleep(jitter);
 
@@ -430,12 +429,11 @@ export class AuthService {
     // of OAuth-only accounts (Google-only users must not silently gain
     // a password they didn't opt into).
     if (!user || user.authProvider !== 'email' || !user.password) {
-      const reason =
-        !user
-          ? 'unknown'
-          : user.authProvider !== 'email'
-            ? 'social-only'
-            : 'no-password';
+      const reason = !user
+        ? 'unknown'
+        : user.authProvider !== 'email'
+        ? 'social-only'
+        : 'no-password';
       this.logger.warn(
         `🔍 Password reset requested for un-resettable account: ${dto.email} (reason: ${reason})`,
       );
@@ -523,7 +521,9 @@ export class AuthService {
         await this.passwordResetRepository.deleteToken(resetToken.id);
       } catch (cleanupErr) {
         this.logger.warn(
-          `Could not delete expired reset token ${resetToken.id}: ${(cleanupErr as Error).message}`,
+          `Could not delete expired reset token ${resetToken.id}: ${
+            (cleanupErr as Error).message
+          }`,
         );
       }
       throw new BadRequestException('🛑 Reset token expired');

@@ -165,7 +165,7 @@ describe('ExpenseCategoryService', () => {
       );
     });
 
-    it('getExpenseCategoryById: only returns rows in the requesting user\'s list', async () => {
+    it("getExpenseCategoryById: only returns rows in the requesting user's list", async () => {
       userRepo.findById.mockResolvedValue(ownerUser);
       // The service uses findByUser + local .find() — never reads foreign
       // rows because the repo scopes by user. Foreign ids naturally

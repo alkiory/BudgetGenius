@@ -24,8 +24,27 @@ jobs:
           distribution: "temurin"
 
       # ── Android SDK ──────────────────────────────────────────────────────
+      # Whitelist the exact SDK packages we need for `assembleDebug` /
+      # `assembleRelease` (compileSdkVersion=35 + minSdk=23). The default
+      # `android-actions/setup-android@v3` install set includes `emulator`,
+      # whose ~1 GB download has been failing intermittently on GitHub
+      # runners since 2026-Q2 with `Error on ZipFile unknown archive`
+      # (likely an incomplete archive from `dl.google.com`). We never run
+      # an emulator in this job — only Gradle build — so omitting it is
+      # safe. If UI tests on an emulator are added later, route them
+      # through `reactivecircus/android-emulator-runner@v2` in a separate
+      # job so build/UI testing stay isolated.
+      #
+      # `packages:` is space-separated (per the v3 action's own README);
+      # commas are silently swallowed and treated as one giant token.
+      # cmdline-tools;latest gives `sdkmanager` itself (needed by any
+      # transitive Gradle step). platform-tools gives `adb`. build-tools
+      # 35.0.0 gives aapt/d8/r8. platforms;android-35 gives the compile
+      # SDK with android.jar.
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'cmdline-tools;latest platform-tools build-tools;35.0.0 platforms;android-35'
 
       # ── Gradle caching (faster subsequent builds) ────────────────────────
       - name: Cache Gradle

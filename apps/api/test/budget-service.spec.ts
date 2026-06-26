@@ -420,9 +420,9 @@ describe('BudgetService', () => {
         new NotFoundException(`Budget ${foreignBudgetId} not found`),
       );
 
-      await expect(
-        service.getBudget(foreignBudgetId, userAId),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.getBudget(foreignBudgetId, userAId)).rejects.toThrow(
+        NotFoundException,
+      );
 
       // Scope must include both id AND userId; a future regression that
       // drops `userId` would still appear to "work" by accident, so we
@@ -479,9 +479,9 @@ describe('BudgetService', () => {
         spent: 0,
       };
 
-      await expect(
-        service.updateBudgetCategory(userAId, dto),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.updateBudgetCategory(userAId, dto)).rejects.toThrow(
+        NotFoundException,
+      );
       expect(repo.updateBudgetCategory).not.toHaveBeenCalled();
       // Recompute side-effect must also be skipped.
       expect(repo.findById).not.toHaveBeenCalled();
@@ -562,9 +562,7 @@ describe('BudgetService', () => {
       // Eager user/budget ownership check passes (the user owns the budget).
       userRepo.findById.mockResolvedValue({
         ...mockUser,
-        budgets: [
-          buildBudget({ id: 1, user: { id: userAId, ...budgetUser } }),
-        ],
+        budgets: [buildBudget({ id: 1, user: { id: userAId, ...budgetUser } })],
       });
       // Repo returns no duplicate; the create call should proceed normally.
       repo.findCategotyQuery.mockResolvedValue([]);
@@ -588,8 +586,7 @@ describe('BudgetService', () => {
       // object with a singular .where shape. Array-destructuring it
       // throws `object is not iterable`. Match the same shape used by
       // the passing `findCategories` tests below.
-      const whereArg = (repo.findCategotyQuery.mock.calls[0] as any[])[0]
-        .where;
+      const whereArg = (repo.findCategotyQuery.mock.calls[0] as any[])[0].where;
       // The flat-shape assertion: the top-level WHERE must NOT carry a
       // `user` property (that would trip TypeORM's column-existence
       // check on BudgetCategory). The user scoping MUST be reachable
@@ -605,9 +602,7 @@ describe('BudgetService', () => {
     it('findCategories: where clause is scoped via budget.user (NOT a flat user filter)', async () => {
       userRepo.findById.mockResolvedValue({
         ...mockUser,
-        budgets: [
-          buildBudget({ id: 1, user: { id: userAId, ...budgetUser } }),
-        ],
+        budgets: [buildBudget({ id: 1, user: { id: userAId, ...budgetUser } })],
       });
       repo.findCategotyQuery.mockResolvedValue([]);
 
@@ -621,8 +616,7 @@ describe('BudgetService', () => {
       });
 
       expect(repo.findCategotyQuery).toHaveBeenCalledTimes(1);
-      const whereArg = (repo.findCategotyQuery.mock.calls[0] as any[])[0]
-        .where;
+      const whereArg = (repo.findCategotyQuery.mock.calls[0] as any[])[0].where;
       expect(whereArg).not.toHaveProperty('user');
       expect(whereArg).toMatchObject({
         budget: { user: { id: userAId }, id: 1 },
@@ -639,8 +633,7 @@ describe('BudgetService', () => {
       });
 
       expect(repo.findCategotyQuery).toHaveBeenCalledTimes(1);
-      const whereArg = (repo.findCategotyQuery.mock.calls[0] as any[])[0]
-        .where;
+      const whereArg = (repo.findCategotyQuery.mock.calls[0] as any[])[0].where;
       expect(whereArg).not.toHaveProperty('user');
       expect(whereArg).toMatchObject({
         budget: { user: { id: userAId } },
@@ -684,9 +677,7 @@ describe('BudgetService', () => {
     it('createBudgetCategory: translates DB-level unique violation (race path) to BadRequestException', async () => {
       userRepo.findById.mockResolvedValue({
         ...mockUser,
-        budgets: [
-          buildBudget({ id: 1, user: { id: userAId, ...budgetUser } }),
-        ],
+        budgets: [buildBudget({ id: 1, user: { id: userAId, ...budgetUser } })],
       });
       // In-app duplicate check passes — the SELECT sees no duplicate at
       // read time. Both writers in the race will see the same empty
@@ -742,17 +733,13 @@ describe('BudgetService', () => {
       // budget'` so callers cannot distinguish common-path from
       // race-path from the API response.
       expect(err).toBeInstanceOf(BadRequestException);
-      expect((err as Error).message).toMatch(
-        /already exists for this budget/,
-      );
+      expect((err as Error).message).toMatch(/already exists for this budget/);
     });
 
     it('createBudgetCategory: rethrows non-unique-violation QueryFailedError untouched', async () => {
       userRepo.findById.mockResolvedValue({
         ...mockUser,
-        budgets: [
-          buildBudget({ id: 1, user: { id: userAId, ...budgetUser } }),
-        ],
+        budgets: [buildBudget({ id: 1, user: { id: userAId, ...budgetUser } })],
       });
       repo.findCategotyQuery.mockResolvedValue([]);
 
@@ -764,11 +751,7 @@ describe('BudgetService', () => {
       const fkErr: any = new Error('foreign key violation');
       fkErr.code = '23503';
       fkErr.constraint = 'FK_some_other';
-      const otherDbError = new QueryFailedError(
-        'INSERT ...',
-        [],
-        fkErr,
-      );
+      const otherDbError = new QueryFailedError('INSERT ...', [], fkErr);
       (otherDbError as any).code = '23503';
       (otherDbError as any).constraint = 'FK_some_other';
       repo.createBudgetCategory.mockRejectedValue(otherDbError);
@@ -809,9 +792,7 @@ describe('BudgetService', () => {
     it('createBudgetCategory: rethrows non-QueryFailedError untouched', async () => {
       userRepo.findById.mockResolvedValue({
         ...mockUser,
-        budgets: [
-          buildBudget({ id: 1, user: { id: userAId, ...budgetUser } }),
-        ],
+        budgets: [buildBudget({ id: 1, user: { id: userAId, ...budgetUser } })],
       });
       repo.findCategotyQuery.mockResolvedValue([]);
 

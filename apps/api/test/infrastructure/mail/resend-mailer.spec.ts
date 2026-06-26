@@ -92,7 +92,9 @@ describe('ResendMailerService — sent-counter contract', () => {
 
     // The "📨 sent" log line MUST be emitted (level: info).
     expect(logger.log).toHaveBeenCalledWith(
-      expect.stringContaining('📨 Password reset email sent to test@example.com'),
+      expect.stringContaining(
+        '📨 Password reset email sent to test@example.com',
+      ),
     );
     // Failures log is silent on success.
     expect(logger.error).not.toHaveBeenCalled();
@@ -105,10 +107,7 @@ describe('ResendMailerService — sent-counter contract', () => {
     });
 
     await expect(
-      service.sendPasswordReset(
-        'test@example.com',
-        'https://example.com/x',
-      ),
+      service.sendPasswordReset('test@example.com', 'https://example.com/x'),
     ).rejects.toThrow(/daily cap exceeded/);
 
     expect((service as any).mailerAttempts).toBe(1);
@@ -127,10 +126,7 @@ describe('ResendMailerService — sent-counter contract', () => {
     sendMock.mockRejectedValueOnce(new Error('socket hang up'));
 
     await expect(
-      service.sendPasswordReset(
-        'test@example.com',
-        'https://example.com/x',
-      ),
+      service.sendPasswordReset('test@example.com', 'https://example.com/x'),
     ).rejects.toThrow(/socket hang up/);
 
     expect((service as any).mailerAttempts).toBe(1);
@@ -243,7 +239,9 @@ describe('ResendMailerService — sent-counter contract', () => {
     // correctly — mirrors the outer `logger: jest.Mocked<LoggingService>`
     // pattern used in the beforeEach block, where the assignment
     // happens at the const declaration site.
-    const scopedLogger = scopedModule.get(LoggingService) as unknown as jest.Mocked<LoggingService>;
+    const scopedLogger = scopedModule.get(
+      LoggingService,
+    ) as unknown as jest.Mocked<LoggingService>;
 
     for (let i = 0; i < 3; i++) {
       await scopedService.sendPasswordReset('a@b.com', 'https://x');

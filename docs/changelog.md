@@ -1,5 +1,24 @@
 # BudgetGenius Changelog
 
+## [v1.1.2] — 2026-06-25
+
+### Fixed
+- **CI: Firebase Hosting PR preview — intermittent `oauth2/v4/token: Premature close`** — Replaced `FirebaseExtended/action-hosting-deploy@v0.11.0` with a direct `firebase-tools@15.20.0 hosting:channel:deploy --expires 7d` invocation wrapped in `nick-fields/retry@v3` (3 attempts, 60 s inter-attempt wait, 15 min per-attempt timeout) on `.github/workflows/firebase-pull-request.yml`. The v0.11.0 wrapper auto-runs `firebase login` internally and offers no retry surface, so transient `oauth2/v4/token: Premature close` errors from the service-account JSON auth path fail the PR build. Calling `firebase-tools` directly gives us a controlled retry point at minimal cost (one extra CLI flag). `firebaseToolsVersion: 15.20.0` pin kept because 15.22.2+ is the version that started returning `Premature close`.
+- **CI: APK build — `Error on ZipFile unknown archive` on Android Emulator package** — `android-actions/setup-android@v3` was installing the full default SDK set, including `emulator`, whose ~1 GB download has been failing intermittently on GitHub runners. `build-apk.yml` now passes an explicit `packages:` list (`cmdline-tools;latest platform-tools build-tools;35.0.0 platforms;android-35`) — exactly what `assembleDebug` / `assembleRelease` need, and zero overlap with the broken emulator package. UI tests on an emulator, if added later, go through `reactivecircus/android-emulator-runner@v2` in a separate job so build vs UI testing stay isolated.
+- **PRODUCTION: APK Google login — "account picker opens, then user is redirected to localhost:5000"** — Symptom: tapping Google from the Android APK opens Chrome Custom Tab, user picks account, then Chrome Custom Tab navigates to `http://localhost:5000/...` and dies (the device has no service on its own loopback, so the redirect to `bgg://auth/success?...` never fires). Root cause: `PUBLIC_API_URL` (or `HOST`) env var on the API was unset / pointed at a loopback. The backend's GoogleStrategy silently fell back to `'http://localhost:3000'`, so Google's OAuth redirect_uri resolved to an unreachable origin from the user's device. **Fixes:** `apps/api/src/infrastructure/auth/google.strategy.ts` — added explicit production validation: in `NODE_ENV=production` the strategy now throws at DI time (`Error`) when `PUBLIC_API_URL` is missing or hits a loopback pattern (`localhost` / `127.0.0.1` / `0.0.0.0` / `::1`). In development it logs a single `console.warn` and continues, so local `pnpm dev` keeps working. Crash loudly: the operator sees the misconfiguration during `gce deploy` instead of debugging a silent APK-only production bug. **Operator action required:** set `PUBLIC_API_URL=https://<your-real-api-host>` in the production env (`.env` on the GCE VM, or the GitHub Actions `ci.yml` → GCE SSH → `.env` write step) before merging/deploying.
+- **OAuth strategy responsibilities — de-duplicated** — `apps/webClient/src/adapters/auth/web-google-login.strategy.ts` was trying both the @capacitor-firebase/authentication plugin AND signInWithPopup, duplicating `NativeGoogleLoginStrategy`. After the refactor: `WebGoogleLoginStrategy` ONLY uses the Firebase JS SDK (`signInWithRedirect` in WebView, `signInWithPopup` in browser; the redirect path returns a never-resolving promise so React Query doesn't fire `onError` with a `navigation-aborted`); `NativeGoogleLoginStrategy` ONLY invokes the Capacitor plugin (added an explicit `clientId` from `VITE_GOOGLE_CLIENT_ID` so multi-OAuth-client Firebase projects don't pick the wrong credential); `HybridGoogleLoginStrategy` is the single source of truth for the platform gatekeeper and the plugin → Web SDK fallback ladder. `apps/webClient/src/adapters/auth/index.ts` now drains a pending `getRedirectResult` first (covers the rare case where the page re-mounted after the OAuth round-trip on a previous click).
+
+### Tests
+- All existing Jest / Playwright suites pass (no behavioural change in web popup path; redirect path still hands the credential to `useFirebaseRedirectReturn.ts`).
+
+### Quality gates
+- ✅ Backend `tsc --noEmit` clean
+- ✅ Backend `jest` — 25/25 still passing (GoogleStrategy has no spec; validation is exercised by the prod-only `Error` throw path, intentionally not unit-tested to avoid gating dev on env vars)
+- ✅ Frontend `tsc --noEmit` clean
+- 🟡 Frontend Playwright — runners, not re-executed for layout-only + test-mock-affecting changes in this cycle
+
+---
+
 ## [v1.1.1] — 2026-06-25
 
 ### Fixed

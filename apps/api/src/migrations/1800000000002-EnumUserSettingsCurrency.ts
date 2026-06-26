@@ -91,6 +91,8 @@ export class EnumUserSettingsCurrency1800000000002
     //    binds another column to the same enum — the cascade removes
     //    the dependent columns automatically, which is appropriate
     //    when we're reverting the schema to its prior shape.
-    await queryRunner.query(`DROP TYPE IF EXISTS "bg_public"."currency_enum" CASCADE`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "bg_public"."currency_enum" CASCADE`,
+    );
   }
 }

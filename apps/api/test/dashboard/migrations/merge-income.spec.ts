@@ -49,7 +49,9 @@ async function probeDb(): Promise<boolean> {
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn(
-      `[merge-income.spec] DB ${DB_CONFIG.host}:${DB_CONFIG.port} unreachable — skipping round-trip tests (${
+      `[merge-income.spec] DB ${DB_CONFIG.host}:${
+        DB_CONFIG.port
+      } unreachable — skipping round-trip tests (${
         (err as Error).message.split('\n')[0]
       })`,
     );

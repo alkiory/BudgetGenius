@@ -260,9 +260,7 @@ describe('TransactionService', () => {
       });
 
       // The repo's `delete` was called only for the owned id.
-      const deletedIds = (repo.delete as jest.Mock).mock.calls.map(
-        (c) => c[0],
-      );
+      const deletedIds = (repo.delete as jest.Mock).mock.calls.map((c) => c[0]);
       expect(deletedIds).toEqual([userATxId]);
       // And every `delete` call must include userAId as the scope.
       for (const call of (repo.delete as jest.Mock).mock.calls) {

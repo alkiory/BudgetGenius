@@ -51,7 +51,9 @@ export class ReportRepository {
   }
 
   /** Weekly trend for last 7 days, scoped to the requesting user. */
-  async getWeeklyTrend(userId: number): Promise<{ day: string; amount: number }[]> {
+  async getWeeklyTrend(
+    userId: number,
+  ): Promise<{ day: string; amount: number }[]> {
     return this.txRepo
       .createQueryBuilder('tx')
       .select("to_char(tx.date, 'Dy')", 'day')

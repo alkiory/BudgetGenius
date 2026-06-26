@@ -109,9 +109,7 @@ export class UserController {
       this.logger.warn(
         `User ${req.user.email} attempted to read profile for ${email}`,
       );
-      throw new ForbiddenException(
-        '⛔ You can only retrieve your own profile',
-      );
+      throw new ForbiddenException('⛔ You can only retrieve your own profile');
     }
     const user = await this.userService.getUserByEmail(email);
     if (!user) {

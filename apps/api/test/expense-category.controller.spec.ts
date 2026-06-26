@@ -25,7 +25,11 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe, NotFoundException } from '@nestjs/common';
+import {
+  INestApplication,
+  ValidationPipe,
+  NotFoundException,
+} from '@nestjs/common';
 import { EntityNotFoundError } from 'typeorm';
 // CJS-style import matches `apps/api/test/app.e2e-spec.ts` so ts-jest's
 // CommonJS transformer resolves the default call-shape correctly. An
@@ -43,14 +47,18 @@ describe('ExpenseCategoryController (HTTP)', () => {
   let svc: jest.Mocked<ExpenseCategoryService>;
 
   // Simulates a JWT-authenticated request as user 1.
-  const asUser1 = { canActivate: (ctx: any) => {
-    ctx.switchToHttp().getRequest().user = { userId: 1 };
-    return true;
-  }};
-  const asUser2 = { canActivate: (ctx: any) => {
-    ctx.switchToHttp().getRequest().user = { userId: 2 };
-    return true;
-  }};
+  const asUser1 = {
+    canActivate: (ctx: any) => {
+      ctx.switchToHttp().getRequest().user = { userId: 1 };
+      return true;
+    },
+  };
+  const asUser2 = {
+    canActivate: (ctx: any) => {
+      ctx.switchToHttp().getRequest().user = { userId: 2 };
+      return true;
+    },
+  };
 
   beforeEach(async () => {
     svc = {
@@ -63,9 +71,7 @@ describe('ExpenseCategoryController (HTTP)', () => {
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       controllers: [ExpenseCategoryController],
-      providers: [
-        { provide: ExpenseCategoryService, useValue: svc },
-      ],
+      providers: [{ provide: ExpenseCategoryService, useValue: svc }],
     })
       // Override the real JWT guard with a controllable stub. The stub
       // writes `req.user` directly so we can simulate any caller without
@@ -88,7 +94,7 @@ describe('ExpenseCategoryController (HTTP)', () => {
   });
 
   describe('list: GET /expense-categories', () => {
-    it('returns only the requesting user\'s rows', async () => {
+    it("returns only the requesting user's rows", async () => {
       const ownRows = [
         { id: 1, name: 'Food', value: 250, userId: 1 },
         { id: 2, name: 'Transport', value: 100, userId: 1 },
@@ -103,9 +109,7 @@ describe('ExpenseCategoryController (HTTP)', () => {
       // Service MUST receive the JWT userId, not anything else.
       expect(svc.getExpenseCategoriesByUser).toHaveBeenCalledWith(1);
       // Foreign row (userB-owned id 999) is naturally absent.
-      expect(
-        (res.body as any[]).find((c) => c.id === 999),
-      ).toBeUndefined();
+      expect((res.body as any[]).find((c) => c.id === 999)).toBeUndefined();
     });
   });
 
@@ -262,15 +266,13 @@ describe('ExpenseCategoryController (HTTP)', () => {
    * intent and propagated userId is caught.
    */
   describe('JWT userId is the source of truth', () => {
-    it('user 2 cannot read user 1\'s category list', async () => {
+    it("user 2 cannot read user 1's category list", async () => {
       // Re-bind guard as user 2 mid-suite to assert isolation switch.
       await app.close(); // restart so the override takes effect
 
       const moduleFixture: TestingModule = await Test.createTestingModule({
         controllers: [ExpenseCategoryController],
-        providers: [
-          { provide: ExpenseCategoryService, useValue: svc },
-        ],
+        providers: [{ provide: ExpenseCategoryService, useValue: svc }],
       })
         .overrideGuard(JwtAuthGuard)
         .useValue(asUser2)

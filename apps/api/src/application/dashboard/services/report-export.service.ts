@@ -36,7 +36,10 @@ const EN_TO_ES_MONTHS: Record<string, string> = {
   Dec: 'Dic',
 };
 
-function localizeMonthName(enAbbr: string | undefined, locale: ExportLocale): string {
+function localizeMonthName(
+  enAbbr: string | undefined,
+  locale: ExportLocale,
+): string {
   if (!enAbbr) return '';
   if (locale === 'es-CO') {
     return EN_TO_ES_MONTHS[enAbbr] ?? enAbbr;
@@ -210,7 +213,14 @@ export class ReportExportService {
       doc.on('error', (err) => reject(err));
 
       try {
-        this.renderPdf(doc, year, localizedMonthly, safeCategories, totals, locale);
+        this.renderPdf(
+          doc,
+          year,
+          localizedMonthly,
+          safeCategories,
+          totals,
+          locale,
+        );
       } finally {
         doc.end();
       }
@@ -254,11 +264,14 @@ export class ReportExportService {
       .font('Helvetica')
       .text(
         // Locale-aware "Generated" + locale-aware timestamp.
-        `${localize('generated', locale)} ${new Date().toLocaleDateString(locale, {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })}`,
+        `${localize('generated', locale)} ${new Date().toLocaleDateString(
+          locale,
+          {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          },
+        )}`,
         { align: 'left' },
       );
     doc.moveDown(1.5);
@@ -311,7 +324,9 @@ export class ReportExportService {
         row.month,
         this.formatMoney(row.income),
         this.formatMoney(row.expenses),
-        this.formatMoney((Number(row.income) || 0) - (Number(row.expenses) || 0)),
+        this.formatMoney(
+          (Number(row.income) || 0) - (Number(row.expenses) || 0),
+        ),
       ]),
       { startX: 48, columnWidths: [80, 140, 140, 140] },
     );
@@ -383,10 +398,7 @@ export class ReportExportService {
     const startY = doc.y + 4;
     let y = startY;
 
-    const drawRow = (
-      cells: string[],
-      isHeader: boolean,
-    ): void => {
+    const drawRow = (cells: string[], isHeader: boolean): void => {
       let cellX = opts.startX;
       cells.forEach((cell, idx) => {
         const width = opts.columnWidths[idx] ?? 80;
@@ -521,7 +533,7 @@ export class ReportExportService {
     safeCategories.forEach((row) => {
       categoriesSheet.addRow({
         category: row.category,
-        total: Number((Math.abs(Number(row.total) || 0)).toFixed(2)),
+        total: Number(Math.abs(Number(row.total) || 0).toFixed(2)),
       });
     });
     this.styleHeaderRow(categoriesSheet.getRow(1));
@@ -554,7 +566,10 @@ export class ReportExportService {
     monthly: { month: string; income: number; expenses: number }[] | undefined,
   ): { income: number; expenses: number; net: number } {
     const safe = monthly ?? [];
-    const income = safe.reduce((acc, row) => acc + (Number(row.income) || 0), 0);
+    const income = safe.reduce(
+      (acc, row) => acc + (Number(row.income) || 0),
+      0,
+    );
     const expenses = safe.reduce(
       (acc, row) => acc + (Number(row.expenses) || 0),
       0,

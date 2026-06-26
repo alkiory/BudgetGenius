@@ -134,7 +134,10 @@ export class ReportsController {
     description:
       'Optional UI locale used to localize month names (and a few English labels) inside the report. Defaults to en-US.',
   })
-  @ApiProduces('application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  @ApiProduces(
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
   @ApiResponse({
     status: 200,
     description: 'Binary file stream (Content-Disposition: attachment)',
@@ -166,7 +169,9 @@ export class ReportsController {
       yearNumber > currentYear + 5
     ) {
       throw new BadRequestException(
-        `Invalid year "${year}". Provide a numeric year between 1900 and ${currentYear + 5}.`,
+        `Invalid year "${year}". Provide a numeric year between 1900 and ${
+          currentYear + 5
+        }.`,
       );
     }
 

@@ -70,7 +70,9 @@ describe('AuthService', () => {
       findByEmail: jest.fn().mockResolvedValue(user),
       // Default implementation for `resetPassword` — mirrors the real one
       // (records the call) so per-test spies can inspect / override.
-      updateUser: jest.fn().mockImplementation((_id, _partial) => Promise.resolve(user)),
+      updateUser: jest
+        .fn()
+        .mockImplementation((_id, _partial) => Promise.resolve(user)),
     };
     // Remove the comparePassword mock function
     delete user.comparePassword;
@@ -102,9 +104,7 @@ describe('AuthService', () => {
     // Resend mailer mock: resolves by default so the happy path doesn't
     // throw; per-test spies can simulate transport failure.
     const mailerMock = {
-      sendPasswordReset: jest
-        .fn()
-        .mockResolvedValue('mock-message-id'),
+      sendPasswordReset: jest.fn().mockResolvedValue('mock-message-id'),
     };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -232,9 +232,9 @@ describe('AuthService', () => {
   // ─── forgot-password (sends through Resend, URL composition from FRONTEND_URL) ─
 
   it('should request password reset (forgot-password) and dispatch the email through the mailer', async () => {
-    const result = await authService.requestPasswordReset(
-      { email: user.email } as ForgotPasswordDto,
-    );
+    const result = await authService.requestPasswordReset({
+      email: user.email,
+    } as ForgotPasswordDto);
     expect(result).toEqual({ message: '📨 Recovery link sent to your email' });
 
     // The mailer MUST receive the user-facing reset URL composed from
@@ -332,8 +332,8 @@ describe('AuthService', () => {
         key === 'JWT_SECRET'
           ? 'test-secret'
           : key === 'FRONTEND_URL'
-            ? 'not-a-url'
-            : undefined,
+          ? 'not-a-url'
+          : undefined,
     );
 
     await expect(
@@ -371,11 +371,14 @@ describe('AuthService', () => {
     // the SQL UPDATE runs — the service is a thin pass-through.
     // Hashing here too would double-hash and silently break login.
     expect(userRepository.updateUser).toHaveBeenCalledTimes(1);
-    const [, updateArg] = (userRepository.updateUser as jest.Mock).mock.calls[0];
+    const [, updateArg] = (userRepository.updateUser as jest.Mock).mock
+      .calls[0];
     expect(updateArg.password).toBe('NewP4ssword!');
 
     // Token must be deleted so it can't be reused.
-    expect(passwordResetRepositoryMock.deleteToken).toHaveBeenCalledWith('tok-1');
+    expect(passwordResetRepositoryMock.deleteToken).toHaveBeenCalledWith(
+      'tok-1',
+    );
   });
 
   it('should reject reset-password when the token is unknown', async () => {
@@ -414,7 +417,9 @@ describe('AuthService', () => {
     // No write MUST happen on an expired token.
     expect(userRepository.updateUser).not.toHaveBeenCalled();
     // Best-effort cleanup of the dangling token.
-    expect(passwordResetRepositoryMock.deleteToken).toHaveBeenCalledWith('tok-old');
+    expect(passwordResetRepositoryMock.deleteToken).toHaveBeenCalledWith(
+      'tok-old',
+    );
   });
 
   // ─── Signup (idempotent + conflict on takeover) ─────────────────────────

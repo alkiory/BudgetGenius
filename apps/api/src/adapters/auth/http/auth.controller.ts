@@ -46,7 +46,7 @@ export class AuthController {
     private readonly logger: LoggingService,
     private readonly cookieService: CookieService,
     private readonly configService: ConfigService,
-  ) { }
+  ) {}
 
   @Get('google')
   @UseGuards(AuthGuard('google'))
@@ -59,10 +59,7 @@ export class AuthController {
   @Get('google-callback')
   @UseGuards(AuthGuard('google'))
   @ApiOperation({ summary: 'Callback de Google OAuth' })
-  async googleCallback(
-    @Req() req,
-    @Res() res: Response,
-  ) {
+  async googleCallback(@Req() req, @Res() res: Response) {
     try {
       const user = req.user as User;
 
@@ -77,9 +74,7 @@ export class AuthController {
         maxAge: REFRESH_COOKIE_MAX_AGE,
       });
 
-      this.logger.log(
-        `🔓 Google OAuth exitoso para: ${user.email}`,
-      );
+      this.logger.log(`🔓 Google OAuth exitoso para: ${user.email}`);
 
       // Redirect to custom scheme for Capacitor app.
       // Tokens are passed in the URL so the Capacitor WebView can set them
@@ -92,17 +87,20 @@ export class AuthController {
       // client-side `window.location.replace()` reliably triggers Android's
       // intent resolution for the `bgg://` scheme, which hands off to the
       // Capacitor app through the intent filter in AndroidManifest.xml.
-      const redirectUrl = `bgg://auth/success?accessToken=${encodeURIComponent(accessToken)}&refreshToken=${encodeURIComponent(refreshToken)}`;
-      return res
-        .status(200)
-        .type('text/html')
-        .send(`<!DOCTYPE html>
+      const redirectUrl = `bgg://auth/success?accessToken=${encodeURIComponent(
+        accessToken,
+      )}&refreshToken=${encodeURIComponent(refreshToken)}`;
+      return res.status(200).type('text/html').send(`<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Redirecting to BudgetGenius…</title>
-<meta http-equiv="refresh" content="0;url=${redirectUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}">
+<meta http-equiv="refresh" content="0;url=${redirectUrl
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')}">
 <style>
   body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
   p { font-size: 1.1rem; opacity: 0.8; }
@@ -115,13 +113,17 @@ export class AuthController {
 </html>`);
     } catch (error) {
       this.logger.error(`🚨 Falló el OAuth de Google: ${error.message}`);
-      const fallbackUrl = this.configService.get<string>('NODE_ENV') === 'production'
-        ? 'https://budgetgeniusia.web.app'
-        : 'http://localhost:5173';
+      const fallbackUrl =
+        this.configService.get<string>('NODE_ENV') === 'production'
+          ? 'https://budgetgeniusia.web.app'
+          : 'http://localhost:5173';
       const frontendUrl =
         this.configService.get<string>('FRONTEND_URL')?.split(',')[0]?.trim() ||
         fallbackUrl;
-      return res.redirect(301, `${frontendUrl}/auth/login?error=google_auth_failed`);
+      return res.redirect(
+        301,
+        `${frontendUrl}/auth/login?error=google_auth_failed`,
+      );
     }
   }
 
@@ -206,9 +208,10 @@ export class AuthController {
         role: signupDTO.role ?? 'user',
       });
 
-    this.cookieService.setCookie(res, 'accessToken', accessToken);      this.cookieService.setCookie(res, 'refreshToken', refreshToken, {
-        maxAge: REFRESH_COOKIE_MAX_AGE,
-      });
+    this.cookieService.setCookie(res, 'accessToken', accessToken);
+    this.cookieService.setCookie(res, 'refreshToken', refreshToken, {
+      maxAge: REFRESH_COOKIE_MAX_AGE,
+    });
 
     if (isNewUser) {
       this.logger.log(`🪪 Registering new user: ${signupDTO.email}`);
@@ -280,9 +283,10 @@ export class AuthController {
   ) {
     const result = await this.authService.login(body.email, body.password);
 
-    this.cookieService.setCookie(res, 'accessToken', result.accessToken);    this.cookieService.setCookie(res, 'refreshToken', result.refreshToken, {
-        maxAge: REFRESH_COOKIE_MAX_AGE,
-      });
+    this.cookieService.setCookie(res, 'accessToken', result.accessToken);
+    this.cookieService.setCookie(res, 'refreshToken', result.refreshToken, {
+      maxAge: REFRESH_COOKIE_MAX_AGE,
+    });
 
     return {
       user: result.user,
@@ -401,14 +405,18 @@ export class AuthController {
   }
 
   @Post('set-cookies')
-  @ApiOperation({ summary: 'Establecer cookies JWT desde el WebView de Capacitor' })
+  @ApiOperation({
+    summary: 'Establecer cookies JWT desde el WebView de Capacitor',
+  })
   @ApiResponse({ status: 200, description: 'Cookies seteadas correctamente' })
   async setCookies(
     @Body() body: { accessToken: string; refreshToken: string },
     @Res({ passthrough: true }) res: Response,
   ) {
     if (!body.accessToken || !body.refreshToken) {
-      throw new UnauthorizedException('Access token and refresh token are required');
+      throw new UnauthorizedException(
+        'Access token and refresh token are required',
+      );
     }
 
     this.cookieService.setCookie(res, 'accessToken', body.accessToken);

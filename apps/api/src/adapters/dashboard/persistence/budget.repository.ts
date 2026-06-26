@@ -51,7 +51,10 @@ export class BudgetRepository {
     return b;
   }
 
-  async findByBudgetId(budgetId: number, userId: number): Promise<BudgetCategory[]> {
+  async findByBudgetId(
+    budgetId: number,
+    userId: number,
+  ): Promise<BudgetCategory[]> {
     return this.categoryRepo.find({
       where: { budget: { id: budgetId, user: { id: userId } } },
     });

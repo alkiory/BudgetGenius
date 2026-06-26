@@ -51,10 +51,7 @@ const normalizeOrigin = (raw: string): string =>
  * Empty entries are dropped; duplicates are de-duplicated by the caller.
  */
 const parseOriginList = (raw: string | undefined | null): string[] =>
-  (raw ?? '')
-    .split(',')
-    .map(normalizeOrigin)
-    .filter(Boolean);
+  (raw ?? '').split(',').map(normalizeOrigin).filter(Boolean);
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -130,7 +127,9 @@ async function bootstrap() {
   );
   logger.log(`🚀 Application is running on: ${await app.getUrl()}`);
   logger.log(
-    `🔐 CORS allowed origins (${allowedOrigins.length}): ${allowedOrigins.join(', ')}`,
+    `🔐 CORS allowed origins (${allowedOrigins.length}): ${allowedOrigins.join(
+      ', ',
+    )}`,
   );
 }
 

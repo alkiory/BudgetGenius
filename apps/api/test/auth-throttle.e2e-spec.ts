@@ -28,11 +28,7 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  Throttle,
-  ThrottlerModule,
-  hours,
-} from '@nestjs/throttler';
+import { Throttle, ThrottlerModule, hours } from '@nestjs/throttler';
 import request = require('supertest');
 import { ThrottlerBehindProxyGuard } from '../src/infrastructure/config/guards/throttler-behind-proxy.guard';
 
