@@ -93,7 +93,12 @@ async function bootstrap() {
       return callback(null, false);
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'X-Device-Id',
+    ],
     credentials: true,
     optionsSuccessStatus: 204,
     exposedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
