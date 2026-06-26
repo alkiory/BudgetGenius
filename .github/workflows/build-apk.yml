@@ -44,7 +44,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'cmdline-tools;latest platform-tools build-tools;35.0.0 platforms;android-35'
+          packages: "cmdline-tools;latest platform-tools build-tools;35.0.0 platforms;android-35"
 
       # ── Gradle caching (faster subsequent builds) ────────────────────────
       - name: Cache Gradle
@@ -61,7 +61,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24.15
+          node-version: 20
 
       - name: Install pnpm
         run: npm install -g pnpm

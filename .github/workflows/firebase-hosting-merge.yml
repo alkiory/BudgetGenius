@@ -2,6 +2,7 @@ name: Deploy to Firebase Hosting on merge
 on:
   push:
     branches: [main]
+
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
@@ -10,7 +11,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          # Cambiamos a Node 20 (LTS). Es la versión más estable y recomendada
+          # para evitar el error "Premature close" en la librería de Google Auth.
+          node-version: "20"
 
       - name: Generate build version
         id: version
@@ -23,12 +26,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
-        # Inyectamos variables de entorno durante el build
         run: pnpm --filter frontend-web build
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_APP_VERSION: ${{ steps.version.outputs.version }}
-          # Firebase — necesario para Google Login con Firebase JS SDK
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
@@ -44,8 +45,3 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BUDGETGENIUSIA }}
           channelId: live
           projectId: budgetgeniusia
-          # Pin BOTH the action (specific v0.11.0 — the floating @v0
-          # tag can drift to a future v0.x release) AND firebase-tools
-          # (15.20.0, pre-15.22.2 which started returning `Premature
-          # close` on oauth2 token refresh). Bump either with care.
-          firebaseToolsVersion: '15.20.0'

@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- Brand-coloured launcher background (deep purple, complementary to the
+         purple→fuchsia radial-gradient disc rendered in
+         `mipmap-*/ic_launcher_foreground.png`). On devices/Android versions
+         that mask the foreground differently from a circle, the area visible
+         outside the disc is this colour, so the launcher reads as a clean
+         branded circle-on-purple instead of a generic white blob. -->
+    <color name="ic_launcher_background">#4C1D95</color>
 </resources>

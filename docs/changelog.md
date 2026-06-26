@@ -1,5 +1,29 @@
 # BudgetGenius Changelog
 
+## [v1.1.3] — 2026-06-26
+
+### Changed
+- **APK launcher icon — replaced default Capacitor mark with the brand mark shown during loading** — The Android home-screen icon was still the bundled Capacitor default (`mipmap-*/ic_launcher.png`), inconsistent with the Wallet-on-purple-gradient mark the user sees on the React splash page (`apps/webClient/src/presentation/pages/splash.tsx`). Replaced all 15 launcher PNGs with a render of the same brand identity: deep purple `#4C1D95` background, purple→fuchsia `#C084FC→#E879F9` radial gradient disc, and a simplified white Wallet outline (body + top flap + right-edge clasp) centred inside the disc. Adaptive-icon foreground (`ic_launcher_foreground.png`) is contained in the 72/108 safe-zone so launcher masks never clip the Wallet glyph.
+
+### Added
+- **Launcher icon regenerator** — `apps/mobile/scripts/generate-launcher-icons.py` is a self-contained Python 3 stdlib script that renders all 15 PNGs (5 densities × 3 variants: `ic_launcher.png`, `ic_launcher_round.png`, `ic_launcher_foreground.png`) at 2× supersampled resolution and downsamples with a 2×2 block average for antialiased edges. No third-party dependencies (no Pillow, no ImageMagick, no librsvg) so it runs in any minimal CI image. Re-run whenever the brand palette or composition changes.
+
+### Fixed
+- **Launcher background colour mismatch** — `@color/ic_launcher_background` was `#FFFFFF`, so devices where the launcher mask exposes any area outside the foreground disc rendered a white halo around the brand mark. Updated to deep purple `#4C1D95` (purple-900 in Tailwind, complements the foreground gradient). The orphaned `drawable/ic_launcher_background.xml` vector was **deleted** instead of speculatively updated — grep confirmed nothing in `apps/mobile/**` references `@drawable/ic_launcher_background`, and editing a 200-line dead vector for a "future tool that might auto-detect by name" would have been maintenance debt with no current consumer.
+
+### Notes
+- **Wordmark deliberately omitted from the icon.** The React splash page shows the full "BudgetGenius" wordmark + tagline during loading, but launcher icons (48–192 px) are too small to carry readable text and rendering crisp bitmap text from pure Python stdlib (no Pillow / no fontconfig available in this env) would mean shipping a TTF font asset. The mark alone scales cleanly across every launcher size. If a wordmark is ever required, install Pillow and call `ImageFont.truetype` in the generator script.
+- **`ic_launcher_round.png` is intentionally identical to `ic_launcher.png`.** Android 8+ adaptive icons apply the round mask at compose time, so a separate rounded PNG is redundant for modern launchers. The deep-purple background fill at the canvas edges means the system mask reveals a clean branded disc instead of a blank corner.
+- **Icon regeneration is now wired.** Run `pnpm icons:regenerate` from the repo root (delegates to `python3 apps/mobile/scripts/generate-launcher-icons.py`) to rebuild all 15 PNGs after a palette or composition change.
+
+### Quality gates
+- ✅ PNG signature (`89 50 4E 47 0D 0A 1A 0A`) verified on every output file
+- ✅ 15/15 files written with expected byte sizes (mdpi 1.1 KB → xxxhdpi 8.6 KB)
+- ✅ APK typecheck unaffected (no Android-side TS/JS touched; only PNGs + XML resources)
+- 🟡 On-device visual smoke test not executed in this cycle (no Android device attached to the runner); the script's geometry is deterministic so the result is reproducible locally with `python3 apps/mobile/scripts/generate-launcher-icons.py`
+
+---
+
 ## [v1.1.2] — 2026-06-25
 
 ### Fixed
