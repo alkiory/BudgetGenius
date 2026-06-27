@@ -85,11 +85,6 @@ const mockCategoryShape = {
   name: 'Medical',
   allocated: 550,
   spent: 250,
-  // Wave 3 [T3.5]: `currency` is NOT NULL after the
-  // `1800000000004-AddCurrencyToBudgetCategory` migration. Mock
-  // fixtures include it so `repo.createBudgetCategory(...)
-  // .mockResolvedValue(buildCategory())` satisfies the entity
-  // type signature without `as any` casting on every assertion.
   currency: 'USD' as const,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -156,11 +151,6 @@ describe('BudgetService', () => {
             error: jest.fn(),
           },
         },
-        // Wave 3 [T3.5]: `BudgetService` now injects
-        // `UserSettingsService.getOrCreateSettings(userId)` to
-        // resolve the row's currency. The stub returns a settings
-        // bundle with `currency: 'USD'` so the resolver surfaces
-        // the canonical MVP default.
         {
           provide: UserSettingsService,
           useValue: {
@@ -366,10 +356,6 @@ describe('BudgetService', () => {
       const result = await service.updateBudgetCategory(1, dto);
 
       expect(result.spent).toBe(850);
-      // Should have recalculated the parent budget's totalSpent.
-      // The new repo signature forwards userId so the WHERE clause also
-      // scopes by owner; the assertion below checks both args so any
-      // future signature drift on either parameter is caught.
       expect(repo.findById).toHaveBeenCalledWith(1, 1); // budget id + userId from category owner
       expect(repo.updateBudget).toHaveBeenCalled();
     });
@@ -416,14 +402,6 @@ describe('BudgetService', () => {
     });
   });
 
-  /**
-   * Cross-user ownership isolation. These tests lock in the post-audit
-   * contract: any attempt by user A to touch a row owned by user B
-   * either throws NotFoundException (fetches / updates) or is a silent
-   * no-op (deletes). They never leak the foreign row, never return it,
-   * and never expose a 403 that would let a caller probe for ownership
-   * existence by status-code inference.
-   */
   describe('ownership/cross-user isolation', () => {
     const userAId = 1;
     const userBId = 2;
@@ -447,9 +425,6 @@ describe('BudgetService', () => {
         NotFoundException,
       );
 
-      // Scope must include both id AND userId; a future regression that
-      // drops `userId` would still appear to "work" by accident, so we
-      // pin the full argument shape.
       expect(repo.findById).toHaveBeenCalledWith(foreignBudgetId, userAId);
     });
 
@@ -517,10 +492,6 @@ describe('BudgetService', () => {
       const result = await service.deleteBudget(userAId, foreignBudgetId);
 
       expect(result).toBeUndefined();
-      // Repo must receive the userId so the WHERE clause scopes the
-      // DELETE statement; otherwise we'd hit a flat
-      // `delete({id: foreignBudgetId})` — which would be a privilege
-      // escalation.
       expect(repo.deleteBudget).toHaveBeenCalledWith(foreignBudgetId, userAId);
     });
 
@@ -540,10 +511,6 @@ describe('BudgetService', () => {
     });
 
     it('createBudgetCategory: appending to a foreign budget is rejected', async () => {
-      // The defence-in-depth ownership check (`repo.findById(budgetId, userId)`)
-      // throws if the budget does not belong to userA. The repo's
-      // NotFoundException bubbles; createBudgetCategory never reaches
-      // the DB write.
       repo.findById.mockRejectedValue(
         new NotFoundException(`Budget ${foreignBudgetId} not found`),
       );
@@ -564,23 +531,6 @@ describe('BudgetService', () => {
       expect(repo.createBudgetCategory).not.toHaveBeenCalled();
     });
 
-    /**
-     * Bug regression tests for #EntityPropertyNotFoundError. The previous
-     * service code passed `{ budget: { id }, user: { id } }` to the
-     * `where` clause of the BudgetCategory repository. `BudgetCategory`
-     * has no `user` relation (user is reachable only transitively through
-     * `BudgetCategory.budget -> Budget.user`), so TypeORM would throw
-     * `EntityPropertyNotFoundError: Property "user" was not found in
-     * "BudgetCategory"` and the POST never persisted a category. The fix
-     * was to scope the duplicate-name lookup and the categories finder
-     * through the budget relation chain so the WHERE clause refuses to
-     * filter on a property that does not exist.
-     *
-     * These tests pin the shape of the call into the repository so a
-     * future contributor who reintroduces a flat `user: { id }` filter
-     * at the top level will trip a `toHaveBeenCalledWith` mismatch (and
-     * the production error from TypeORM) before reaching the user.
-     */
     it('createBudgetCategory: duplicate-name lookup is scoped via budget.user (NOT a flat user filter)', async () => {
       // Eager user/budget ownership check passes (the user owns the budget).
       userRepo.findById.mockResolvedValue({
@@ -603,17 +553,7 @@ describe('BudgetService', () => {
       });
 
       expect(repo.findCategotyQuery).toHaveBeenCalledTimes(1);
-      // `.where` is a single object (not `[{...}, ...]`). The service
-      // calls `repo.findCategotyQuery({ where: { budget: {...},
-      // name: ... } })`, so the call's first arg is the FindManyOptions
-      // object with a singular .where shape. Array-destructuring it
-      // throws `object is not iterable`. Match the same shape used by
-      // the passing `findCategories` tests below.
       const whereArg = (repo.findCategotyQuery.mock.calls[0] as any[])[0].where;
-      // The flat-shape assertion: the top-level WHERE must NOT carry a
-      // `user` property (that would trip TypeORM's column-existence
-      // check on BudgetCategory). The user scoping MUST be reachable
-      // through the budget relation chain.
       expect(whereArg).not.toHaveProperty('user');
       expect(whereArg).toHaveProperty('budget');
       expect(whereArg.budget).toMatchObject({
@@ -629,9 +569,6 @@ describe('BudgetService', () => {
       });
       repo.findCategotyQuery.mockResolvedValue([]);
 
-      // With both budgetId and name filters, the resulting WHERE must NOT
-      // carry a flat `user` key. The user scoping must flow through
-      // `budget.user.id`.
       await service.findCategories({
         userId: userAId,
         budgetId: 1,
@@ -667,14 +604,6 @@ describe('BudgetService', () => {
     });
 
     it('findCategories: filtering by a foreign budgetId is rejected', async () => {
-      // The service eagerly checks `user.budgets.find(b.id === budgetId)`
-      // before hitting the repo. This guards against a user enumerating
-      // other users' budget ids via the categories endpoint.
-      // A foreign budgetId trips the guard and throws NotFoundException
-      // before the repo is called. The `expect(...).rejects.toThrow()`
-      // assertion also makes the rejection observable to the runner
-      // (a bare `await` followed by an assertion would re-throw and
-      // fail the test on the assignment line, not on intent).
       await expect(
         service.findCategories({
           userId: userAId,
@@ -683,36 +612,13 @@ describe('BudgetService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    /**
-     * Bug regression tests for #concurrent-insert. The in-app duplicate
-     * check above (createBudgetCategory lines around
-     * `findCategotyQuery({ where: { budget: {...}, name } })`) is racy
-     * under concurrent POSTs: two writers can both pass it and both
-     * INSERT, leaving two rows. Migration
-     * `BudgetCategoryUniqueName1800000000003` adds the storage-layer
-     * UNIQUE constraint `UQ_budget_categories_budgetId_name` so the
-     * race path fails atomically with `QueryFailedError`
-     * (SQLSTATE `23505`). The service-level try/catch translates that
-     * error into `BadRequestException` so the API surface is identical
-     * for both the common-path (single client double-click) and the
-     * race-path (two concurrent writers).
-     */
     it('createBudgetCategory: translates DB-level unique violation (race path) to BadRequestException', async () => {
       userRepo.findById.mockResolvedValue({
         ...mockUser,
         budgets: [buildBudget({ id: 1, user: { id: userAId, ...budgetUser } })],
       });
-      // In-app duplicate check passes — the SELECT sees no duplicate at
-      // read time. Both writers in the race will see the same empty
-      // result, and only the DB-level constraint can break the tie.
       repo.findCategotyQuery.mockResolvedValue([]);
 
-      // Simulate the race outcome that the pg driver surfaces: between
-      // the SELECT and the INSERT, another writer inserted the same
-      // (budgetId, name). The DB rejects our INSERT with the canonical
-      // SQLSTATE 23505 + constraint name. `QueryFailedError` is what
-      // `typeorm` re-throws; pg copies both `code` and `constraint`
-      // onto the error object directly (verified for typeorm 0.3.21).
       const driverErr: any = new Error(
         `duplicate key value violates unique constraint "${BUDGET_CATEGORY_UNIQUE_CONSTRAINT_NAME}"`,
       );
@@ -723,20 +629,10 @@ describe('BudgetService', () => {
         [],
         driverErr,
       );
-      // `QueryFailedError` does not declare `code`/`constraint` in its
-      // type — pg attaches them at runtime. Stamp them on the visible
-      // instance so the service's narrow `code`+`constraint` check can
-      // match them without `any` casting in production code.
       (dbError as any).code = '23505';
       (dbError as any).constraint = BUDGET_CATEGORY_UNIQUE_CONSTRAINT_NAME;
       repo.createBudgetCategory.mockRejectedValue(dbError);
 
-      // Capture the rejection once and assert both the thrown class and
-      // the message. Running two `await expect(...).rejects.toThrow(...)`
-      // would re-invoke the service twice — the second invocation
-      // re-runs the catch with a fresh mockResolvedValue stack and the
-      // assertion turns into a side-effectful smoke test rather than a
-      // locked-in contract check.
       const err = await service
         .createBudgetCategory({
           userId: userAId,
@@ -750,11 +646,6 @@ describe('BudgetService', () => {
         })
         .catch((e) => e);
 
-      // The service must catch the unique violation and re-raise as a
-      // 400 with the same message the in-app check would have produced.
-      // Both paths surface `'Category "<name>" already exists for this
-      // budget'` so callers cannot distinguish common-path from
-      // race-path from the API response.
       expect(err).toBeInstanceOf(BadRequestException);
       expect((err as Error).message).toMatch(/already exists for this budget/);
     });
@@ -766,11 +657,6 @@ describe('BudgetService', () => {
       });
       repo.findCategotyQuery.mockResolvedValue([]);
 
-      // Simulate an unrelated driver error (e.g. FK violation 23503 or
-      // unique violation on a different constraint). The narrow
-      // code+constraint check in the service must NOT swallow these —
-      // they should bubble up untouched so the global filters + axios
-      // interceptors pick them up with the right status code.
       const fkErr: any = new Error('foreign key violation');
       fkErr.code = '23503';
       fkErr.constraint = 'FK_some_other';
@@ -779,10 +665,6 @@ describe('BudgetService', () => {
       (otherDbError as any).constraint = 'FK_some_other';
       repo.createBudgetCategory.mockRejectedValue(otherDbError);
 
-      // The service must NOT translate this into a BadRequestException;
-      // the QueryFailedError must bubble up so the controller / filter
-      // pipeline can return the right status code (500 by default, or
-      // whatever the entity-not-found filter does for driver errors).
       await expect(
         service.createBudgetCategory({
           userId: userAId,
@@ -797,15 +679,6 @@ describe('BudgetService', () => {
       ).rejects.toThrow(QueryFailedError);
     });
 
-    /**
-     * Bug regression test for #DB-constraint constant wiring. The
-     * service-level query catch matches the constraint NAME against the
-     * constant exported from `budget-category.entity.ts`. A rename in
-     * either the migration's DDL literal OR the entity constant must
-     * be reflected on both sides — this test pins the runtime side by
-     * matching the constant from the canonical source rather than by
-     * duplicating the string in the test fixture.
-     */
     it('createBudgetCategory: race-translator matches the canonical constraint name constant', async () => {
       expect(BUDGET_CATEGORY_UNIQUE_CONSTRAINT_NAME).toBe(
         'UQ_budget_categories_budgetId_name',
@@ -818,11 +691,6 @@ describe('BudgetService', () => {
         budgets: [buildBudget({ id: 1, user: { id: userAId, ...budgetUser } })],
       });
       repo.findCategotyQuery.mockResolvedValue([]);
-
-      // The catch should only narrow on QueryFailedError. A generic
-      // Error thrown by the repo (e.g. timeout, network) must bubble
-      // up untouched. A bare `instanceof Error` check is too broad and
-      // would mask unrelated failures as 400s.
       repo.createBudgetCategory.mockRejectedValue(
         new Error('connection reset'),
       );

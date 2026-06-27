@@ -1,36 +1,10 @@
-// Wave 2 [T2.1 / T2.2 / T2.3]: shared, locale-aware decimal-input hook
-// used by `budget-category.tsx`, `transaction-form.tsx`,
-// `add-transaction.tsx`, and the inline `AddBudgetCategory` price
-// fields. Before this hook each call site re-implemented the same
-// raw-string-buffer → `parseAmountInput` → submit pattern with subtly
-// different error handling — the consolidated contract is:
-//
-//   1. The input element is rendered as `type="text" inputMode="decimal"`
-//      so the user's literal dot/comma keystrokes are preserved
-//      character-for-character (`<input type="number">` would silently
-//      reject non-locale-valid separators on some browsers, especially
-//      mobile keyboards in Spanish/CO-locale users).
-//   2. The hook exposes a `text` string buffer as the source of truth
-//      (so intermediate states like `"1."` round-trip without being
-//      collapsed to `1`).
-//   3. Parsing happens once on demand via `parseNumber()`; this is
-//      intended to be called at submit time, NOT on every keystroke.
-//      Keystroke-driven parsing is what caused the prior bug class
-//      where `"10.5"` rendered as `105` mid-edit.
-//
-// The hook also surfaces a `livePreview` string formatted with
-// `Intl.NumberFormat` so the user can see exactly what the submitted
-// amount will be parsed to, in their currency's locale. This makes
-// `"10,42"` (COP-de-input-as-COP) appear as `"10,42 $"` instead of
-// the input field committing a mystery parse.
-
-import { useState } from "react";
 import {
   Currency,
   CURRENCY_LOCALE_MAP,
   CURRENCY_PRECISION_MAP,
   currencyService,
 } from "@presentation/utils/currencyService";
+import { useState } from "react";
 
 interface UseDecimalInputOptions {
   /** Initial numeric value (or undefined for blank). */

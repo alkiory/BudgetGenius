@@ -1,5 +1,5 @@
-import { RootState } from "@adapters/store/rootStore";
 import { useDecimalInput } from "@adapters/hooks/useDecimalInput";
+import { RootState } from "@adapters/store/rootStore";
 import {
   NewTransactionInput,
   TRANSACTION_CATEGORIES,
@@ -40,14 +40,6 @@ export default function AddTransactionForm({
     recurrence: null,
   });
 
-  // Wave 2 [T2.2]: locale-aware decimal input via `useDecimalInput`.
-  // Same hook the Edit form consumes (transaction-form.tsx); the Add
-  // form has no initial value to seed so `initial: undefined` produces
-  // an empty buffer. The hook owns:
-  //   - the raw text buffer (preserves `"1."` / `,15` keystrokes)
-  //   - the parse-at-submit gate (no per-keystroke numeric coercion)
-  //   - the currency-aware `step` + `livePreview` placeholder
-  //   - the locale-aware currency symbol prefix
   const amountInput = useDecimalInput({
     initial: undefined,
     currency: userCurrency,
@@ -106,11 +98,10 @@ export default function AddTransactionForm({
             type="button"
             data-testid="type-expense"
             onClick={() => setTransactionType("expense")}
-            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-              transactionType === "expense"
+            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${transactionType === "expense"
                 ? "bg-red-500 text-white"
                 : "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-            }`}
+              }`}
           >
             {t("transactions.expense")}
           </button>
@@ -118,11 +109,10 @@ export default function AddTransactionForm({
             type="button"
             data-testid="type-income"
             onClick={() => setTransactionType("income")}
-            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-              transactionType === "income"
+            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${transactionType === "income"
                 ? "bg-green-500 text-white"
                 : "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-            }`}
+              }`}
           >
             {t("transactions.income")}
           </button>
@@ -176,18 +166,14 @@ export default function AddTransactionForm({
             // typing (including the `.` or `,` they just pressed) is
             // preserved character-for-character.
             step={
-              amountInput.precision === 0
-                ? 1
-                : 1 / 10 ** amountInput.precision
+              amountInput.precision === 0 ? 1 : 1 / 10 ** amountInput.precision
             }
             value={amountInput.text}
             onChange={(e) => {
               amountInput.setText(e.target.value);
             }}
             aria-label={t("transactions.amount")}
-            aria-invalid={
-              amountInput.text !== "" && !amountInput.isValid()
-            }
+            aria-invalid={amountInput.text !== "" && !amountInput.isValid()}
             className="pl-7"
             placeholder={amountInput.livePreview() || "0.00"}
             required

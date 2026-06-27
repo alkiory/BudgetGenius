@@ -35,9 +35,6 @@ export function LanguageSwitcher() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Wave 2 [T2.4]: Escape-to-close for keyboard users. Bound only when
-  // the dropdown is open so we don't capture Escape globally while the
-  // user is typing in other inputs (e.g. profile / transaction forms).
   useEffect(() => {
     if (!isOpen) return;
     function handleKeydown(event: KeyboardEvent) {
@@ -73,10 +70,6 @@ export function LanguageSwitcher() {
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
         aria-label="Switch language"
-        // Wave 2 [T2.4]: announce the trigger as a listbox popup and
-        // expose the open/closed state via `aria-expanded` so screen
-        // readers track the dropdown lifecycle. Pre-Wave-2 the button
-        // had only an `aria-label` and no popup semantics.
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
@@ -87,11 +80,6 @@ export function LanguageSwitcher() {
       </button>
 
       {isOpen && (
-        // Wave 2 [T2.4]: `role="listbox"` on the menu container; each
-        // option gets `role="option"` + `aria-selected` so AT users get
-        // a countable, selectable item list. The container also gets
-        // a single `tabIndex` so the wrapper can receive focus when
-        // escape/re-open happens.
         <div
           className="absolute right-0 z-50 mt-1 w-36 origin-top-right rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
           role="listbox"
@@ -107,11 +95,10 @@ export function LanguageSwitcher() {
                   onClick={() => handleSelect(lang.locale)}
                   role="option"
                   aria-selected={isSelected}
-                  className={`flex w-full items-center px-3 py-2 text-left text-sm transition-colors ${
-                    isSelected
+                  className={`flex w-full items-center px-3 py-2 text-left text-sm transition-colors ${isSelected
                       ? "bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300"
                       : "text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
-                  }`}
+                    }`}
                 >
                   <span
                     className="mr-2 text-xs font-semibold uppercase text-slate-400"

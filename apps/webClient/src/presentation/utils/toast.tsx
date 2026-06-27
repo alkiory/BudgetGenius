@@ -59,18 +59,6 @@ const customToast = ({
 
   return toast.custom(
     (t) => (
-      // Wave 2 [T2.6]: WAI-ARIA `role` + `aria-live` per toast type.
-      //   - `alert`/`assertive` for warning + error: screen readers
-      //     interrupt the current read-out so destructive outcomes
-      //     aren't missed.
-      //   - `status`/`polite` for success + info: announce when the AT
-      //     user's current utterance finishes, the canonical
-      //     non-intrusive pattern.
-      // `aria-atomic="true"` ensures the entire toast message is
-      // re-announced on change (rather than only the delta). The icon
-      // and dismiss button are marked `aria-hidden` so AT users hear
-      // only the message text — the icon glyph would otherwise be
-      // read aloud.
       <div
         role={type === "error" || type === "warning" ? "alert" : "status"}
         aria-live={
@@ -120,14 +108,6 @@ export const confirmToast = (
 ) => {
   return toast.custom(
     (t) => (
-      // Wave 2 [T2.6 follow-through]: confirmToast uses `role="alert"` +
-      // `aria-live="assertive"` because the user must acknowledge it
-      // (Cancel/Delete buttons). We previously used `role="alertdialog"`
-      // which is INCORRECT for this UI: `alertdialog` requires modal
-      // semantics + a focus trap, neither of which this bottom-of-page
-      // toast implements. The choice mirrors the `errorToast`/`warningToast`
-      // assertive announcement pattern. Migrating to a true modal
-      // (`<dialog>` element + focus trap) is a Wave 3 follow-up.
       <div
         role="alert"
         aria-live="assertive"

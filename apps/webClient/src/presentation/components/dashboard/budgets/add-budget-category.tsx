@@ -30,11 +30,6 @@ export default function AddBudgetCategory({
   const userSetting = useSelector((state: RootState) => state.userSettings);
   const targetCurrency = (userSetting?.settings?.currency || "USD") as Currency;
   const currencySymbol = currencyService.getSymbol(targetCurrency);
-
-  // Wave 2 [T2.3]: step is derived from the user's currency precision
-  // (1 for COP because 1/10^0 = 1 whole unit; 0.01 for USD/EUR). Was
-  // previously hardcoded `step="0.01"` which blocked decimal entry for
-  // COP users.
   const precision = CURRENCY_PRECISION_MAP[targetCurrency] ?? 2;
   const stepAttr = precision === 0 ? 1 : 1 / 10 ** precision;
 
@@ -69,11 +64,6 @@ export default function AddBudgetCategory({
             </span>
             <Input
               id="new-category-allocated"
-              // Wave 2 [T2.3]: type="text" + inputMode="decimal" so the
-              // raw string buffer (parent state) survives intermediate
-              // states like `1.` and locale-specific separators. Was
-              // previously `type="number" step="0.01"` which had the
-              // integer-collapse bug class.
               type="text"
               inputMode="decimal"
               name="allocated"

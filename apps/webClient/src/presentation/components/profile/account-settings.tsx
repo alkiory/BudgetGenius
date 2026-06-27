@@ -72,16 +72,6 @@ export function AccountSettings() {
       return;
     }
 
-    // Wave 1 [T1.2]: the three `x !== y → x = x as T` blocks used
-    // to sit above this line as no-op self-assignments (no actual
-    // narrowing or coupling to the payload). The mutation hook
-    // `updateUserSettings` already accepts `Partial<UserSettings>`,
-    // so we forward the form's already-typed `settingsToUpdate`
-    // directly. The leading `settingsToUpdate` `useState` widens
-    // `currency` to `string` (via the `<Select value→string>` callback),
-    // so no per-call cast is required — the type narrows at the
-    // precise boundary (the Select handler) and stays narrow in
-    // the React Query payload.
     updateSettings(settingsToUpdate);
   };
 

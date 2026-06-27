@@ -7,13 +7,13 @@ import {
 } from "@domain/dashboard/budgets/budget.entity";
 import Loader from "@presentation/components/loader";
 import { Button } from "@presentation/components/ui/button";
+import { currencyService } from "@presentation/utils/currencyService";
 import {
   successToast,
   errorToast,
   warningToast,
   infoToast,
 } from "@presentation/utils/toast";
-import { currencyService } from "@presentation/utils/currencyService";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useState, useMemo, useCallback } from "react";
@@ -46,19 +46,6 @@ export function BudgetDetail({
 
   const activeBudget = selectedBudget?.id;
 
-  // Wave 2 [T2.3]: the inline new-category form switches to **string
-  // buffers** for `allocatedText` and `spentText` so the user's literal
-  // keystrokes are preserved while typing. The previous shape mapped
-  // `Number(value) || 0` on every keystroke, which collapsed the
-  // intermediate `1.` or `1,` to `1` mid-edit (the input would visually
-  // "skip" the decimal separator). On submit we re-parse via
-  // `currencyService.parseAmountInput` and feed the numeric value to
-  // the parent mutation — the canonical pattern also used by the
-  // transaction forms' `useDecimalInput` hook.
-  //
-  // The numeric `allocated` / `spent` fields are kept for any consumer
-  // (display paths) that reads them, so this is an additive change; the
-  // raw string buffer is the source of truth for input + submit.
   const [newCategory, setNewCategory] = useState<{
     name: string;
     allocatedText: string;
@@ -76,13 +63,6 @@ export function BudgetDetail({
     refetch: refetchCategories,
   } = useFetchBudgetCategories({
     budgetId: Number(activeBudget),
-    // Wave 1 [T1.3]: forward `undefined` instead of `""` so the
-    // `name` key reads as "not provided" rather than "empty filter".
-    // Backend (`budget.service.ts:167`) already strips `""` via
-    // `if (filters.name)`, but the falsy-empty path also makes the
-    // URL param in the browser Network tab read as `?budgetId=N`
-    // rather than `?budgetId=N&name=` — easier to diff, easier to
-    // spot accidental name-based filtering regressions later.
     name: undefined,
   });
 
@@ -196,12 +176,6 @@ export function BudgetDetail({
   // Handlers optimizados con useCallback
   const onUpdateSpent = useCallback(
     (categoryId: number, spent: number) => {
-      // Bug fix (#currency-edit-mangling): persist the user-entered amount
-      // as-is. The previous flow converted display currency → USD before
-      // saving, which broke round-trip on re-edit (2000 EUR → 2150 USD
-      // stored, then re-displayed as 2150 regardless of the user's display
-      // choice). Display paths read the value as a no-op identity
-      // conversion (source = targetCurrency).
       const normalizedSpent = spent;
 
       // Check if new spent exceeds allocated & show friendly warning
@@ -235,11 +209,6 @@ export function BudgetDetail({
   const handleNewCategoryChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const { name, value } = e.target;
-      // Wave 2 [T2.3]: every keystroke lands in the string buffer
-      // verbatim, including partial decimals like `1.` or `1,42`.
-      // No numeric coercion at the input layer — that's what previously
-      // collapsed `1.` to `1` on every render. Parsing happens once at
-      // submit time via `parseAmountInput`.
       setNewCategory((prev) => ({ ...prev, [name]: value }));
     },
     [],
@@ -251,21 +220,15 @@ export function BudgetDetail({
     const categoryName = newCategory.name.trim();
     if (categoryName === "") return;
 
-    // Parse text buffers once at submit time. `parseAmountInput` returns
-    // NaN for empty / invalid input; coerce to 0 to match historical
-    // behavior (`Number(value) || 0`).
     const allocatedNum = currencyService.parseAmountInput(
       newCategory.allocatedText,
     );
-    const spentNum = currencyService.parseAmountInput(
-      newCategory.spentText,
-    );
-    const allocated = Number.isFinite(allocatedNum) ? Math.max(0, allocatedNum) : 0;
+    const spentNum = currencyService.parseAmountInput(newCategory.spentText);
+    const allocated = Number.isFinite(allocatedNum)
+      ? Math.max(0, allocatedNum)
+      : 0;
     const spent = Number.isFinite(spentNum) ? Math.max(0, spentNum) : 0;
 
-    // Don't submit a fully-blank row (mirrors the legacy `!newCategory.allocated`
-    // exit — was checking falsiness which covered 0/empty/undefined; here we
-    // also catch the all-empty case explicitly).
     if (allocated === 0 && spent === 0) return;
 
     addBudgetCategory({
@@ -346,8 +309,6 @@ export function BudgetDetail({
         {isAddingCategory && (
           <AddBudgetCategory
             name={newCategory.name}
-            // Wave 2 [T2.3]: pass raw string buffers straight through.
-            // All parsing happens at submit time in handleAddCategorySubmit.
             allocated={newCategory.allocatedText}
             spent={newCategory.spentText}
             handleNewCategoryChange={handleNewCategoryChange}

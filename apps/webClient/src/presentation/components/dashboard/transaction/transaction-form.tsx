@@ -1,5 +1,5 @@
-import { RootState } from "@adapters/store/rootStore";
 import { useDecimalInput } from "@adapters/hooks/useDecimalInput";
+import { RootState } from "@adapters/store/rootStore";
 import {
   INCOME_RECURRENCES,
   IncomeRecurrence,
@@ -23,9 +23,6 @@ interface TransactionFormProps {
   onCancel: () => void;
 }
 
-// Phase 3 (T3.5): "One-time" represents the default no-recurrence label.
-// The backend stores `null` for non-recurring rows; the frontend maps an
-// empty select / the One-time sentinel to `null` on submit.
 const ONE_TIME_LABEL = "One-time";
 
 export function TransactionForm({
@@ -50,14 +47,6 @@ export function TransactionForm({
     recurrence: null,
   });
 
-  // Wave 2 [T2.2]: locale-aware decimal input backed by
-  // `useDecimalInput`. Replaces the previous ad-hoc `amountInput` raw
-  // string buffer plus the monolithic `parseAmountInput` call. The
-  // hook owns:
-  //   - the `<input type="text" inputMode="decimal">` value
-  //   - the parse-at-submit gate (no per-keystroke numeric coercion)
-  //   - the currency-aware `step` and `placeholder` for the input
-  //   - the locale-aware currency symbol prefix
   const amountInput = useDecimalInput({
     initial: undefined,
     currency: targetCurrency,
@@ -70,10 +59,6 @@ export function TransactionForm({
         return;
       }
       const abs = Math.abs(raw);
-      // Round to the currency's precision so the buffer opens with the
-      // exact value the parent will see on submit (avoids a wondering
-      // "the form showed 10.1 but the value was 10.100000000000001"
-      // from a JSON numeric round-trip).
       const precision = amountInput.precision;
       const rounded = Number(abs.toFixed(precision));
       amountInput.setText(Number.isFinite(rounded) ? String(rounded) : "");
@@ -155,11 +140,10 @@ export function TransactionForm({
             type="button"
             data-testid="type-expense"
             onClick={() => setTransactionType("expense")}
-            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-              transactionType === "expense"
+            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${transactionType === "expense"
                 ? "bg-red-500 text-white"
                 : "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-            }`}
+              }`}
           >
             {t("transactions.expense")}
           </button>
@@ -167,11 +151,10 @@ export function TransactionForm({
             type="button"
             data-testid="type-income"
             onClick={() => setTransactionType("income")}
-            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-              transactionType === "income"
+            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${transactionType === "income"
                 ? "bg-green-500 text-white"
                 : "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-            }`}
+              }`}
           >
             {t("transactions.income")}
           </button>
@@ -227,18 +210,14 @@ export function TransactionForm({
             // is preserved character-for-character. Parsing happens once
             // at submit time in `handleSubmit`.
             step={
-              amountInput.precision === 0
-                ? 1
-                : 1 / 10 ** amountInput.precision
+              amountInput.precision === 0 ? 1 : 1 / 10 ** amountInput.precision
             }
             value={amountInput.text}
             onChange={(e) => {
               amountInput.setText(e.target.value);
             }}
             aria-label={t("transactions.amount")}
-            aria-invalid={
-              amountInput.text !== "" && !amountInput.isValid()
-            }
+            aria-invalid={amountInput.text !== "" && !amountInput.isValid()}
             className="pl-7"
             placeholder={amountInput.livePreview() || "0.00"}
             required
@@ -249,8 +228,6 @@ export function TransactionForm({
         </p>
       </div>
 
-      {/* Phase 3 (T3.5): recurrence picker shown only for income rows.
-          Expense rows store `null` (non-recurring by default). */}
       {transactionType === "income" && (
         <div className="space-y-2">
           <Label htmlFor="recurrence">{t("transactions.recurrence")}</Label>

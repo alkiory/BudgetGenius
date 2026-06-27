@@ -18,16 +18,6 @@ export class BudgetCategory {
   @Column()
   name: string;
 
-  // Wave 3 [T3.1 + T3.7]: per-row currency tag. The migration
-  // `1800000000004-AddCurrencyToBudgetCategory` ADDed this column,
-  // backfilled it from `user_settings.currency` (COALESCE USD for
-  // orphans), then SET NOT NULL. The entity mirrors that final
-  // state so TypeORM INSERTs without an explicit `currency` field
-  // get the DB-level DEFAULT 'USD' (see the matching `ALTER ...
-  // DEFAULT 'USD'` in the migration's `up()`). The enum reuses the
-  // existing `bg_public.currency_enum` so adding a 4th currency
-  // (out of MVP scope) requires both a migration AND the
-  // `SupportedCurrency` union update.
   @Column({
     type: 'enum',
     enum: ['USD', 'EUR', 'COP'],
@@ -70,26 +60,5 @@ export class BudgetCategory {
   budget: Budget;
 }
 
-/**
- * Canonical constraint name for the storage-layer UNIQUE invariant
- * introduced by migration `BudgetCategoryUniqueName1800000000003`.
- *
- * The migration hardcodes the identical string in its DDL (DDL is
- * intentionally self-contained — migrations are loaded by file path,
- * not by import graph, so a `const` import would break the migration
- * runner). Treat this constant as the runtime-side authority:
- *
- *   - `apps/api/src/application/dashboard/services/budget.service.ts`
- *     uses it to identify the SQLSTATE 23505 race path and translate it
- *     to a `BadRequestException` with the same surface error the
- *     in-app check throws.
- *   - `apps/api/test/budget-service.spec.ts` uses it to simulate the
- *     pg driver's `QueryFailedError` shape without duplicating the
- *     string in two places.
- *
- * If you rename the constraint in the migration, rename this constant
- * in lockstep — the test suite and the runtime translator both go
- * stale otherwise.
- */
 export const BUDGET_CATEGORY_UNIQUE_CONSTRAINT_NAME =
   'UQ_budget_categories_budgetId_name';
