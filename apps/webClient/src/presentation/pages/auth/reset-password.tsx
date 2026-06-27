@@ -105,7 +105,7 @@ export default function ResetPasswordPage() {
               onChange={(e) => setNewPassword(e.target.value)}
               required
             />
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               {t("auth.passwordRequirements")}
             </p>
           </div>
@@ -126,7 +126,7 @@ export default function ResetPasswordPage() {
         </form>
       </CardContent>
       <CardFooter className="flex justify-center">
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           {t("auth.alreadyHaveAccount")}{" "}
           <Link
             to={RoutePaths.Auth + "/" + RoutePaths.Login}

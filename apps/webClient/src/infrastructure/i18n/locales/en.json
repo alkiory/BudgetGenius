@@ -205,9 +205,22 @@
     "allocatedAmount": "Allocated Amount",
     "spentAmount": "Spent Amount",
     "totalBudget": "Total Budget",
+    "totalLimit": "Total Limit",
+    "spentLabel": "Spent",
+    "limitLabel": "Limit",
+    "hasSpent": "You've spent {{amount}}",
+    "available": "Available",
+    "availableAmount": "{{amount}} Available",
     "namePlaceholder": "e.g., Monthly Budget",
     "submitCreate": "Create Budget",
-    "submitUpdate": "Update Budget"
+    "submitUpdate": "Update Budget",
+    "spentOfAllocated": "{{spent}} of {{allocated}}",
+    "amountRemaining": "{{amount}} remaining",
+    "amountOverBudget": "{{amount}} over budget",
+    "updateSpentLabel": "Update Spent Amount",
+    "addExpense": "Add expense",
+    "addExpenseCurrent": "Current: {{current}}",
+    "spentLabelAria": "Spent amount for {{category}}"
   },
   "reports": {
     "title": "Financial Reports",
@@ -442,6 +455,10 @@
   "investments": {
     "underConstruction": "This feature is under construction and will be available soon in our app."
   },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark"
+  },
   "sidebar": {
     "investments": "Investments",
     "savings": "Savings",
@@ -537,6 +554,8 @@
     "desktopExperienceDesc": "Our desktop interface provides a comprehensive view of your finances with powerful tools for tracking, analyzing, and planning.",
     "mobileExperience": "Mobile Experience",
     "mobileExperienceDesc": "Take your finances on the go with our mobile-optimized interface, designed for easy tracking and management.",
+    "desktopScreenshotAlt": "Screenshot of the Budget Genius desktop dashboard",
+    "mobileScreenshotAlt": "Screenshot of the Budget Genius mobile app",
     "monthlyOverview": "Monthly Overview",
     "incomeVsExpenses": "Income vs. Expenses",
     "monthlySummary": "Monthly Summary",

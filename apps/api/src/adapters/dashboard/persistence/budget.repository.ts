@@ -120,12 +120,27 @@ export class BudgetRepository {
   }
 
   /**
-   * Delete a budget category scoped to the user — falls through silently
-   * (returns void, no exception) on miss so service callers can treat a
-   * foreign-id attempt as a no-op rather than a leaked error.
+   * Delete a budget category by id — ownership is validated by the
+   * service layer via `categoryRepo.getBudgetCategory(id, userId)` BEFORE
+   * this method is invoked, so the repo only needs to operate on the
+   * local `id` column.
+   *
+   * The previous signature was `deleteBudgetCategory(id, userId)` and
+   * the body used `categoryRepo.delete({ id, budget: { user: { id } } })`.
+   * That two-level nested relation criteria is NOT translated to a JOIN
+   * by TypeORM's `Repository.delete()` — it tries to match a literal
+   * `budget` column on `budget_categories`, which does not exist, so
+   * the driver throws `QueryFailedError`. The custom
+   * `EntityNotFoundExceptionFilter` catches `EntityNotFoundError` only;
+   * `QueryFailedError` falls through to Nest's default filter and
+   * surfaces as a 500. User-facing symptom: `DELETE /budgets/category/:id`
+   * returned 500 even when the category legitimately belonged to the
+   * caller. Fixed in v1.4.x by hoisting ownership validation into the
+   * service (which uses `findOne` and DOES translate the nested WHERE
+   * correctly via QueryBuilder).
    */
-  async deleteBudgetCategory(id: number, userId: number): Promise<void> {
-    await this.categoryRepo.delete({ id, budget: { user: { id: userId } } });
+  async deleteBudgetCategory(id: number): Promise<void> {
+    await this.categoryRepo.delete({ id });
   }
 
   /**

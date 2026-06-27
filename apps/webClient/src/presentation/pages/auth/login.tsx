@@ -1,5 +1,6 @@
 import { loginAction, setUser } from "@adapters/slices/auth/authSlice";
 import { login } from "@application/auth/auth.service";
+import { isNativePlatform } from "@infrastructure/platform";
 import { SocialLoginButtons } from "@presentation/components/social-buttons-login";
 import { Button } from "@presentation/components/ui/button";
 import {
@@ -29,6 +30,9 @@ export default function LoginPage() {
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  // Module-scope lazy cache in @infrastructure/native makes this cheap
+  // (O(1) cache hit on every call after the first).
+  const isNative = isNativePlatform();
 
   const { mutate: loginMutation } = useMutation({
     mutationKey: ["login"],
@@ -97,13 +101,15 @@ export default function LoginPage() {
 
   return (
     <div className="w-full h-full flex items-center justify-center">
-      <Button
-        variant="default"
-        className="absolute left-4 top-[max(env(safe-area-inset-top),1rem)] md:left-8 md:top-8 animate-shake"
-        onClick={() => navigate(RoutePaths.Home)}
-      >
-        {t("auth.goBack")}
-      </Button>
+      {!isNative && (
+        <Button
+          variant="default"
+          className="absolute left-4 top-[max(env(safe-area-inset-top),1rem)] md:left-8 md:top-8 animate-shake"
+          onClick={() => navigate(RoutePaths.Home)}
+        >
+          {t("auth.goBack")}
+        </Button>
+      )}
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center">
@@ -170,7 +176,7 @@ export default function LoginPage() {
               <Separator className="w-full" />
             </div>
             <div className="relative flex justify-center">
-              <span className="bg-white px-2 text-xs text-slate-500">
+              <span className="bg-white px-2 text-xs text-slate-500 dark:bg-slate-900 dark:text-slate-400">
                 {t("auth.orContinueWith")}
               </span>
             </div>
@@ -179,7 +185,7 @@ export default function LoginPage() {
           <SocialLoginButtons />
         </CardContent>
         <CardFooter className="flex justify-center">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             {t("auth.dontHaveAccount")}{" "}
             <Link
               to={RoutePaths.Auth + "/" + RoutePaths.Signup}

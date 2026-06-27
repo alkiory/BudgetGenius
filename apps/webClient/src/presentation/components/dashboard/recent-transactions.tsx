@@ -1,5 +1,5 @@
+import { useUserSettings } from "@adapters/hooks/useUserSettings";
 import { useFetchRecentSummary } from "@adapters/query/dashboard";
-import { RootState } from "@adapters/store/rootStore";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { RoutePaths } from "@presentation/utils/routes";
 import {
@@ -21,7 +21,6 @@ import {
   Activity,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useSelector } from "react-redux";
 import { Link } from "react-router";
 
 // Mapeo de categorías a iconos
@@ -74,9 +73,14 @@ export function RecentTransactions() {
   // Recent slice returned by GET /dashboard/recent-summary (already DESC).
   const { data, isSuccess } = useFetchRecentSummary(50);
 
-  const userSetting = useSelector((state: RootState) => state.userSettings);
-
-  const { settings } = userSetting;
+  // One Redux subscription covers both fields the card needs:
+  // `settings?.currency` for the per-transaction amount formatter
+  // and `settings?.locale` for the per-row date. The previous
+  // version used `useSelector + useLocale()` + destructure (3
+  // separate statements for 2 fields); `useUserSettings()` collapses
+  // them.
+  const settings = useUserSettings();
+  const locale = settings?.locale || "en-US";
 
   const recentTransactions = (data?.transactions ?? []).slice(0, 3);
 
@@ -120,7 +124,11 @@ export function RecentTransactions() {
                       <p className="font-medium">{transaction.description}</p>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
                         {transaction.category} •{" "}
-                        {new Date(transaction.date).toDateString()}
+                        {new Date(transaction.date).toLocaleDateString(locale, {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })}
                       </p>
                     </div>
                   </div>

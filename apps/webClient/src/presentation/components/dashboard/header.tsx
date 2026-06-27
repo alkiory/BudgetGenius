@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 import { Link } from "react-router";
 import { ThemeToggle } from "../themeToogle";
-import { LanguageSwitcher } from "./language-switcher";
 import { AddTransactionModal } from "./transaction/add-transaction-modal";
 
 export function DashboardHeader() {
@@ -21,7 +20,6 @@ export function DashboardHeader() {
           <div className="ml-3">
             <ThemeToggle />
           </div>
-          <LanguageSwitcher />
           <div className="relative ml-3">
             <div>
               <button

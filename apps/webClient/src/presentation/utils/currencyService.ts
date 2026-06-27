@@ -1,11 +1,31 @@
-// MVP scope (T3.x): the MVP supports only three currencies — USD, EUR,
-// COP. Removing GBP, JPY, AUD, CAD here narrows the `Currency` union so
-// the rest of the codebase no longer has to deal with rows whose rates
-// the upstream provider occasionally returns as NaN (which surfaced as
-// "NaN" in the dashboard for the Australian and Canadian dollars —
-// fixed by simply not supporting them).
+import { httpCurrencyClient } from "@adapters/http/currency.client";
+
 export type Currency = "USD" | "EUR" | "COP";
 type ExchangeRates = Record<Currency, number>;
+
+const SUPPORTED_CURRENCIES: ReadonlyArray<Currency> = ["USD", "EUR", "COP"];
+
+/**
+ * Coerce an arbitrary string (e.g. backend-returned currency code, or
+ * `undefined` from legacy rows) into one of the three supported
+ * `Currency` values. Anything that isn't `"USD" | "EUR" | "COP"` falls
+ * back to `"USD"` so the formatter never receives garbage — without
+ * this guard a stray GBP, typo, or transport corruption would land in
+ * `formatCurrency`'s `convertAmount`, multiply by `undefined`, and
+ * render `NaN` strings in the UI.
+ *
+ * Use this anywhere the codebase reads an externally-sourced currency
+ * code (api entity mirrors, `user_settings.currency`, query params,
+ * form values). Single source of truth for the "is this a real
+ * currency" check — keeps unsupported-value handling consistent across
+ * every callsite without each consumer re-implementing the same
+ * fallback.
+ */
+export function toCurrency(value: string | undefined | null): Currency {
+  return SUPPORTED_CURRENCIES.includes(value as Currency)
+    ? (value as Currency)
+    : "USD";
+}
 
 // Exchange rates defaults (Should be fetched from an API)
 const DEFAULT_EXCHANGE_RATES: ExchangeRates = {
@@ -19,6 +39,18 @@ const CURRENCY_SYMBOLS: Record<Currency, string> = {
   USD: "$",
   EUR: "€",
   COP: "$",
+};
+
+export const CURRENCY_PRECISION_MAP: Record<Currency, number> = {
+  USD: 2,
+  EUR: 2,
+  COP: 0,
+};
+
+export const CURRENCY_LOCALE_MAP: Record<Currency, string> = {
+  USD: "en-US",
+  EUR: "es-ES",
+  COP: "es-CO",
 };
 
 interface CurrencyConversionOptions {
@@ -44,12 +76,7 @@ export class CurrencyService {
   }
 
   private getLocaleForCurrency(currency: Currency): string {
-    const localeMap: Record<Currency, string> = {
-      USD: "en-US",
-      EUR: "es-ES",
-      COP: "es-CO",
-    };
-    return localeMap[currency] || "en-US";
+    return CURRENCY_LOCALE_MAP[currency] || "en-US";
   }
 
   public static getInstance(): CurrencyService {
@@ -95,13 +122,17 @@ export class CurrencyService {
   public convertAmount(options: CurrencyConversionOptions): number {
     const { amount, fromCurrency = "USD", toCurrency } = options;
     const rates = options.exchangeRates || this.exchangeRates;
+    const fromRate = fromCurrency === "USD" ? 1 : rates[fromCurrency];
+    const toRate = toCurrency === "USD" ? 1 : rates[toCurrency];
+    if (fromRate === undefined || toRate === undefined) {
+      return amount;
+    }
 
     // Convert to USD first if not the base currency
-    const amountInUSD =
-      fromCurrency === "USD" ? amount : amount / rates[fromCurrency];
+    const amountInUSD = fromCurrency === "USD" ? amount : amount / fromRate;
 
     // Convert to target currency
-    return toCurrency === "USD" ? amountInUSD : amountInUSD * rates[toCurrency];
+    return toCurrency === "USD" ? amountInUSD : amountInUSD * toRate;
   }
 
   public normalizeAmount(amount: number, currency: Currency): number {
@@ -146,16 +177,6 @@ export class CurrencyService {
     };
   }
 
-  /**
-   * Normalize a user-entered amount string from any supported locale to a
-   * number. Accepts `5.23`, `10,42`, and ` 5 . 23 ` (decimal-comma and
-   * decimal-dot inputs). Returns NaN for empty / unparseable input —
-   * callers should treat NaN as "no amount entered".
-   *
-   * The MVP handles single-decimal-separator inputs (dot OR comma).
-   * Thousand-grouped values such as `1,234.56` or `1.234,56` are NOT
-   * supported — they require locale-aware parsing, out of MVP scope.
-   */
   public parseAmountInput(value: string | number | null | undefined): number {
     if (typeof value === "number") {
       return Number.isFinite(value) ? value : Number.NaN;
@@ -166,12 +187,6 @@ export class CurrencyService {
     const normalized = trimmed.replace(/,/g, ".");
     // Drop everything that is not a digit, sign, or decimal point.
     const cleaned = normalized.replace(/[^.\d-]/g, "");
-    // Collapse repeated decimal points so only the FIRST one is kept as
-    // the decimal separator. Subsequent dots (likely misplaced thousand
-    // separators from a paste, e.g. "1.234.567") are dropped. Crucially
-    // we KEEP the first dot — the previous implementation stripped it
-    // from the prefix slice, so a single-decimal value like "10.5" came
-    // out as parseFloat("105") = 105.
     const firstDot = cleaned.indexOf(".");
     let safe = cleaned;
     if (firstDot !== -1) {
@@ -198,6 +213,24 @@ export class CurrencyService {
       },
       60 * 60 * 1000,
     ); // update every hour
+  }
+
+  public async convertAmountAsync(
+    amount: number,
+    fromCurrency: Currency,
+    toCurrency: Currency,
+  ): Promise<number> {
+    if (fromCurrency === toCurrency) return amount;
+    try {
+      const rate = await httpCurrencyClient.fetchRate(fromCurrency, toCurrency);
+      return amount * rate;
+    } catch (err) {
+      console.warn(
+        `[currencyService] backend unreachable, falling back to bundled rates for ${fromCurrency}->${toCurrency}`,
+        (err as Error)?.message ?? err,
+      );
+      return this.convertAmount({ amount, fromCurrency, toCurrency });
+    }
   }
 }
 

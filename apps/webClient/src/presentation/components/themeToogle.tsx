@@ -1,10 +1,12 @@
 import { useTheme } from "@adapters/hooks/themeContext";
 import { Moon, Sun } from "lucide-react";
 import * as React from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 
 export function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
 
@@ -49,7 +51,7 @@ export function ThemeToggle() {
                 theme === "light" ? "bg-slate-100 dark:bg-slate-700" : ""
               }`}
             >
-              Light
+              {t("theme.light")}
             </Button>
             <Button
               onClick={() => {
@@ -60,7 +62,7 @@ export function ThemeToggle() {
                 theme === "dark" ? "bg-slate-100 dark:bg-slate-700" : ""
               }`}
             >
-              Dark
+              {t("theme.dark")}
             </Button>
           </div>
         </div>

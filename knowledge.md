@@ -569,7 +569,7 @@ FIREBASE_AUTH_DOMAIN=
 FIREBASE_STORAGE_BUCKET=
 FIREBASE_MESSAGING_SENDER_ID=
 FIREBASE_APP_ID=
-FIREBASE_MEASURENT_ID=
+FIREBASE_MEASUREMENT_ID=
 ```
 
 **Frontend (`apps/webClient/.env.development`):**
@@ -585,7 +585,7 @@ VITE_FIREBASE_AUTH_DOMAIN=
 VITE_FIREBASE_STORAGE_BUCKET=
 VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
-VITE_FIREBASE_MEASURENT_ID=
+VITE_FIREBASE_MEASUREMENT_ID=
 ```
 
 ---
@@ -768,6 +768,7 @@ Ambiguity → [Research] → [Plan] → [Implement] → Outcome
 - No database seed data for development (only a `UserSeederService` placeholder)
 - **Protected-route infinite-render outage (2026-06):** a rewrite of `apps/webClient/src/presentation/routes/protected-route.tsx` collapsed three auth slice fields into a single `useSelector((s) => s.auth)` and React 19 + StrictMode tripped React's `getSnapshot should be cached` guard, leaving `/app/*` routes blank on hard refresh. Fixed by splitting into three leaf selectors; codified as §6.8 so the next combined-slice selector gets caught pre-merge.
 - **Capacitor Android APK third-party cookie outage (2026-06, fixed in v1.3.0):** Android System WebView silently drops `Set-Cookie` from cross-origin responses, so the entire Capacitor mobile auth path — `/auth/firebase-login` → `/api/...` round-trip → `/auth/refresh` — was broken on real devices (cookies never reached the WebView's cookie jar; the backend's `req.cookies.refreshToken` reads returned undefined; users got 401s and were bounced back to `/auth/login`). The RPI-install path for `@capacitor-community/cookies` (`rpi/mobile-cookies-persistence/`) was not available on the npm registry at install time (E404 on both `@capacitor-community/cookies@^6.0.0` and `@capacitor-community/cookies@^7.0.0`), so the v1.3.0 fix shipped **without a native cookies plugin** and instead relied on the body-token + Authorization-header defense-in-depth: backend `/auth/{login,signup,firebase-login,refresh}` now returns `{accessToken, refreshToken, user, ...}` in the response body; `/auth/refresh` also reads the refresh token from `req.body.refreshToken` or `Authorization: Bearer ...`; webClient's `apps/webClient/src/infrastructure/api.config.ts` request interceptor attaches `Authorization: Bearer ${localStorage.accessToken}` and `X-Device-Id` on every request, and the response interceptor persists tokens to localStorage + `document.cookie` on every successful auth response. Backend also gained `@SkipThrottle()` on `/auth/refresh`, `cookieOptions.maxAge` bumped 15 → 30 minutes, and the cross-cutting watchdog spec `apps/api/test/auth-cookie-bridge.spec.ts` covers cookie+body+header input/output across all four auth routes. Full RPI artifacts + research + plan + FAR (4.67) / FACTS (4.80) scores at `rpi/mobile-cookies-persistence/`.
+- **Budget cross-currency aggregation (Phase: Option B shipped in v1.4.1, see `rpi/budget-currency-coercion/`):** `Budget.totalAllocated` / `Budget.totalSpent` now FX-coerce at both read-time (`getBudgets` in-memory loop) and write-time (`recalculateBudgetTotalSpent` loop) via `CurrencyService.convert`. The persisted columns remain for backwards compatibility but are vestigial: `getBudget(id)` (single-budget fetch) still reads them without recompute, while `getBudgets` (list) updates in-memory on each request. Identity fast-path skips `CurrencyService` entirely when `from === target` (single-currency users pay zero latency penalty). Vestigial-column deletion is a follow-up migration — the column shape is part of the schema contract exported via Swagger, historical budget snapshots reference it via `overview` aggregations, and a clean drop needs an `overview`-consumer audit. The 31-test budget-service spec pins the cross-currency behavior (mixed USD+COP math correctness, identity fast-path zero-call assertion, `ServiceUnavailableException` graceful degradation, persisted-coercion correctness).
 
 ---
 

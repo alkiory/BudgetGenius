@@ -2,8 +2,15 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BudgetService } from '@application/dashboard/services/budget.service';
 import { BudgetRepository } from '@adapters/dashboard/persistence/budget.repository';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  NotFoundException,
+  BadRequestException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { LoggingService } from '@infrastructure/log/logger.service';
+import { UserSettingsService } from '@application/user/user-settings.service';
+import { CurrencyService } from '@infrastructure/currency/currency.service';
+import { SupportedCurrency } from '@domain/user/user-settings.entity';
 import { QueryFailedError } from 'typeorm';
 import { BUDGET_CATEGORY_UNIQUE_CONSTRAINT_NAME } from '@domain/dashboard/budget-category.entity';
 
@@ -84,6 +91,13 @@ const mockCategoryShape = {
   name: 'Medical',
   allocated: 550,
   spent: 250,
+  // Widened from `'USD' as const` to `SupportedCurrency` so the
+  // spread-override pattern in cross-currency tests (e.g.
+  // `{ ...buildCategory(...), currency: 'COP' as SupportedCurrency }`)
+  // still satisfies the resulting object's currency field. Existing
+  // overrides that use `currency: 'USD' as const` remain assignable
+  // because `'USD'` is a member of `SupportedCurrency`.
+  currency: 'USD' as SupportedCurrency,
   createdAt: new Date(),
   updatedAt: new Date(),
   budget: { ...categoryBudget },
@@ -94,6 +108,35 @@ const buildBudget = (overrides: Partial<typeof mockBudgetShape> = {}) => ({
   ...mockBudgetShape,
   ...overrides,
 });
+
+// Module-level singleton CurrencyService fake. Identity default behaviour
+// (returns `amount` unchanged via `convertedAmount: amount`) so existing
+// tests with single-currency USD fixtures pass without per-test mock
+// overrides. Per-test overrides via `(fakeCurrencyService.convert as
+// jest.Mock).mockImplementation(...)` (T4.1/T4.2 cross-currency tests).
+const fakeCurrencyService = {
+  convert: jest
+    .fn()
+    .mockImplementation(
+      async ({
+        amount,
+        fromCurrency,
+        toCurrency,
+      }: {
+        amount: number;
+        fromCurrency: string;
+        toCurrency: string;
+      }) => ({
+        amount,
+        fromCurrency,
+        toCurrency,
+        convertedAmount: amount, // identity by default
+        rate: 1,
+        fetchedAt: new Date().toISOString(),
+        cacheHit: true,
+      }),
+    ),
+};
 
 const mockBudgetShape = {
   id: 1,
@@ -113,6 +156,7 @@ describe('BudgetService', () => {
   let service: BudgetService;
   let repo: jest.Mocked<BudgetRepository>;
   let userRepo: jest.Mocked<UserRepositoryImpl>;
+  let logger: jest.Mocked<LoggingService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -149,12 +193,34 @@ describe('BudgetService', () => {
             error: jest.fn(),
           },
         },
+        {
+          provide: UserSettingsService,
+          useValue: {
+            getOrCreateSettings: jest.fn().mockResolvedValue({
+              id: 1,
+              timezone: 'UTC',
+              currency: 'USD',
+              locale: 'en-US',
+            }),
+          },
+        },
+        {
+          provide: CurrencyService,
+          useValue: fakeCurrencyService,
+        },
       ],
     }).compile();
 
     service = module.get<BudgetService>(BudgetService);
     repo = module.get(BudgetRepository);
     userRepo = module.get(UserRepositoryImpl);
+    logger = module.get(LoggingService);
+
+    // Reset CurrencyService mock state per test so cross-currency
+    // overrides from inner describe blocks don't leak into the standard
+    // 27-test suite. mockClear wipes call history; the default identity
+    // implementation defined at module top survives mockClear.
+    (fakeCurrencyService.convert as jest.Mock).mockClear();
   });
 
   describe('createBudget', () => {
@@ -230,6 +296,10 @@ describe('BudgetService', () => {
       expect(result[0].totalSpent).toBe(850);
       // totalAllocated should be recalculated from categories: 550
       expect(result[0].totalAllocated).toBe(550);
+      // Phase 3 T3.2: identity fast-path (USD→USD) keeps zero Redis
+      // round-trips. Pin the optimization — a regression that removes
+      // the fast-path would issue 1 round-trip per category here.
+      expect(fakeCurrencyService.convert).not.toHaveBeenCalled();
     });
 
     it('should recalculate totalSpent and totalAllocated from categories over stale DB values', async () => {
@@ -254,6 +324,10 @@ describe('BudgetService', () => {
       // Both should be recalculated from categories, not from stale DB values
       expect(result[0].totalSpent).toBe(430); // 250 + 180
       expect(result[0].totalAllocated).toBe(500); // 300 + 200, overrides stale 999
+      // Phase 3 T3.3: identity fast-path (USD→USD) keeps zero Redis
+      // round-trips across 2 categories. Same pin as T3.2 — guards
+      // the optimization from regression.
+      expect(fakeCurrencyService.convert).not.toHaveBeenCalled();
     });
 
     it('should return empty array when user has no budgets', async () => {
@@ -343,10 +417,6 @@ describe('BudgetService', () => {
       const result = await service.updateBudgetCategory(1, dto);
 
       expect(result.spent).toBe(850);
-      // Should have recalculated the parent budget's totalSpent.
-      // The new repo signature forwards userId so the WHERE clause also
-      // scopes by owner; the assertion below checks both args so any
-      // future signature drift on either parameter is caught.
       expect(repo.findById).toHaveBeenCalledWith(1, 1); // budget id + userId from category owner
       expect(repo.updateBudget).toHaveBeenCalled();
     });
@@ -393,19 +463,27 @@ describe('BudgetService', () => {
     });
   });
 
-  /**
-   * Cross-user ownership isolation. These tests lock in the post-audit
-   * contract: any attempt by user A to touch a row owned by user B
-   * either throws NotFoundException (fetches / updates) or is a silent
-   * no-op (deletes). They never leak the foreign row, never return it,
-   * and never expose a 403 that would let a caller probe for ownership
-   * existence by status-code inference.
-   */
   describe('ownership/cross-user isolation', () => {
     const userAId = 1;
-    const userBId = 2;
-    const foreignBudgetId = 999; // owned by userB
-    const foreignCategoryId = 888; // owned by userB inside userB's budget
+    // List of canonical test-id constants. `foreignBudgetId` and
+    // `foreignCategoryId` are owned by a hypothetical userB (not the
+    // current caller) and serve as negative-test inputs across this
+    // describe. Their declared `userB` ownership is documented but no
+    // userB id is needed in the test bodies — the foreignness is the
+    // signal, not a peer user's id.
+    const foreignBudgetId = 999; // owned by userB (foreign to userAId)
+    const foreignCategoryId = 888; // inside userB's budget
+    // Canonical shape of the freshly-created category. Referenced from
+    // BOTH the `repo.createBudgetCategory.mockResolvedValue(...)` payload
+    // AND the post-create `repo.findById.mockResolvedValue(...)`
+    // categories list, so a future intent-change locks both mocks at once
+    // (otherwise they'd drift and silently mask a wiring regression).
+    const newCategoryShape = {
+      id: 42,
+      name: 'NewCategory',
+      spent: 30,
+      allocated: 100,
+    };
 
     beforeEach(() => {
       userRepo.findById.mockResolvedValue({
@@ -424,9 +502,6 @@ describe('BudgetService', () => {
         NotFoundException,
       );
 
-      // Scope must include both id AND userId; a future regression that
-      // drops `userId` would still appear to "work" by accident, so we
-      // pin the full argument shape.
       expect(repo.findById).toHaveBeenCalledWith(foreignBudgetId, userAId);
     });
 
@@ -494,33 +569,26 @@ describe('BudgetService', () => {
       const result = await service.deleteBudget(userAId, foreignBudgetId);
 
       expect(result).toBeUndefined();
-      // Repo must receive the userId so the WHERE clause scopes the
-      // DELETE statement; otherwise we'd hit a flat
-      // `delete({id: foreignBudgetId})` — which would be a privilege
-      // escalation.
       expect(repo.deleteBudget).toHaveBeenCalledWith(foreignBudgetId, userAId);
     });
 
-    it('deleteBudgetCategory: foreign-id attempt is a silent no-op', async () => {
-      repo.deleteBudgetCategory.mockResolvedValue(undefined);
-
-      const result = await service.deleteBudgetCategory(
-        userAId,
-        foreignCategoryId,
+    it('deleteBudgetCategory: foreign-id attempt is a service-level NotFoundException (no repo delete)', async () => {
+      // Production path: the service-layer pre-delete lookup rejects
+      // the foreign id with NotFoundException BEFORE reaching the repo.
+      // This is what the user sees as a clean 404 (not the 500 that the
+      // buggy nested-WHERE delete used to throw at the SQL-driver layer).
+      repo.getBudgetCategory.mockRejectedValue(
+        new NotFoundException(`Budget category ${foreignCategoryId} not found`),
       );
 
-      expect(result).toEqual({ message: 'Category deleted successfully' });
-      expect(repo.deleteBudgetCategory).toHaveBeenCalledWith(
-        foreignCategoryId,
-        userAId,
-      );
+      await expect(
+        service.deleteBudgetCategory(userAId, foreignCategoryId),
+      ).rejects.toThrow(NotFoundException);
+      // Defensive belt-and-suspenders: the repo never sees a category
+      // id that wouldn't belong to the user.
+      expect(repo.deleteBudgetCategory).not.toHaveBeenCalled();
     });
-
     it('createBudgetCategory: appending to a foreign budget is rejected', async () => {
-      // The defence-in-depth ownership check (`repo.findById(budgetId, userId)`)
-      // throws if the budget does not belong to userA. The repo's
-      // NotFoundException bubbles; createBudgetCategory never reaches
-      // the DB write.
       repo.findById.mockRejectedValue(
         new NotFoundException(`Budget ${foreignBudgetId} not found`),
       );
@@ -541,23 +609,6 @@ describe('BudgetService', () => {
       expect(repo.createBudgetCategory).not.toHaveBeenCalled();
     });
 
-    /**
-     * Bug regression tests for #EntityPropertyNotFoundError. The previous
-     * service code passed `{ budget: { id }, user: { id } }` to the
-     * `where` clause of the BudgetCategory repository. `BudgetCategory`
-     * has no `user` relation (user is reachable only transitively through
-     * `BudgetCategory.budget -> Budget.user`), so TypeORM would throw
-     * `EntityPropertyNotFoundError: Property "user" was not found in
-     * "BudgetCategory"` and the POST never persisted a category. The fix
-     * was to scope the duplicate-name lookup and the categories finder
-     * through the budget relation chain so the WHERE clause refuses to
-     * filter on a property that does not exist.
-     *
-     * These tests pin the shape of the call into the repository so a
-     * future contributor who reintroduces a flat `user: { id }` filter
-     * at the top level will trip a `toHaveBeenCalledWith` mismatch (and
-     * the production error from TypeORM) before reaching the user.
-     */
     it('createBudgetCategory: duplicate-name lookup is scoped via budget.user (NOT a flat user filter)', async () => {
       // Eager user/budget ownership check passes (the user owns the budget).
       userRepo.findById.mockResolvedValue({
@@ -580,17 +631,7 @@ describe('BudgetService', () => {
       });
 
       expect(repo.findCategotyQuery).toHaveBeenCalledTimes(1);
-      // `.where` is a single object (not `[{...}, ...]`). The service
-      // calls `repo.findCategotyQuery({ where: { budget: {...},
-      // name: ... } })`, so the call's first arg is the FindManyOptions
-      // object with a singular .where shape. Array-destructuring it
-      // throws `object is not iterable`. Match the same shape used by
-      // the passing `findCategories` tests below.
       const whereArg = (repo.findCategotyQuery.mock.calls[0] as any[])[0].where;
-      // The flat-shape assertion: the top-level WHERE must NOT carry a
-      // `user` property (that would trip TypeORM's column-existence
-      // check on BudgetCategory). The user scoping MUST be reachable
-      // through the budget relation chain.
       expect(whereArg).not.toHaveProperty('user');
       expect(whereArg).toHaveProperty('budget');
       expect(whereArg.budget).toMatchObject({
@@ -606,9 +647,6 @@ describe('BudgetService', () => {
       });
       repo.findCategotyQuery.mockResolvedValue([]);
 
-      // With both budgetId and name filters, the resulting WHERE must NOT
-      // carry a flat `user` key. The user scoping must flow through
-      // `budget.user.id`.
       await service.findCategories({
         userId: userAId,
         budgetId: 1,
@@ -644,14 +682,6 @@ describe('BudgetService', () => {
     });
 
     it('findCategories: filtering by a foreign budgetId is rejected', async () => {
-      // The service eagerly checks `user.budgets.find(b.id === budgetId)`
-      // before hitting the repo. This guards against a user enumerating
-      // other users' budget ids via the categories endpoint.
-      // A foreign budgetId trips the guard and throws NotFoundException
-      // before the repo is called. The `expect(...).rejects.toThrow()`
-      // assertion also makes the rejection observable to the runner
-      // (a bare `await` followed by an assertion would re-throw and
-      // fail the test on the assignment line, not on intent).
       await expect(
         service.findCategories({
           userId: userAId,
@@ -660,36 +690,13 @@ describe('BudgetService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    /**
-     * Bug regression tests for #concurrent-insert. The in-app duplicate
-     * check above (createBudgetCategory lines around
-     * `findCategotyQuery({ where: { budget: {...}, name } })`) is racy
-     * under concurrent POSTs: two writers can both pass it and both
-     * INSERT, leaving two rows. Migration
-     * `BudgetCategoryUniqueName1800000000003` adds the storage-layer
-     * UNIQUE constraint `UQ_budget_categories_budgetId_name` so the
-     * race path fails atomically with `QueryFailedError`
-     * (SQLSTATE `23505`). The service-level try/catch translates that
-     * error into `BadRequestException` so the API surface is identical
-     * for both the common-path (single client double-click) and the
-     * race-path (two concurrent writers).
-     */
     it('createBudgetCategory: translates DB-level unique violation (race path) to BadRequestException', async () => {
       userRepo.findById.mockResolvedValue({
         ...mockUser,
         budgets: [buildBudget({ id: 1, user: { id: userAId, ...budgetUser } })],
       });
-      // In-app duplicate check passes — the SELECT sees no duplicate at
-      // read time. Both writers in the race will see the same empty
-      // result, and only the DB-level constraint can break the tie.
       repo.findCategotyQuery.mockResolvedValue([]);
 
-      // Simulate the race outcome that the pg driver surfaces: between
-      // the SELECT and the INSERT, another writer inserted the same
-      // (budgetId, name). The DB rejects our INSERT with the canonical
-      // SQLSTATE 23505 + constraint name. `QueryFailedError` is what
-      // `typeorm` re-throws; pg copies both `code` and `constraint`
-      // onto the error object directly (verified for typeorm 0.3.21).
       const driverErr: any = new Error(
         `duplicate key value violates unique constraint "${BUDGET_CATEGORY_UNIQUE_CONSTRAINT_NAME}"`,
       );
@@ -700,20 +707,10 @@ describe('BudgetService', () => {
         [],
         driverErr,
       );
-      // `QueryFailedError` does not declare `code`/`constraint` in its
-      // type — pg attaches them at runtime. Stamp them on the visible
-      // instance so the service's narrow `code`+`constraint` check can
-      // match them without `any` casting in production code.
       (dbError as any).code = '23505';
       (dbError as any).constraint = BUDGET_CATEGORY_UNIQUE_CONSTRAINT_NAME;
       repo.createBudgetCategory.mockRejectedValue(dbError);
 
-      // Capture the rejection once and assert both the thrown class and
-      // the message. Running two `await expect(...).rejects.toThrow(...)`
-      // would re-invoke the service twice — the second invocation
-      // re-runs the catch with a fresh mockResolvedValue stack and the
-      // assertion turns into a side-effectful smoke test rather than a
-      // locked-in contract check.
       const err = await service
         .createBudgetCategory({
           userId: userAId,
@@ -727,11 +724,6 @@ describe('BudgetService', () => {
         })
         .catch((e) => e);
 
-      // The service must catch the unique violation and re-raise as a
-      // 400 with the same message the in-app check would have produced.
-      // Both paths surface `'Category "<name>" already exists for this
-      // budget'` so callers cannot distinguish common-path from
-      // race-path from the API response.
       expect(err).toBeInstanceOf(BadRequestException);
       expect((err as Error).message).toMatch(/already exists for this budget/);
     });
@@ -743,11 +735,6 @@ describe('BudgetService', () => {
       });
       repo.findCategotyQuery.mockResolvedValue([]);
 
-      // Simulate an unrelated driver error (e.g. FK violation 23503 or
-      // unique violation on a different constraint). The narrow
-      // code+constraint check in the service must NOT swallow these —
-      // they should bubble up untouched so the global filters + axios
-      // interceptors pick them up with the right status code.
       const fkErr: any = new Error('foreign key violation');
       fkErr.code = '23503';
       fkErr.constraint = 'FK_some_other';
@@ -756,10 +743,6 @@ describe('BudgetService', () => {
       (otherDbError as any).constraint = 'FK_some_other';
       repo.createBudgetCategory.mockRejectedValue(otherDbError);
 
-      // The service must NOT translate this into a BadRequestException;
-      // the QueryFailedError must bubble up so the controller / filter
-      // pipeline can return the right status code (500 by default, or
-      // whatever the entity-not-found filter does for driver errors).
       await expect(
         service.createBudgetCategory({
           userId: userAId,
@@ -774,19 +757,111 @@ describe('BudgetService', () => {
       ).rejects.toThrow(QueryFailedError);
     });
 
-    /**
-     * Bug regression test for #DB-constraint constant wiring. The
-     * service-level query catch matches the constraint NAME against the
-     * constant exported from `budget-category.entity.ts`. A rename in
-     * either the migration's DDL literal OR the entity constant must
-     * be reflected on both sides — this test pins the runtime side by
-     * matching the constant from the canonical source rather than by
-     * duplicating the string in the test fixture.
-     */
     it('createBudgetCategory: race-translator matches the canonical constraint name constant', async () => {
       expect(BUDGET_CATEGORY_UNIQUE_CONSTRAINT_NAME).toBe(
         'UQ_budget_categories_budgetId_name',
       );
+    });
+
+    // Spec-gap guard (added in v1.4.x): the post-create recalc hook was
+    // wired up because parent totals silently drifted otherwise. This
+    // test pins the wiring via mock expectations — without it, a future
+    // refactor could drop the recalc without breaking any spec, and the
+    // parent-drift bug would re-emerge invisibly.
+    it('createBudgetCategory: recalculates parent budget totalSpent after insert', async () => {
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [buildBudget({ id: 1, user: { id: userAId, ...budgetUser } })],
+      });
+      // findById is called TWICE in createBudgetCategory: once for the
+      // initial budget-existence check (must succeed), once from inside
+      // recalculateBudgetTotalSpent (the post-create read). Both calls
+      // use identical args, so a positional expectation (times + last)
+      // is required to lock both fire — not just the existence check.
+      // buildBudget inherits mockCategoryShape.spent: 250 if its
+      // categories are not overridden — do that explicitly so the sum
+      // matches the asserted value below.
+      repo.findById.mockResolvedValue(
+        buildBudget({ id: 1, categories: [buildCategory(newCategoryShape)] }),
+      );
+      repo.findCategotyQuery.mockResolvedValue([]);
+      repo.createBudgetCategory.mockResolvedValue(
+        buildCategory({
+          ...newCategoryShape,
+          budget: { ...categoryBudget, id: 1 },
+        }),
+      );
+      repo.updateBudget.mockResolvedValue({} as any);
+
+      await service.createBudgetCategory({
+        userId: userAId,
+        budgetId: 1,
+        dto: {
+          name: 'NewCategory',
+          allocated: 100,
+          spent: 30,
+          budgetId: 1,
+        } as any,
+      });
+
+      expect(repo.createBudgetCategory).toHaveBeenCalledTimes(1);
+      // The post-create recalc hook MUST fire (regression guard). Both
+      // expected: existence check + recalc. Verifying `times(2)` AND
+      // `lastCalledWith` ensures the recalc specifically fired — a
+      // single-arg assertion would pass with only the existence check.
+      expect(repo.findById).toHaveBeenCalledTimes(2);
+      expect(repo.findById).toHaveBeenLastCalledWith(1, userAId);
+      expect(repo.updateBudget).toHaveBeenCalledTimes(1);
+      // Capture the recalc write's argument shape — locks the wiring
+      // beyond "a write happened" and verifies the actual sum.
+      const updatedBudget = repo.updateBudget.mock.calls[0][0];
+      expect(updatedBudget.totalSpent).toBe(30); // sum of new category.spent
+      expect(updatedBudget.id).toBe(1);
+    });
+
+    // Symmetric spec-gap guard for the post-delete recalc hook. Mirrors
+    // the create-side tightening: positional assertions on the new
+    // wires + captured arg-shape on the recalc write.
+    it('deleteBudgetCategory: recalculates parent budget totalSpent after delete (when category belongs to user)', async () => {
+      const categoryToDelete = buildCategory({
+        id: 17,
+        name: 'Medical',
+        spent: 50,
+        allocated: 100,
+        budget: { ...categoryBudget, id: 1 },
+      });
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [buildBudget({ id: 1, user: { id: userAId, ...budgetUser } })],
+      });
+      // getBudgetCategory must resolve to a category so the lookup
+      // captures budgetId; otherwise the recalc-skip path triggers and
+      // we'd be testing the wrong branch.
+      repo.getBudgetCategory.mockResolvedValue(categoryToDelete);
+      repo.deleteBudgetCategory.mockResolvedValue(undefined);
+      // Post-delete recalc reads the (now-empty-of-17) budget + writes it.
+      // categories: [] is EXPLICIT — without the override, mockBudgetShape
+      // injects one entry with spent: 250 which would mask a
+      // "sum-after-delete didn't fire" regression as a non-zero-but-wrong total.
+      repo.findById.mockResolvedValue(buildBudget({ id: 1, categories: [] }));
+      repo.updateBudget.mockResolvedValue({} as any);
+
+      const result = await service.deleteBudgetCategory(userAId, 17);
+
+      expect(result).toEqual({ message: 'Category deleted successfully' });
+      expect(repo.getBudgetCategory).toHaveBeenCalledTimes(1);
+      expect(repo.getBudgetCategory).toHaveBeenCalledWith(17, userAId);
+      expect(repo.deleteBudgetCategory).toHaveBeenCalledTimes(1);
+      expect(repo.deleteBudgetCategory).toHaveBeenCalledWith(17);
+      // Recalc hook fired exactly once with the right (budgetId, userId).
+      expect(repo.findById).toHaveBeenCalledTimes(1);
+      expect(repo.findById).toHaveBeenCalledWith(1, userAId);
+      expect(repo.updateBudget).toHaveBeenCalledTimes(1);
+      // Capture the recalc write's argument shape — locks the wiring
+      // beyond "a write happened" and verifies the sum is reset.
+      const updatedBudget = repo.updateBudget.mock.calls[0][0];
+      expect(updatedBudget.totalSpent).toBe(0); // categories[] after delete
+      expect(updatedBudget.id).toBe(1);
     });
 
     it('createBudgetCategory: rethrows non-QueryFailedError untouched', async () => {
@@ -795,11 +870,6 @@ describe('BudgetService', () => {
         budgets: [buildBudget({ id: 1, user: { id: userAId, ...budgetUser } })],
       });
       repo.findCategotyQuery.mockResolvedValue([]);
-
-      // The catch should only narrow on QueryFailedError. A generic
-      // Error thrown by the repo (e.g. timeout, network) must bubble
-      // up untouched. A bare `instanceof Error` check is too broad and
-      // would mask unrelated failures as 400s.
       repo.createBudgetCategory.mockRejectedValue(
         new Error('connection reset'),
       );
@@ -816,6 +886,211 @@ describe('BudgetService', () => {
           } as any,
         }),
       ).rejects.toThrow('connection reset');
+    });
+  });
+
+  // AUDIT (rpi/budget-currency-coercion/plan.md Phase 4): cross-currency
+  // tests verify the FX coercion math end-to-end. Each test overrides
+  // `fakeCurrencyService.convert.mockImplementation(...)` per-test to
+  // dispatch on (fromCurrency, toCurrency); the outer beforeEach's
+  // `mockClear` wipes call-history between tests so overrides don't leak.
+  describe('cross-currency coercion', () => {
+    it('getBudgets: USD + COP mixed categories coerce to canonical (USD)', async () => {
+      const mixedBudget = buildBudget({
+        id: 1,
+        totalSpent: 0,
+        totalAllocated: 0,
+        categories: [
+          buildCategory({
+            id: 1,
+            name: 'Food',
+            spent: 50,
+            allocated: 50,
+          }),
+          {
+            ...buildCategory({
+              id: 2,
+              name: 'Sweets',
+              spent: 200000,
+              allocated: 200000,
+            }),
+            currency: 'COP' as SupportedCurrency,
+          },
+        ],
+      });
+      repo.findByUser.mockResolvedValue([mixedBudget]);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [mixedBudget],
+      });
+
+      // Override convert: USD→USD identity; COP→USD = amount / 4000
+      // (matches the CurrencyService mock rate table in
+      // apps/api/test/currency.service.spec.ts). Per-test implementation
+      // survives mockClear because we replace — not just stack — the
+      // default identity via `mockImplementation`.
+      (fakeCurrencyService.convert as jest.Mock).mockImplementation(
+        async (args: {
+          amount: number;
+          fromCurrency: string;
+          toCurrency: string;
+        }) => ({
+          ...args,
+          convertedAmount:
+            args.fromCurrency === args.toCurrency
+              ? args.amount
+              : args.amount / 4000,
+          rate: args.fromCurrency === args.toCurrency ? 1 : 0.00025,
+          cacheHit: true,
+          fetchedAt: 'x',
+        }),
+      );
+
+      const result = await service.getBudgets(1);
+
+      expect(result).toHaveLength(1);
+      // 50 USD + (200000 COP / 4000) = 50 + 50 = 100 USD.
+      expect(result[0].totalSpent).toBe(100);
+      expect(result[0].totalAllocated).toBe(100);
+      // Convert called twice: the USD-cat spent/allocated skip the
+      // fast-path's identity branch AND return amount unchanged, so only
+      // the COP-cat fields trigger a real convert call (spent + allocated).
+      expect(fakeCurrencyService.convert).toHaveBeenCalledTimes(2);
+      expect(fakeCurrencyService.convert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fromCurrency: 'COP',
+          toCurrency: 'USD',
+          amount: 200000,
+        }),
+      );
+    });
+
+    it('getBudgets: identity fast-path skips CurrencyService when canonical === every cat.currency', async () => {
+      const usdBudget = buildBudget({
+        id: 1,
+        categories: [
+          buildCategory({
+            id: 1,
+            spent: 850,
+            allocated: 550,
+          }),
+        ],
+      });
+      repo.findByUser.mockResolvedValue([usdBudget]);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [usdBudget],
+      });
+
+      await service.getBudgets(1);
+
+      // Identity fast-path: USD→USD skips convert entirely for both
+      // spent and allocated on the single category. Zero Redis traffic.
+      expect(fakeCurrencyService.convert).not.toHaveBeenCalled();
+    });
+
+    it('getBudgets: graceful degradation when CurrencyService throws ServiceUnavailableException', async () => {
+      const copBudget = buildBudget({
+        id: 1,
+        categories: [
+          {
+            ...buildCategory({
+              id: 1,
+              spent: 50,
+              allocated: 50,
+            }),
+            currency: 'COP' as SupportedCurrency,
+          },
+        ],
+      });
+      repo.findByUser.mockResolvedValue([copBudget]);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [copBudget],
+      });
+
+      // Simulate upstream provider failure on the COP→USD conversion.
+      // `mockRejectedValue` (not `mockRejectedValueOnce`) so both
+      // coerceCategoryTotals's parallel coerceToCanonical calls see
+      // the failure and both fall back to identity.
+      (fakeCurrencyService.convert as jest.Mock).mockRejectedValue(
+        new ServiceUnavailableException('Exchange-rate provider unavailable'),
+      );
+
+      const result = await service.getBudgets(1);
+
+      // Identity fallback: totalSpent === category.spent (50) unchanged.
+      // The fallback is silent to the caller (no exception propagated).
+      expect(result[0].totalSpent).toBe(50);
+      expect(result[0].totalAllocated).toBe(50);
+      // Warn log surfaces the caller context + fallback reason. Match
+      // the prefix from coerceToCanonical: `[budget-currency-coerce]`.
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /\[budget-currency-coerce\] identity fallback \(caller=getBudgets/,
+        ),
+      );
+    });
+
+    it('recalculateBudgetTotalSpent: persists FX-coerced totals on update (COP → USD canonical)', async () => {
+      const copCategory = {
+        ...buildCategory({
+          id: 1,
+          spent: 200000,
+          allocated: 200000,
+          budget: { ...categoryBudget, id: 1 },
+        }),
+        currency: 'COP' as SupportedCurrency,
+      };
+      const copBudget = buildBudget({
+        id: 1,
+        totalSpent: 0,
+        totalAllocated: 0,
+        categories: [copCategory],
+      });
+
+      // updateBudgetCategory happy-path mocks.
+      repo.getBudgetCategory.mockResolvedValue(copCategory);
+      userRepo.findById.mockResolvedValue(mockUser);
+      repo.updateBudgetCategory.mockResolvedValue(copCategory);
+      // Recalc reads the (now-COP) budget + writes the coerced totals.
+      repo.findById.mockResolvedValue(copBudget);
+
+      // Override convert: COP→USD = amount / 4000.
+      (fakeCurrencyService.convert as jest.Mock).mockImplementation(
+        async (args: {
+          amount: number;
+          fromCurrency: string;
+          toCurrency: string;
+        }) => ({
+          ...args,
+          convertedAmount:
+            args.fromCurrency === args.toCurrency
+              ? args.amount
+              : args.amount / 4000,
+          rate: args.fromCurrency === args.toCurrency ? 1 : 0.00025,
+          cacheHit: true,
+          fetchedAt: 'x',
+        }),
+      );
+
+      await service.updateBudgetCategory(1, {
+        id: 1,
+        name: 'Sweets',
+        allocated: 200000,
+        spent: 200000,
+        currency: 'COP',
+      } as any);
+
+      // The totalSpent write should be coerced: 200000 COP / 4000 = 50.
+      expect(repo.updateBudget).toHaveBeenCalledTimes(1);
+      const writtenBudget = repo.updateBudget.mock.calls[0][0];
+      expect(writtenBudget.totalSpent).toBe(50);
+      expect(writtenBudget.totalAllocated).toBe(50);
+      // Convert called twice (spent + allocated on the COP category);
+      // identity fast-path never fires because cat.currency ('COP') ≠
+      // canonical ('USD').
+      expect(fakeCurrencyService.convert).toHaveBeenCalledTimes(2);
     });
   });
 });

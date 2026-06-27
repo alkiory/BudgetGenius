@@ -147,7 +147,7 @@ BudgetGenius/
 | Technology | Purpose |
 |-----------|---------|
 | **Capacitor 7** | Native wrapper for Android (and iOS) — wraps the Vite build output |
-| **@capacitor-firebase/authentication** | Native Firebase Auth plugin (replaces `signInWithPopup` in WebView) |
+| **@capgo/capacitor-social-login** | Native Android Credential Manager plugin (replaces the older `@capacitor-firebase/authentication` flow which opened Chrome Custom Tabs — see `docs/changelog.md` v1.2.0) |
 | **Android Gradle** | Build system for Android APK generation |
 
 ### DevOps & Infrastructure
@@ -298,13 +298,15 @@ This starts both the **NestJS backend** and the **Vite frontend** with hot reloa
 
 #### 4. Access the Application
 
-| Service | URL | Description |
-|---------|-----|-------------|
-| 🌐 **Frontend** | http://localhost:3001 | React SPA served by nginx (Docker) or Vite dev server (local) |
-| 🚂 **Backend API** | http://localhost:3000 | NestJS REST API |
-| 📚 **Swagger Docs** | http://localhost:3000/docs | Interactive API documentation |
-| 🐘 **PostgreSQL** | localhost:5432 | Database (`user: postgres_admin_dev`, `pass: dev_password`, `db: budgetgenius_dev`) |
-| 🔴 **Redis** | localhost:6379 | Cache and session store |
+| Service | URL (Mode A — local dev) | URL (Mode B — Docker) | Description |
+|---------|--------------------------|----------------------|-------------|
+| 🌐 **Frontend** | http://localhost:5173 (Vite) | http://localhost:3001 (nginx) | React SPA |
+| 🚂 **Backend API** | http://localhost:5000 | http://localhost:3000 | NestJS REST API (binds `process.env.PORT \|\| 5000`, see `apps/api/src/main.ts`) |
+| 📚 **Swagger Docs** | http://localhost:5000/docs | http://localhost:3000/docs | Interactive API documentation |
+| 🐘 **PostgreSQL** | localhost:5432 | localhost:5432 (via Docker port mapping) | Schema `bg_public` (`user: postgres_admin_dev`, `pass: dev_password`, `db: budgetgenius_dev`) |
+| 🔴 **Redis** | localhost:6379 | localhost:6379 (via Docker port mapping) | Cache, refresh tokens, throttle buckets |
+
+> **Wave 1 [T1.6] reconciliation note:** the architecture diagram and this table show **both Mode A and Mode B** ports side-by-side. Mode A = `pnpm dev` (Vite + `nest start`, hot reload). Mode B = `docker compose up` (nginx + image-baked NestJS). The `.env.development` files always keep *Mode A* defaults (`localhost:5000` for backend); Docker overrides them to `redis`/`database` hostnames via `docker-compose.dev.yml`.
 
 #### 5. Default Users (Auto-Seeded)
 
@@ -496,7 +498,7 @@ BudgetGenius runs as a **native Android APK** via [Capacitor 7](https://capacito
 - The Vite build is output to `apps/webClient/dist/`
 - Capacitor serves these files from the native Android WebView
 - In dev mode (`CAP_DEV=true`), the WebView loads directly from the Vite dev server at `http://10.0.2.2:5173` for **hot reload**
-- Google Login uses a **Strategy Pattern**: `signInWithPopup` in web, `@capacitor-firebase/authentication` plugin in native
+- Google Login uses a **Strategy Pattern**: `signInWithPopup` / `signInWithRedirect` in web, `@capgo/capacitor-social-login` plugin (Android Credential Manager bottom sheet) in native
 
 ### Prerequisites
 
@@ -599,7 +601,7 @@ The app uses a **Strategy Pattern** that automatically selects the right auth me
 ```
 googleLogin()
   → Capacitor.isNativePlatform() = true  →  NativeGoogleLoginStrategy
-  │     → @capacitor-firebase/authentication → signInWithGoogle()
+  │     → @capgo/capacitor-social-login → signInWithGoogle()
   │     → idToken → POST /auth/firebase-login
   │
   → Capacitor.isNativePlatform() = false →  WebGoogleLoginStrategy
@@ -607,8 +609,8 @@ googleLogin()
         → idToken → POST /auth/firebase-login
 ```
 
-- **Web:** Uses `signInWithPopup` (Firebase JS SDK) — unchanged from the original behavior
-- **Native:** Uses `@capacitor-firebase/authentication` plugin — shows the native Google account picker
+- **Web:** Uses `signInWithPopup` / `signInWithRedirect` (Firebase JS SDK) — unchanged from the original behavior
+- **Native:** Uses `@capgo/capacitor-social-login@7` plugin which delegates to Android's Credential Manager — shows an in-app bottom sheet (no Chrome Custom Tab, no deeplink round-trip). The selected Google account's signed `idToken` flows directly to `POST /auth/firebase-login` like the Web SDK path. See `docs/changelog.md` v1.2.0 for the incident postmortem that motivated the swap.
 
 ### 🔧 Troubleshooting
 
@@ -824,7 +826,15 @@ VITE_FRONTEND_URL=http://localhost:3001
 VITE_FIREBASE_PROJECT_ID=
 VITE_FIREBASE_API_KEY=
 VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_MEASUREMENT_ID=
 ```
+
+> **Wave 1 [T1.4] alias note.** Operators who set this var under the older
+> name `VITE_FIREBASE_MEASURENT_ID` (the typo'd spelling historically
+> propagated through this README, `.env.example` and 3 GitHub Actions
+> workflows) — ensure your GitHub Secret is renamed too, otherwise the
+> `firebaseConfig.ts` `measurementId` reads as `undefined` and Analytics
+> silently fails to initialize.
 
 ### Complete Reference
 

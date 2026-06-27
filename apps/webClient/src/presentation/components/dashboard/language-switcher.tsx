@@ -35,6 +35,17 @@ export function LanguageSwitcher() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleKeydown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("keydown", handleKeydown);
+    return () => document.removeEventListener("keydown", handleKeydown);
+  }, [isOpen]);
+
   const handleSelect = (locale: string) => {
     if (locale === currentLocale) {
       setIsOpen(false);
@@ -59,35 +70,54 @@ export function LanguageSwitcher() {
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
         aria-label="Switch language"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
       >
         <Languages className="h-4 w-4" />
-        <span className="hidden sm:inline">{currentLang.short}</span>
+        <span className="hidden sm:inline" aria-hidden="true">
+          {currentLang.short}
+        </span>
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 z-50 mt-1 w-36 origin-top-right rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+        <div
+          className="absolute right-0 z-50 mt-1 w-36 origin-top-right rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
+          role="listbox"
+          aria-label="Available languages"
+          tabIndex={-1}
+        >
           <div className="py-1">
-            {LANGUAGES.map((lang) => (
-              <button
-                key={lang.locale}
-                onClick={() => handleSelect(lang.locale)}
-                className={`flex w-full items-center px-3 py-2 text-left text-sm transition-colors ${
-                  lang.locale === currentLocale
-                    ? "bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300"
-                    : "text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
-                }`}
-              >
-                <span className="mr-2 text-xs font-semibold uppercase text-slate-400">
-                  {lang.short}
-                </span>
-                <span>{lang.label}</span>
-                {lang.locale === currentLocale && (
-                  <span className="ml-auto text-purple-600 dark:text-purple-400">
-                    ✓
+            {LANGUAGES.map((lang) => {
+              const isSelected = lang.locale === currentLocale;
+              return (
+                <button
+                  key={lang.locale}
+                  onClick={() => handleSelect(lang.locale)}
+                  role="option"
+                  aria-selected={isSelected}
+                  className={`flex w-full items-center px-3 py-2 text-left text-sm transition-colors ${isSelected
+                      ? "bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300"
+                      : "text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                    }`}
+                >
+                  <span
+                    className="mr-2 text-xs font-semibold uppercase text-slate-400"
+                    aria-hidden="true"
+                  >
+                    {lang.short}
                   </span>
-                )}
-              </button>
-            ))}
+                  <span>{lang.label}</span>
+                  {isSelected && (
+                    <span
+                      className="ml-auto text-purple-600 dark:text-purple-400"
+                      aria-hidden="true"
+                    >
+                      ✓
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

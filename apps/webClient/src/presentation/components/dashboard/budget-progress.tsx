@@ -88,6 +88,20 @@ export function BudgetProgress() {
                   ></div>
                 </div>
                 <div className="mt-1 flex justify-between text-xs">
+                  {/*
+                    The previous layout included a second `<span>`
+                    rendering `${Math.max(formattedAllocated.amount -
+                    formattedSpent.amount, 0)} ${t("dashboard.left")}`
+                    below the bar. That output had two problems: (a)
+                    `.amount` returns the raw `number` from the
+                    formatter (e.g. `1500.3399999999998`), bypassing
+                    `currencyService` and surfacing JS floating-point
+                    noise, and (b) it duplicated the limit/spend info
+                    already shown above the bar. The replacement
+                    keeps just the progress percentage + the over-
+                    budget label, which is what the dashboard widget
+                    is meant to communicate at a glance.
+                   */}
                   <span
                     className={
                       isOverBudget
@@ -96,13 +110,6 @@ export function BudgetProgress() {
                     }
                   >
                     {percentage}% {isOverBudget && t("dashboard.overBudget")}
-                  </span>
-                  <span className="text-slate-500 dark:text-slate-400">
-                    {Math.max(
-                      formattedAllocated.amount - formattedSpent.amount,
-                      0,
-                    )}{" "}
-                    {t("dashboard.left")}
                   </span>
                 </div>
               </div>

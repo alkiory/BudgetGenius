@@ -66,6 +66,7 @@ export const TabsList = React.forwardRef<HTMLDivElement, TabsListProps>(
   ({ children, className = "" }, ref) => (
     <div
       ref={ref}
+      role="tablist"
       className={`inline-flex h-10 gap-2 items-center justify-center rounded-md p-1 bg-primary-foreground dark:bg-primary-foreground ${className}`}
     >
       {children}
@@ -79,20 +80,24 @@ export const TabsTrigger = React.forwardRef<
   TabsTriggerProps
 >(({ children, value, className = "", disabled = false }, ref) => {
   const { activeTab, setActiveTab } = React.useContext(TabsContext);
+  const isActive = activeTab === value;
 
   return (
     <button
       ref={ref}
       onClick={() => setActiveTab(value)}
       disabled={disabled}
-      className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium transition-all 
-          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 
-          disabled:pointer-events-none disabled:opacity-50 bg-foreground/10
+      role="tab"
+      id={`tab-${value}`}
+      aria-selected={isActive}
+      className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium transition-all
+          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
+          disabled:pointer-events-none disabled:opacity-50 bg-foreground/10 text-slate-900 dark:text-slate-100
           ${
             activeTab === value
               ? "dark:bg-secondary-foreground text-muted-foreground shadow-md"
-              : "hover:text-gray-700"
-          } 
+              : "hover:text-gray-700 dark:hover:text-slate-50"
+          }
           ${className}`}
     >
       {children}
@@ -104,10 +109,13 @@ TabsTrigger.displayName = "TabsTrigger";
 export const TabsContent = React.forwardRef<HTMLDivElement, TabsContentProps>(
   ({ children, value, className = "" }, ref) => {
     const { activeTab } = React.useContext(TabsContext);
+    const isActive = activeTab === value;
 
-    return activeTab === value ? (
+    return isActive ? (
       <div
         ref={ref}
+        role="tabpanel"
+        aria-labelledby={`tab-${value}`}
         className={`mt-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${className}`}
       >
         {children}

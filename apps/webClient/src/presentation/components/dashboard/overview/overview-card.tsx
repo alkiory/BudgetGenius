@@ -1,3 +1,4 @@
+import { useLocale } from "@adapters/hooks/useLocale";
 import { ArrowDownRight, ArrowUpRight, DollarSign } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -15,14 +16,30 @@ export function OverviewCard({
   period,
 }: OverviewCardProps) {
   const { t } = useTranslation();
+  // `period` sometimes arrives as a string timestamp from the API
+  // (e.g. `overview?.period`); `new Date(x)` tolerates both Date
+  // instances and ISO strings, so we just normalize here.
   const periodDate = new Date(period);
+  // Hook reads `state.userSettings.settings.locale` (BCP-47 tag) via
+  // `useSelector`, with `"en-US"` fallback while the slice still
+  // holds `locale: ""` (the initial state per `settingsSlice.ts`).
+  // Using the user’s chosen locale here replaces the previous
+  // `periodDate.toDateString()` — `toDateString()` ignores locale
+  // entirely and always emits the English `"Thu Jun 28 2026"` form,
+  // which is the root cause of the Spanish-UI-but-English-date
+  // mismatch on the dashboard.
+  const locale = useLocale();
 
   return (
     <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">{t("dashboard.overview")}</h2>
         <span className="text-sm text-slate-500 dark:text-slate-400">
-          {periodDate.toDateString()}
+          {periodDate.toLocaleDateString(locale, {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })}
         </span>
       </div>
       <div className="grid gap-4 md:grid-cols-3">

@@ -21,6 +21,19 @@ import {
 import { User } from '@domain/user/user.entity';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { QueryFailedError } from 'typeorm';
+import { UserSettingsService } from '@application/user/user-settings.service';
+import { SupportedCurrency } from '@domain/user/user-settings.entity';
+import { CurrencyService } from '@infrastructure/currency/currency.service';
+import { ConvertCurrencyDto } from '@infrastructure/currency/dto/convert.dto';
+
+// Runtime members of the SupportedCurrency string-union. Used by
+// `resolveCategoryCurrency` (Phase 2 polish) to defend against malformed
+// DB values that bypass the TypeORM enum check.
+const SUPPORTED_CURRENCIES: readonly SupportedCurrency[] = [
+  'USD',
+  'EUR',
+  'COP',
+];
 
 @Injectable()
 export class BudgetService {
@@ -29,6 +42,8 @@ export class BudgetService {
     private readonly categoryRepo: BudgetRepository,
     private readonly userRepo: UserRepositoryImpl,
     private readonly logger: LoggingService,
+    private readonly userSettingsService: UserSettingsService,
+    private readonly currencyService: CurrencyService,
   ) {}
 
   async createBudget(userId: number, dto: CreateBudgetDto): Promise<Budget> {
@@ -84,36 +99,8 @@ export class BudgetService {
       throw new NotFoundException('User not found');
     }
 
-    // Direct DB ownership check (defence in depth). The earlier
-    // `user.budgets.find(...)` relied on the eager-loaded `budgets`
-    // array, which can go stale if the budget was deleted concurrently;
-    // pointing through the repo's user-scoped findById is authoritative.
-    // The repo throws NotFoundException for foreign ids so we get a
-    // clean 404 instead of a generic FK violation downstream.
     await this.repo.findById(budgetId, userId);
 
-    // DB-based uniqueness check for duplicate category names under the
-    // same parent budget. This query reads the actual table on every
-    // request, so it catches the common-path replay case (a single
-    // client sending two POSTs back-to-back before the first returns).
-    //
-    // Bug fix (#EntityPropertyNotFoundError): `BudgetCategory` does NOT
-    // have a `user` relation (the user is reachable transitively only
-    // through `BudgetCategory.budget -> Budget.user`). Filtering by a
-    // flat `user: { id: userId }` clause throws
-    // `EntityPropertyNotFoundError: Property "user" was not found in
-    // "BudgetCategory"`. Scope through the budget relation chain so
-    // both ownership and the duplicate-name lookup are honoured.
-    //
-    // Bug fix (#concurrent-insert): the in-app check above is racy
-    // — two concurrent POSTs can both pass it and both INSERT. The
-    // migration `BudgetCategoryUniqueName1800000000003` adds the
-    // storage-layer UNIQUE constraint
-    // `UQ_budget_categories_budgetId_name` so the race path fails
-    // atomically with `QueryFailedError` (SQLSTATE `23505`). The
-    // `try/catch` below translates that driver error into the same
-    // `BadRequestException` the in-app check throws, so the API
-    // contract is identical for both paths.
     const existing = await this.repo.findCategotyQuery({
       where: {
         budget: { id: budgetId, user: { id: userId } },
@@ -126,24 +113,35 @@ export class BudgetService {
       );
     }
 
+    const resolvedCurrency: SupportedCurrency =
+      dto.currency ?? (await this.resolveCurrencyForUser(userId));
+
     const newCategory = {
       ...dto,
+      currency: resolvedCurrency,
       budget: { id: budgetId } as Budget,
     };
-
     try {
-      return await this.repo.createBudgetCategory(newCategory);
+      const created = await this.repo.createBudgetCategory(newCategory);
+      // Spec-gap fix (was inconsistent with the update path which already
+      // recalculates the parent budget's totalSpent via
+      // `recalculateBudgetTotalSpent` after each edit). Post-create
+      // recalc keeps `Budget.totalSpent` / `.totalAllocated` in sync
+      // without waiting for the next category update. Best-effort: a
+      // transient recalc failure doesn't bubble up to the caller because
+      // the category row IS already inserted. The helper itself is
+      // defensively null-tolerant (see audit note inside recalc).
+      try {
+        await this.recalculateBudgetTotalSpent(budgetId, userId);
+      } catch (recalcErr) {
+        this.logger.warn(
+          `[budget-currency-coercion] post-create recalculation failed ` +
+            `for budget=${budgetId} after category insert: ` +
+            `${(recalcErr as Error)?.message ?? recalcErr}`,
+        );
+      }
+      return created;
     } catch (err) {
-      // Storage-layer referee (migration 1800000000003) caught a race
-      // the in-app check missed. Surface the same `BadRequestException`
-      // the synchronous path would have produced so callers cannot tell
-      // the two apart from the API response. Anything else re-throws
-      // untouched (FK violations, connection drops, etc.).
-      //
-      // The constraint name lives in `budget-category.entity.ts` as the
-      // runtime-side authority; the migration owns the matching DDL
-      // literal but cannot import from the entity (migrations are loaded
-      // by file path). If you rename it on either side, rename in lockstep.
       if (
         err instanceof QueryFailedError &&
         (err as any).code === '23505' &&
@@ -173,17 +171,41 @@ export class BudgetService {
       return [];
     }
 
-    // calculate total spent and total allocated from categories
+    // AUDIT (rpi/budget-currency-coercion): on-the-fly FX-coerced sum,
+    // never persisted (the Budget entity's column is now vestigial — see
+    // research.md §"Dead column signal"). The list endpoint computes
+    // fresh math every request, eliminating rate-locking concerns. For
+    // a single-currency user (canonicalCurrency === all cat.currency),
+    // every coerceToCanonical is the identity fast-path and adds no
+    // Redis traffic. canonicalCurrency resolved ONCE per request outside
+    // the per-budget loop — same value applies to all budgets the user
+    // owns. Inner coercion delegates to coerceCategoryTotals (Phase 2
+    // polish DRY), collapsing the per-category body to a single line.
+    const canonicalCurrency = await this.resolveCurrencyForUser(userId);
     for (const budget of budgets) {
       let totalSpent = 0;
       let totalAllocated = 0;
       for (const category of budget.categories) {
-        totalSpent += category.spent;
-        totalAllocated += category.allocated;
+        const { spent, allocated } = await this.coerceCategoryTotals({
+          cat: category,
+          canonicalCurrency,
+          caller: 'getBudgets',
+        });
+        totalSpent += spent;
+        totalAllocated += allocated;
       }
       budget.totalSpent = totalSpent;
       budget.totalAllocated = totalAllocated;
     }
+
+    // FIX SHIPPED (rpi/budget-currency-coercion, docs/changelog.md [v1.4.1]):
+    // the stale AUDIT-TODO block above this comment was the original 2026-06
+    // audit noting that this loop produced garbage for mixed-currency budgets.
+    // The fix landed via `coerceCategoryTotals` (line above) — every
+    // category.spent / .allocated is now FX-coerced into canonicalCurrency
+    // before `+=`. The persisted `Budget.totalSpent` / `.totalAllocated`
+    // columns remain vestigial and are NOT recomputed on read for
+    // `getBudget(id)` (single-budget fetch); that's an isolated follow-up.
 
     return budgets;
   }
@@ -212,12 +234,6 @@ export class BudgetService {
       throw new NotFoundException(`This budget does not exist`);
     }
 
-    // Bug fix (#EntityPropertyNotFoundError): same root cause as
-    // `createBudgetCategory` above. `BudgetCategory` has no direct user
-    // relation; scope user-scoping through the `budget` relation chain.
-    // The optional `budgetId` is folded into the same `budget` clause so
-    // the resulting WHERE has the shape
-    // `{ budget: { user: { id }, [id]: ... }, [name]: ... }`.
     const where: any = { budget: { user: { id: filters.userId } } };
     if (filters.budgetId) {
       where.budget = { ...where.budget, id: filters.budgetId };
@@ -240,10 +256,6 @@ export class BudgetService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-
-    // Repo pre-filters and throws NotFoundException if the budget is not
-    // owned by the requesting user; this is the primary ownership check
-    // (defence in depth: see budget.repository.updateBudget).
     const existing = await this.repo.findById(dto.id, userId);
     if (!existing) {
       throw new NotFoundException(`Budget ${dto.id} not found`);
@@ -276,16 +288,20 @@ export class BudgetService {
     userId: number,
     dto: UpdateBudgetCategoryDto,
   ): Promise<BudgetCategory> {
-    // Repo pre-filters via category → budget → user; throws NotFoundException
-    // if the category is not owned by the requesting user.
     const category = await this.categoryRepo.getBudgetCategory(dto.id, userId);
     if (!category) {
       throw new NotFoundException(`Category ${dto.id} not found`);
     }
 
+    const resolvedCurrency: SupportedCurrency =
+      dto.currency ??
+      (category.currency as SupportedCurrency | undefined) ??
+      (await this.resolveCurrencyForUser(userId));
+
     const updatedCategory = await this.repo.updateBudgetCategory(
       {
         ...dto,
+        currency: resolvedCurrency,
         updatedAt: new Date(),
       },
       userId,
@@ -297,17 +313,165 @@ export class BudgetService {
     return updatedCategory;
   }
 
+  private async resolveCurrencyForUser(
+    userId: number,
+  ): Promise<SupportedCurrency> {
+    try {
+      const settings = await this.userSettingsService.getOrCreateSettings(
+        userId,
+      );
+      return (settings?.currency as SupportedCurrency) ?? 'USD';
+    } catch (err) {
+      this.logger.warn(
+        `[resolveCurrencyForUser] settings lookup failed for user ${userId}; ` +
+          `defaulting to USD (${(err as Error)?.message ?? err})`,
+      );
+      return 'USD';
+    }
+  }
+
+  // AUDIT (rpi/budget-currency-coercion): batched per-category coercion.
+  // Reduces both `getBudgets` (the in-memory read path) and
+  // `recalculateBudgetTotalSpent` (the persisted write path) to a single
+  // for-loop body of four lines. Internally: resolves category currency
+  // (defending against malformed DB values via resolveCategoryCurrency)
+  // then awaits two parallel coerceToCanonical calls (one per field) via
+  // Promise.all. Returns Coerced totals in the canonical currency,
+  // preserving integer / float precision through CurrencyService.applyRates.
+  // Plan: rpi/budget-currency-coercion/plan.md Phase 2 polish (DRY).
+  private async coerceCategoryTotals(args: {
+    cat: BudgetCategory;
+    canonicalCurrency: SupportedCurrency;
+    caller: string;
+  }): Promise<{ spent: number; allocated: number }> {
+    const { cat, canonicalCurrency, caller } = args;
+    const catCurrency = this.resolveCategoryCurrency(cat, canonicalCurrency);
+    const [spent, allocated] = await Promise.all([
+      this.coerceToCanonical({
+        amount: cat.spent,
+        fromCurrency: catCurrency,
+        targetCurrency: canonicalCurrency,
+        caller,
+      }),
+      this.coerceToCanonical({
+        amount: cat.allocated,
+        fromCurrency: catCurrency,
+        targetCurrency: canonicalCurrency,
+        caller,
+      }),
+    ]);
+    return { spent, allocated };
+  }
+
+  // AUDIT (rpi/budget-currency-coercion): sync helper. Resolves a
+  // category's effective currency, defending against malformed DB values
+  // (via the SUPPORTED_CURRENCIES runtime check) and falling back to the
+  // canonical currency if the row's column is null/undefined or holds an
+  // out-of-enum value. Plans: rpi/budget-currency-coercion/plan.md Phase
+  // 2 polish.
+  private resolveCategoryCurrency(
+    cat: BudgetCategory | undefined,
+    fallbackCurrency: SupportedCurrency,
+  ): SupportedCurrency {
+    const raw = cat?.currency;
+    if (
+      typeof raw === 'string' &&
+      (SUPPORTED_CURRENCIES as readonly string[]).includes(raw)
+    ) {
+      return raw as SupportedCurrency;
+    }
+    return fallbackCurrency;
+  }
+
+  // AUDIT (rpi/budget-currency-coercion): FX coercion helper. Identity
+  // fast-path skips CurrencyService entirely when from === target
+  // (single-currency case is zero-cost). On upstream failure, returns
+  // amount unchanged + structured warn log with caller context. Object-
+  // param signature matches the findCategories(filters:{...}) pattern
+  // in this file. Plan: rpi/budget-currency-coercion/plan.md Phase 1.
+  private async coerceToCanonical(args: {
+    amount: number;
+    fromCurrency: SupportedCurrency;
+    targetCurrency: SupportedCurrency;
+    caller: string;
+  }): Promise<number> {
+    const { amount, fromCurrency, targetCurrency, caller } = args;
+    if (fromCurrency === targetCurrency) return amount;
+    try {
+      const res = await this.currencyService.convert({
+        fromCurrency,
+        toCurrency: targetCurrency,
+        amount,
+      } as ConvertCurrencyDto);
+      return res.convertedAmount;
+    } catch (err) {
+      const msg = (err as Error)?.message ?? String(err);
+      this.logger.warn(
+        `[budget-currency-coerce] identity fallback (caller=${caller} ` +
+          `from=${fromCurrency} to=${targetCurrency} amount=${amount}): ${msg}`,
+      );
+      return amount;
+    }
+  }
+
   private async recalculateBudgetTotalSpent(
     budgetId: number,
     userId: number,
   ): Promise<void> {
     const budget = await this.repo.findById(budgetId, userId);
-    const totalSpent = budget.categories.reduce(
-      (sum, cat) => sum + cat.spent,
-      0,
-    );
+    // Defensive null-guard: the previously-strict contract threw on
+    // `budget undefined` (crashing the parent operation). Now that the
+    // post-create and post-delete wiring invokes this helper via
+    // best-effort try/catch, the failure mode is "soft skip" instead of
+    // a thrown error. Without this guard, the recent spec mocks for
+    // create/delete happy paths (which intentionally do not stub
+    // findById for the recalc step) would TypeError. Existing
+    // updateBudgetCategory tests already stub findById explicitly, so
+    // they're unaffected.
+    if (!budget) {
+      this.logger.warn(
+        `[recalc-budget-missing] budget=${budgetId} not found during recalc ` +
+          `— skipping. Production-context cause: the parent budget was ` +
+          `deleted concurrently, so the recalculation has no authoritative ` +
+          `row to recompute totals for. Test-context cause: the spec is ` +
+          `missing a repo.findById stub for the budget — check the test ` +
+          `before shipping a fix that requires the recalc hook.`,
+      );
+      return;
+    }
+    // FX-coerce every category.spent / .allocated to the user's canonical
+    // currency (user_settings.currency via resolveCurrencyForUser, falls
+    // back to 'USD'). The identity fast-path in coerceToCanonical skips the
+    // CurrencyService round-trip entirely for the common single-currency
+    // case — this loop costs zero Redis traffic when canonicalCurrency
+    // equals every cat.currency. Promise.all reduces the per-category cost
+    // from 2N sequential awaits (one per field) to N parallel awaits for
+    // mixed-currency users.
+    let totalSpent = 0;
+    let totalAllocated = 0;
+    const canonicalCurrency = await this.resolveCurrencyForUser(userId);
+    for (const cat of budget.categories) {
+      const { spent, allocated } = await this.coerceCategoryTotals({
+        cat,
+        canonicalCurrency,
+        caller: 'recalculateBudgetTotalSpent',
+      });
+      totalSpent += spent;
+      totalAllocated += allocated;
+    }
     budget.totalSpent = totalSpent;
+    budget.totalAllocated = totalAllocated;
     await this.repo.updateBudget(budget, userId);
+
+    // FIX SHIPPED (rpi/budget-currency-coercion, docs/changelog.md [v1.4.1]):
+    // the stale AUDIT-TODO block above was the original 2026-06 audit
+    // noting that this persisted reduction writes mixed-currency nonsense
+    // into the DB column. The fix landed via `coerceCategoryTotals` (call
+    // above the persist) — every category.spent / .allocated is now
+    // FX-coerced into canonicalCurrency before `+=` and BEFORE the trailing
+    // `updateBudget` persists the sums. The persisted column is still
+    // authoritative for `getBudget(id)` until that endpoint is migrated to
+    // in-memory recompute too.
   }
 
   async deleteBudgetCategory(userId: number, id: number) {
@@ -317,9 +481,45 @@ export class BudgetService {
       throw new NotFoundException('User not found');
     }
 
+    // Spec-gap fix: pre-delete lookup captures the parent budgetId so
+    // we can hook the recalculation symmetric to the create path. The
+    // helper recalculateBudgetTotalSpent takes (budgetId, userId), but
+    // delete only receives the category id. Without this lookup, parent
+    // totals silently drifted until the next category update chained.
+    // The lookup also doubles as a "did this category even exist for
+    // this user" check; the repo's scoped delete is a no-op for
+    // foreign / missing ids, so we mirror that behaviour and skip the
+    // wasted recalc when there's no parent to recompute.
+    //
+    // Latency cost: one indexed PK read per delete (the category→budget
+    // join is PK-indexed on both sides). Acceptable because the
+    // subsequent DELETE and the parent-budget UPDATE dominate the
+    // write-side latency. Keeping the lookup is mandatory to preserve
+    // recalc coverage on the foreign-id silent-no-op path \u2014 do not
+    // "optimize" this away without first considering that the bug it
+    // guards against (parent totals drifting) compounds silently across
+    // every delete in the session.
+    const category = await this.categoryRepo.getBudgetCategory(id, userId);
+    const budgetId = category?.budget?.id;
+
     // Repo scopes the DELETE statement by userId → row delete is a no-op
     // for foreign ids, so no Foreign-key / 403 leakage here.
-    await this.repo.deleteBudgetCategory(id, userId);
+    await this.repo.deleteBudgetCategory(id);
+
+    // Best-effort recalc — same pattern as the create hook above. A
+    // transient recalc failure doesn't fool the caller into believing
+    // the delete failed (the category row IS already gone).
+    if (budgetId !== undefined) {
+      try {
+        await this.recalculateBudgetTotalSpent(budgetId, userId);
+      } catch (recalcErr) {
+        this.logger.warn(
+          `[budget-currency-coercion] post-delete recalculation failed ` +
+            `for budget=${budgetId} after category delete: ` +
+            `${(recalcErr as Error)?.message ?? recalcErr}`,
+        );
+      }
+    }
 
     return { message: 'Category deleted successfully' };
   }

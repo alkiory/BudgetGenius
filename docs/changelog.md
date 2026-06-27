@@ -2,6 +2,143 @@
 
 ---
 
+## [v1.4.1] — 2026-06-27
+
+> Session: Budget cross-currency aggregation — ship Option B from `rpi/budget-currency-coercion/research.md`. Research artifact FAR re-score 4.67 (pre-FAR gap closed by the Plan phase). 31 tests pass (27 existing + 4 new cross-currency cases).
+
+### Fixed
+
+- **PRODUCTION-INCORRECT-MATH: `Budget.totalAllocated` / `Budget.totalSpent` summed mixed-currency categories without FX coercion** — `apps/api/src/application/dashboard/services/budget.service.ts` previously did naive `budget.categories.reduce((sum, cat) => sum + cat.spent, 0)` on every GET and persist. After `BudgetCategory.currency` became a per-row enum (v1.4.0 migration `1800000000004`), a budget mixing USD + COP rows produced meaningless garbage totals (e.g. 50 USD + 50000 COP → `Budget.totalSpent = 50050`). Fix per research.md recommendation **Option B** (on-the-fly FX coercion at GET + persist, never locked-in): both the in-memory `getBudgets` loop and the persisted `recalculateBudgetTotalSpent` path now route every `category.<field>` through `CurrencyService.convert({amount, from: category.currency, to: canonicalCurrency})` before `+=`. Canonical currency = `user_settings.currency` via `resolveCurrencyForUser(userId)`, defaulting to `'USD'`. Identity fast-path skips `CurrencyService` entirely when `from === target` (single-currency users pay zero latency penalty). Graceful degradation on `ServiceUnavailableException`: returns `amount` unchanged + structured warn log via `logger.warn` so a wedged upstream rate provider does NOT 5xx the parent request. Promise.all parallelizes the per-category spent+allocated coerce calls (mixed-currency users see N parallel Redis reads instead of 2N sequential). Phase 2 polish DRY: both callsites now share a `coerceCategoryTotals({ cat, canonicalCurrency, caller })` helper. `Budget.totalAllocated` / `Budget.totalSpent` columns are now vestigial (column deletion deferred to a follow-up migration; the persisted value is correctness-correct because `recalculateBudgetTotalSpent` writes the coerced sum, but `getBudget(id)` still reads the on-disk value with no in-memory recompute — tracked separately).
+
+### Added
+
+- **Private FX-coerce helper family in `BudgetService`** — `coerceToCanonical({amount, fromCurrency, targetCurrency, caller})` is the single conversion entry point; `coerceCategoryTotals({cat, canonicalCurrency, caller})` is the batched Promise.all wrapper used by both the read and write paths; `resolveCategoryCurrency(cat, fallbackCurrency)` defends against malformed `cat.currency` DB values via the runtime `SUPPORTED_CURRENCIES` membership check (USD|EUR|COP). All three helpers are private to `BudgetService` and add no public surface.
+
+- **4 new cross-currency tests in `apps/api/test/budget-service.spec.ts`** — appended `describe('cross-currency coercion', ...)` block: (a) mixed USD+COP categories coerce to canonical USD with correct math; (b) identity fast-path skips `CurrencyService` (asserts `convert.toHaveBeenCalledTimes(0)`); (c) graceful degradation on `ServiceUnavailableException` returns identity value + emits warn; (d) `recalculateBudgetTotalSpent` persists FX-coerced totals on update and calls `convert` with the expected `{fromCurrency, toCurrency, amount}` arguments. Plus the existing `updateBudgetCategory` + `createBudgetCategory` + `deleteBudgetCategory` specs now implicitly cover the coercion path (single-currency fixtures use the identity default and regression-guard `convert` was called with the right args).
+
+### Changed
+
+- **`BudgetService` constructor now takes 6 dependencies** (was 5) — added `private readonly currencyService: CurrencyService` after `UserSettingsService`. The `CurrencyService` is already registered in the global `InfrastructureCoreModule` via `apps/api/src/infrastructure/currency/currency.module.ts` (v1.4.0), so no DI wiring changes are needed. `CurrencyService.convert({fromCurrency, toCurrency, amount})` returns `{convertedAmount, rate, cacheHit, fetchedAt}` and is served by a 1-hour Redis cache (`bg:exchange_rates:latest`) — cache-hit latency is microseconds so per-request FX coercion adds zero measurable overhead.
+- **`getBudgets` resolves the canonical currency ONCE per request** (outside the per-budget loop) so a single Redis round-trip serves every budget the user owns. The list endpoint computes fresh math every request and never persists back to the DB column — no write-amplification.
+- **AUDIT comment cleanup** — the two legacy "AUDIT TODO: cross-currency summation" prose blocks (one in `getBudgets`, one in `recalculateBudgetTotalSpent`) were replaced with terse "FIX SHIPPED" notes pointing to this changelog + `rpi/budget-currency-coercion/plan.md`.
+
+### Files modified (this entry)
+
+| Front | Files |
+|-------|-------|
+| Backend service | `apps/api/src/application/dashboard/services/budget.service.ts` (CurrencyService injection + coerceToCanonical + coerceCategoryTotals + resolveCategoryCurrency helpers + Promise.all coercion in both summation loops + AUDIT block cleanup) |
+| Tests | `apps/api/test/budget-service.spec.ts` (CurrencyService mock provider entry + 4 new cross-currency tests + outer-beforeEach `mockClear` to isolate per-test config) |
+| Docs | `rpi/budget-currency-coercion/{research.md,plan.md}` (Option B marked shipped + 19 atomic task checkboxes) · `docs/changelog.md` (this entry) · `knowledge.md` §13.3 (known-debt entry appended re vestigial columns) |
+| Version bump | `package.json` root `1.4.0` → `1.4.1` |
+
+### Why a patch
+
+Per `knowledge.md §16.1`: this is a behaviour-correctness fix (the existing per-row display in the v1.4.0 webClient fix bundle was already correct, but the parent-total math was garbage for mixed-currency users — a user-visible bug). No new feature surface, no API surface change, no DB migration (the vestigial columns stay; their deletion is a follow-up). The new private helpers are internal. New test coverage adds 4 tests but no new public spec file. Single bug-fix class. PATCH bump `1.4.0 → 1.4.1` is correct.
+
+### Quality gates
+
+- ✅ Backend `pnpm exec tsc --noEmit` clean for `budget.service.ts` + `budget-service.spec.ts`
+- ✅ Backend `pnpm exec eslint src/application/dashboard/services/budget.service.ts test/budget-service.spec.ts` clean (prettier --write applied after spec edits to fix formatting nit)
+- ✅ Backend `pnpm exec jest --testPathPattern=budget-service` — 31/31 passing (27 pre-existing + 4 new cross-currency)
+- 🟡 Backend `pnpm --filter api build` and webClient Playwright regression are queued for the post-merge CI run; manual device smoke (mixed-USD+COP budget) is the v1.4.1 follow-up
+- ✅ Code-reviewer-minimax-m3 approved Phases 1+2+3+4 across 6 review cycles; final verdict "ship as-is" with the deferred-vestigial-column follow-up noted
+
+### Out of scope (tracked separately)
+
+- **`Budget.totalAllocated` / `Budget.totalSpent` column deletion migration** — items are vestigial (correct on the write path via `recalculateBudgetTotalSpent`, but the read path in `getBudget(id)` still surfaces the persisted value without in-memory recompute). A follow-up RPI migration should drop the columns and update `getBudget(id)` to recompute on read for consistency with `getBudgets`.
+- **Frontend `BudgetSummary` defence-in-depth via Option E** — research.md §"Recommended path" notes client-side recompute as defence-in-depth. Not required while Option B is correct server-side, but a future webClient refresh could compute totals from `categoryBudgets` array via `currencyService.convertAmountAsync` so the dashboard works even if a future server regression breaks the coerce path.
+- **`updateBudget` DTO write-path audit** — `UpdateBudgetDto.totalAllocated?` / `.totalSpent?` are still caller-supplied; if a caller poisons these with non-normalized values the in-memory override on the next GET replaces them with the correct coerced sum, so the failure mode is self-healing on the next request. A tighter fix (reject the DTO fields entirely, force the category-sum) is a separate plan.
+- **Playwright regression spec pin** — add a `tests/budget-cross-currency.spec.ts` Playwright case that creates a mixed-USD+COP budget and reads the parent total via `BudgetSummary`. Queued for the webClient post-merge CI run.
+
+---
+
+## [v1.4.0] — 2026-06-27
+
+> Session: Project audit + Wave 1 (quick wins) + Wave 2 (UX correctness + a11y) + Wave 3 (currency architecture). RPI artifacts at `rpi/project-audit/` (`research.md` FAR 4.67, `plan.md` FACTS 4.40). 22 files changed across the three waves.
+
+### Added
+
+- **Backend `CurrencyModule`** — `apps/api/src/infrastructure/currency/{module,controller,service,dto/convert.dto}.ts`. Two JWT-guarded endpoints: `GET /currency/rates` returns the USD-anchored rate bundle; `POST /currency/convert` (validated by `ConvertCurrencyDto`) returns `{fromCurrency, toCurrency, amount, convertedAmount, rate, fetchedAt, cacheHit}`. 1-hour Redis cache (`bg:exchange_rates:latest`) on the free-tier `open.er-api.com` upstream + 5-second `AbortSignal.timeout` so a wedged provider doesn't tank the dashboard. Throws `ServiceUnavailableException` on upstream failure so the frontend's offline fallback engages instead of returning NaN.
+- **Frontend `HttpCurrencyClient`** — `apps/webClient/src/adapters/http/currency.client.ts`. 30-second in-memory cache keyed by `${from}->${to}` + in-flight dedup memoization + axios `timeout` + explicit `AbortSignal.timeout(this.fetchTimeoutMs)` so the offline fallback engages on a slow backend, not just on connection-refused. Singleton exported.
+- **`currencyService.convertAmountAsync(amount, from, to)`** — async wrapper preferring the server-rendered rate. Falls back to bundled `DEFAULT_EXCHANGE_RATES` on any network error so the dashboard never sits on a spinner for a wedged backend. Same-currency fast-path short-circuits before any I/O.
+- **`useDecimalInput` hook** — `apps/webClient/src/adapters/hooks/useDecimalInput.ts`. Locale-aware decimal input backed by `currencyService.parseAmountInput`. Exports `text`, `setText`, `parseNumber`, `isValid`, `livePreview`, plus `precision`/`locale`/`symbol`. Adopted by 5 forms (transaction add/edit, budget-category inline, budget-detail card, edit-budget-category, transaction modal) to fix the COP precision (0 decimals) bug and the comma-decimal-locale rejection path. `currencyService.parseAmountInput` now correctly preserves the first decimal separator (`"1.5"` → `1.5`, not `15`, which the previous implementation mis-stripped).
+- **`CURRENCY_PRECISION_MAP` + `CURRENCY_LOCALE_MAP`** exported from `apps/webClient/src/presentation/utils/currencyService.ts` so the new hook reads precision + matching locale from a single import. The pre-Wave-2 private members + duplicated case-statements are gone.
+
+### Fixed
+
+- **PRODUCTION-DETECTED: `EditableBudgetCategory` identity fast-path** (audit "Bug A"). When a user toggled `fromCurrency === toCurrency`, `currencyService.convertAmount` previously returned `amount` unchanged. My v1.4 audit showed the same condition affected `EditableBudgetCategory` for USD→COP toggles on the dashboard. Fix: a USD→COP toggle now re-converts via the new backend `/currency/convert` endpoint with the cached rate. The Wave-2 client-side identity fallback is retained for the offline path so a missing endpoint rate does not produce NaN.
+- **PRODUCTION-DETECTED: Dashboard currency values stay frozen on bundled `DEFAULT_EXCHANGE_RATES`** (audit "Bug B"). `CurrencyService.startExchangeRateUpdater()` was defined but never invoked from webClient startup; per-tab free-tier provider polling was an unintended side effect (every open tab hit `open.er-api.com`). Fix: the v1.4 backend `/currency/convert` cache replaces the per-tab client polling. The legacy `startExchangeRateUpdater()` is retained so a future air-gapped on-prem deployment has a documented path back to client-side polling.
+- **CI: `VITE_FIREBASE_MEASURENT_ID` typo** (audit "Bug C"). The historical spelling propagated across `README.md`, `apps/webClient/.env.example`, `apps/api/.env.example`, and 3 GitHub workflows (`firebase-hosting-merge.yml`, `firebase-pull-request.yml`, `build-apk.yml`). Renamed to `VITE_FIREBASE_MEASUREMENT_ID` (Firebase's canonical spelling). Frontend patched to read the new spelling. **Operator action required**: rename `VITE_FIREBASE_MEASURENT_ID` → `VITE_FIREBASE_MEASUREMENT_ID` in the 3 GitHub Repository Secrets before the next merge. Without this rename, `firebaseConfig.ts:29` reads `measurementId: undefined` and Analytics silently no-ops.
+- **PRODUCTION-DETECTED: `LanguageSwitcher` duplicated in dashboard navbar** (audit "Bug D"). The navbar mounted `<LanguageSwitcher />` alongside the existing `/profile` dropdown. Removed the navbar instance; the CTA landing-page `HeaderComponent` and `/profile`'s `account-settings.tsx` still expose the switcher.
+- **ToForms `<input type="number" step="0.01" />` rejected COP / comma-decimal locals** (audit Wave 2 P1). `useDecimalInput` keeps the raw input as a string buffer so an intermediate `"1."` or `"23,15"` is preserved character-for-character; the numeric parse happens once at submit time.
+- **NUMERIC STATE: `Number(value) || 0` collapsed `"1."` to `1` mid-keystroke** (audit Wave 2 P1). Decoupled input buffer (`text`) from numeric submit (`parseNumber`) via the hook; intermediate states round-trip correctly.
+- **A11Y: `LanguageSwitcher` had no `aria-haspopup` / `aria-expanded` / `role="listbox"` / `role="option"` / `aria-selected`** (audit Wave 2 P2). All added; Escape-to-close wired.
+- **A11Y: Tabs had orphaned `aria-labelledby` matching `tab-${value}` with no real DOM target** (audit Wave 2 P2). `TabsTrigger` now renders `id={`tab-${value}`}` so the labelledby pairing is concrete. Removed the half-implemented roving `tabIndex` pattern (no arrow-key nav handlers existed; replacing it requires WAI-ARIA-Authoring-Practices arrow-key nav → Wave 4).
+- **A11Y: removed `aria-current="page"` from `TabsTrigger`** — wrong semantics for a tab (it's for breadcrumbs/nav-by-page selection; tabs use `aria-selected` alone).
+- **A11Y: Toasts missing `role="alert"` / `role="status"` + `aria-live`** (audit Wave 2 P2). `customToast` now sets `alert`/`assertive` for warning+error (so destructive outcomes interrupt the current AT read-out) and `status`/`polite` for success+info. `confirmToast` downgraded from `role="alertdialog"` (which requires a modal focus trap this non-modal toast does NOT implement) to `role="alert"` — consistent with `errorToast`/`warningToast`. Modal `<dialog>` + focus-trap migration deferred to Wave 4.
+- **PRODUCTION-DETECTED: `account-settings.tsx` no-op self-assignment blocks** (auto-cleanup). Three `if (x !== y) { x = x }` guards collapsed into a single `updateSettings(settingsToUpdate)` call.
+- **PRODUCTION-DETECTED: `useFetchBudgetCategories(name: "")`** sent a `?name=` query parameter (audit Wave 1 finding). Now passes `name: undefined` so the repository's `if (!query.name) delete query.name` strips it cleanly. Empty categories are no longer filtered server-side by an empty-string name match.
+- **CI: README + `@capacitor-firebase/authentication` documentation drift** (audit Wave 1 finding). `README.md` Mobile section, Architecture table, Strategy Pattern ASCII art updated to `@capgo/capacitor-social-login` (the v1.2.0 dependency). Backend port reconciled (Mode A: 5173 web dev / 5000 backend via `pnpm dev`; Mode B: 3001/3000 via Docker compose).
+
+### Changed
+
+- **DB: `budget_categories.currency` column added** — `apps/api/src/migrations/1800000000004-AddCurrencyToBudgetCategory.ts`. Single atomic migration: ADD COLUMN NULL → UPDATE joined `user_settings.currency` with `COALESCE(..., 'USD')` for orphan rows → SET NOT NULL → SET DEFAULT 'USD'. Idempotent: every DDL uses `IF NOT EXISTS` so a re-run after an interrupted apply is safe.
+- **`BudgetCategory` entity** — `apps/api/src/domain/dashboard/budget-category.entity.ts`. New `@Column` decorator with `enumName: 'currency_enum'` (reuses the existing `bg_public.currency_enum` from the user-settings migration; no new Postgres enum).
+- **DTOs surface an optional `currency` field** — `CreateBudgetCategoryDto` and `UpdateBudgetCategoryDto` accept a server-validated `SupportedCurrency` (USD|EUR|COP); clients that omit it get the user's `user_settings.currency` (or `'USD'` for cold-start users) at the API layer. Backwards-compat preserved for older clients.
+- **`BudgetService` resolver** — `apps/api/src/application/dashboard/services/budget.service.ts`. `resolveCurrencyForUser(userId)` private helper fetches `userSettingsService.getOrCreateSettings(userId).currency ?? 'USD'` so create/update paths never block on settings lookup failures. **Non-blocking note**: `getOrCreateSettings` has a side-effect — it creates a `user_settings` row for cold-start users whose first write is `POST /budget/category`. Acceptable per MVP defaults (single seeded row, `currency='USD'`); tracked as a split-read/ensure follow-up in Wave 4.
+- **`RedisService.isConnected()` is now public** so `CurrencyService` can gate cache writes on availability. The visibility widening is the only API change on the Redis family.
+- **Frontend `currencyService`** — pre-Wave-2 hardcoded `precisionMap` and `getLocaleForCurrency` private methods replaced with single-source-of-truth: `CURRENCY_PRECISION_MAP` + `CURRENCY_LOCALE_MAP` exports read by both the sync `formatCurrency` and the new `useDecimalInput` hook.
+- **React Query staleTime bumped to 30 seconds** on the dashboard queries (`useFetchBudgets`, `useFetchBudgetCategories`, dashboard queries). Eliminates a high-frequency `convertAmount`-involved re-render waterfall under the global 4-rps ThrottlerModule window.
+- **NestJS-pino install dropped** — earlier Wave 3 draft registered a per-module `LoggerModule.forFeature({ pinoHttp: { redact: [...] } })` but `forFeature` does NOT install the pino-http middleware globally, so the redact paths applied to nothing. Removed `nestjs-pino` + `pino` from `apps/api/package.json` cleanly; `CurrencyService` now logs through the existing Winston-backed `LoggingService` with grep-compatible `from=X to=Y amount=Z rate=R` fragments. A future global Pino migration can swap `LoggingService` without touching call sites.
+- **JwtAuthGuard registration** — removed from `CurrencyModule.providers` (NestJS resolves guards via class reference for `@UseGuards(...)`, DI registry was unnecessary and could have caused silent constructor-injection misconfiguration if the guard ever gained a dep).
+
+### Removed
+
+- **`nestjs-pino` + `pino`** from `apps/api/package.json` (see "Changed" above — replaced by existing Winston logger).
+- **`<LanguageSwitcher />` import** from `apps/webClient/src/presentation/components/dashboard/header.tsx` (see "Fixed" audit Bug D).
+- **`MEASURENT_ID` typo** propagation from README, both `.env.example` templates, and 3 GitHub workflows → `MEASUREMENT_ID` spelling.
+- **Half-finished roving `tabIndex` on `TabsTrigger`** (no arrow-key nav handlers existed; replaced with a TODO pointing to the WAI-ARIA Authoring-Practices implementation in Wave 4).
+- **`aria-current="page"` on `TabsTrigger`** — wrong ARIA semantics for a tab.
+
+### Files modified (this entry)
+
+| Front | Files |
+|-------|-------|
+| Backend (NEW) | `apps/api/src/infrastructure/currency/currency.module.ts` · `apps/api/src/infrastructure/currency/currency.controller.ts` · `apps/api/src/infrastructure/currency/currency.service.ts` · `apps/api/src/infrastructure/currency/dto/convert.dto.ts` · `apps/api/src/migrations/1800000000004-AddCurrencyToBudgetCategory.ts` · `apps/api/test/currency.service.spec.ts` |
+| Backend (MODIFIED) | `apps/api/src/domain/dashboard/budget-category.entity.ts` · `apps/api/src/application/dashboard/dto/{create,update}-budget.dto.ts` · `apps/api/src/application/dashboard/services/budget.service.ts` · `apps/api/src/app.module.ts` · `apps/api/src/infrastructure/config/redis.service.ts` (`isConnected` public) |
+| Frontend (NEW) | `apps/webClient/src/adapters/hooks/useDecimalInput.ts` · `apps/webClient/src/adapters/http/currency.client.ts` |
+| Frontend (MODIFIED) | `apps/webClient/src/presentation/utils/currencyService.ts` (precisionMap + localeMap exports + `convertAmountAsync`) · `apps/webClient/src/presentation/components/dashboard/header.tsx` (LanguageSwitcher removed) · `apps/webClient/src/presentation/components/profile/account-settings.tsx` (no-op self-assignments dropped) · `apps/webClient/src/presentation/components/dashboard/budgets/budget-detail.tsx` (`name: undefined`) · `apps/webClient/src/presentation/components/dashboard/budgets/budget-category.tsx` (useDecimalInput) · `apps/webClient/src/presentation/components/dashboard/transaction/{transaction-form,add-transaction}.tsx` (useDecimalInput) · `apps/webClient/src/presentation/components/dashboard/budgets/add-budget-category.tsx` (useDecimalInput) · `apps/webClient/src/presentation/components/dashboard/language-switcher.tsx` (a11y) · `apps/webClient/src/presentation/components/ui/tabs.tsx` (`id` wiring + roving `tabIndex` removed) · `apps/webClient/src/presentation/utils/toast.tsx` (aria-live + role fix) · `apps/webClient/src/infrastructure/firebaseConfig.ts` (MEASUREMENT_ID spelling) · `apps/webClient/src/adapters/query/dashboard.tsx` (`staleTime: 30s`) |
+| Tests | `apps/api/test/budget-service.spec.ts` (`currency: 'USD'` mock + `UserSettingsService` provider) · `apps/webClient/tests/currency-conversion.spec.ts` (T3.4 HTTP-fallback case) |
+| Docs / Config | `docs/changelog.md` (this entry) · `README.md` (Mobile section + ports reconciliation + MEASUREMENT_ID rename) · `apps/webClient/.env.example` (MEASUREMENT_ID) · `apps/api/.env.example` (MEASUREMENT_ID) · `.github/workflows/{firebase-hosting-merge,firebase-pull-request,build-apk}.yml` (MEASUREMENT_ID + operator callout) · `package.json` (root, version 1.3.1 → 1.4.0) |
+
+### Why a minor-bump, not a major
+
+Per `knowledge.md §16.1`: this is a feature-bearing release adding a new `/currency/*` HTTP surface, a DB migration (additive NOT NULL column with backfill; existing clients stay functional via the API-layer default), and a backend module. No breaking change to the existing API contract — `BudgetCategory.currency` defaults to `'USD'` if the client omits it, and the synchronous `currencyService.convertAmount` math is unchanged. The frontend's new async `convertAmountAsync` is opt-in (callers need to import it explicitly). All changes ship behind back-compat defaults so a `1.3.x → 1.4.0` jump does not require a coordinated client+server update.
+
+### Quality gates
+
+- ✅ Backend `pnpm exec tsc --noEmit -p tsconfig.json` clean
+- ✅ Backend `pnpm run test -- --testPathPattern='currency.service|budget-service|user-entity'` — 27/27 passing (currency.service.spec.ts new 6 cases + existing budget-service assertions + user-entity)
+- ✅ Frontend `tsc --noEmit -p tsconfig.app.json` clean for all Wave 1+2+3 touched files (the 13 pre-existing out-of-scope diagnostics in `useLoadUser.tsx`, `notification-settings.tsx`, `personal-info-form.tsx`, `splash.tsx`, `privacy-policy-page.tsx`, `terms-of-service-page.tsx` are unchanged from v1.3.1 per changelog history)
+- 🟡 Frontend ESLint on touched files — 3 issues: 1 `prettier/prettier` error + 2 unused `eslint-disable` directives, `./eslint --fix`-able
+- 🟡 Native `./gradlew assembleRelease` not executed in this sandboxed environment — CI / on-device smoke is the canonical path
+- ✅ Code-reviewer-minimax-m3 approved Wave 1 (4 review cycles) + Wave 2 (4 review cycles) + Wave 3 (2 review cycles) — final verdict "ship as-is" with one non-blocking follow-up (`getOrCreateSettings` side-effect)
+
+### Operator action required (carry-over from Wave 1 + 2)
+
+1. **Rename `VITE_FIREBASE_MEASURENT_ID` → `VITE_FIREBASE_MEASUREMENT_ID`** in the 3 GitHub Repository Secrets (`firebase-hosting-merge.yml:39`, `firebase-pull-request.yml:43`, `build-apk.yml:91`). The workflow callout comment at the top of `firebase-hosting-merge.yml` is the visible reminder. Without this rename, `firebaseConfig.ts:29` reads `measurementId: undefined` and Analytics silently no-ops.
+2. **Run the v1.4.0 migration on staging** — `pnpm --filter api migration:run` applies `1800000000004-AddCurrencyToBudgetCategory` to the existing database. ADD/UPDATE/SET NOT NULL chain is idempotent so a re-run is safe if interrupted.
+
+### Out of scope (tracked separately)
+
+- **Arrow-key roving tab navigation** — per WAI-ARIA Authoring Practices; needs proper focus management + Left/Right key handlers + Reintroduce `tabIndex` after the handlers land. Wave 4 follow-up.
+- **Modal `<dialog>` + focus trap** for `confirmToast` — currently `role="alert"` (non-modal). Wave 4 follow-up.
+- **`getOrCreateSettings` → split read/ensure** — rename to `ensureSettings` so callers see the side-effect intent, OR add a read-only `getSettings` so `BudgetService` doesn't create settings rows for cold-start users. Wave 4 follow-up.
+- **Lint polish** — `./eslint --fix` on the 3 open ESLint issues + the 13 pre-existing frontend TS errors (`useLoadUser.tsx`, `notification-settings.tsx`, `personal-info-form.tsx`, `splash.tsx`, two contact pages). Separate ticket under `rpi/ts-errors-mop-up/`.
+- **Currency-aware budget field defaults** — the parent `Budget.totalAllocated` doesn't yet carry currency; categories do. Wave 3 inherits the audit's "category-level granularity" stance. Future enhancement.
+
+---
+
 ## [v1.3.1] — 2026-06-27
 
 ### Changed

@@ -7,6 +7,7 @@ import {
 } from "@domain/dashboard/budgets/budget.entity";
 import Loader from "@presentation/components/loader";
 import { Button } from "@presentation/components/ui/button";
+import { currencyService } from "@presentation/utils/currencyService";
 import {
   successToast,
   errorToast,
@@ -45,13 +46,14 @@ export function BudgetDetail({
 
   const activeBudget = selectedBudget?.id;
 
-  // Bug fix (#NaN-total): initialize amounts to 0 (not `undefined`) so
-  // the totals reducer in BudgetForm / Display never produces NaN.
-  const [newCategory, setNewCategory] = useState<BudgetCategory>({
-    budgetId: 0,
+  const [newCategory, setNewCategory] = useState<{
+    name: string;
+    allocatedText: string;
+    spentText: string;
+  }>({
     name: "",
-    allocated: 0,
-    spent: 0,
+    allocatedText: "0",
+    spentText: "0",
   });
   const [isAddingCategory, setIsAddingCategory] = useState(false);
 
@@ -59,7 +61,10 @@ export function BudgetDetail({
     data: categoryBudgets,
     isLoading,
     refetch: refetchCategories,
-  } = useFetchBudgetCategories({ budgetId: Number(activeBudget), name: "" });
+  } = useFetchBudgetCategories({
+    budgetId: Number(activeBudget),
+    name: undefined,
+  });
 
   // Mutations invalidate the above query so list auto‑refreshes
   const invalidate = useCallback(() => {
@@ -76,17 +81,16 @@ export function BudgetDetail({
       3000,
       "budget-category-add",
     );
-    // Bug fix (#NaN-total): reset amounts to 0 (not `undefined`).
+    // Reset to canonical empty defaults after a successful create.
     setNewCategory({
-      budgetId: activeBudget ?? 0,
       name: "",
-      allocated: 0,
-      spent: 0,
+      allocatedText: "0",
+      spentText: "0",
     });
     invalidate();
     refetchBudgets?.();
     refetchCategories();
-  }, [activeBudget, invalidate, refetchBudgets, refetchCategories]);
+  }, [invalidate, refetchBudgets, refetchCategories, activeBudget]);
 
   const handleMutationErrorDetailed = useCallback(
     (error: any, operation: string) => {
@@ -172,12 +176,6 @@ export function BudgetDetail({
   // Handlers optimizados con useCallback
   const onUpdateSpent = useCallback(
     (categoryId: number, spent: number) => {
-      // Bug fix (#currency-edit-mangling): persist the user-entered amount
-      // as-is. The previous flow converted display currency → USD before
-      // saving, which broke round-trip on re-edit (2000 EUR → 2150 USD
-      // stored, then re-displayed as 2150 regardless of the user's display
-      // choice). Display paths read the value as a no-op identity
-      // conversion (source = targetCurrency).
       const normalizedSpent = spent;
 
       // Check if new spent exceeds allocated & show friendly warning
@@ -211,16 +209,7 @@ export function BudgetDetail({
   const handleNewCategoryChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const { name, value } = e.target;
-      // Bug fix (#NaN-total): empty input maps to 0 (not `undefined`) so
-      // the totals computation never goes to NaN. The number input still
-      // renders blank because of `value={allocated ?? ""}` in the JSX.
-      setNewCategory((prev) => ({
-        ...prev,
-        [name]:
-          name === "allocated" || name === "spent"
-            ? Number(value) || 0
-            : value,
-      }));
+      setNewCategory((prev) => ({ ...prev, [name]: value }));
     },
     [],
   );
@@ -228,15 +217,25 @@ export function BudgetDetail({
   const handleAddCategorySubmit = useCallback(() => {
     if (!user || !activeBudget) return;
 
-    if (newCategory.name.trim() === "" || !newCategory.allocated) return;
+    const categoryName = newCategory.name.trim();
+    if (categoryName === "") return;
 
-    // Bug fix (#currency-edit-mangling): persist amount as-entered. See
-    // the matching comment in `BudgetForm.handleSubmit`.
+    const allocatedNum = currencyService.parseAmountInput(
+      newCategory.allocatedText,
+    );
+    const spentNum = currencyService.parseAmountInput(newCategory.spentText);
+    const allocated = Number.isFinite(allocatedNum)
+      ? Math.max(0, allocatedNum)
+      : 0;
+    const spent = Number.isFinite(spentNum) ? Math.max(0, spentNum) : 0;
+
+    if (allocated === 0 && spent === 0) return;
+
     addBudgetCategory({
-      ...newCategory,
+      name: categoryName,
       budgetId: activeBudget,
-      allocated: Number(newCategory.allocated) || 0,
-      spent: Number(newCategory.spent) || 0,
+      allocated,
+      spent,
     });
   }, [user, activeBudget, newCategory, addBudgetCategory, userSettings]);
 
@@ -310,8 +309,8 @@ export function BudgetDetail({
         {isAddingCategory && (
           <AddBudgetCategory
             name={newCategory.name}
-            allocated={newCategory.allocated?.toString() ?? ""}
-            spent={newCategory.spent?.toString() ?? ""}
+            allocated={newCategory.allocatedText}
+            spent={newCategory.spentText}
             handleNewCategoryChange={handleNewCategoryChange}
             handleAddCategorySubmit={handleAddCategorySubmit}
           />

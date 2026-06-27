@@ -110,19 +110,19 @@ export default function Table({ data }: { data: Transaction[] }) {
       ),
     }),
     columnHelper.accessor("date", {
-      header: "Date",
+      header: () => t("transactions.date"),
       cell: (info) => info.getValue(),
     }),
     columnHelper.accessor("description", {
-      header: "Description",
+      header: () => t("transactions.description"),
       cell: (info) => info.getValue(),
     }),
     columnHelper.accessor("category", {
-      header: "Category",
+      header: () => t("transactions.category"),
       cell: (info) => translateCategory(info.getValue() as string, t),
     }),
     columnHelper.accessor("amount", {
-      header: "Amount",
+      header: () => t("transactions.amount"),
       cell: (info) => {
         const transaction = info.row.original;
         const targetCurrency = (settings?.currency || "USD") as Currency;
@@ -147,7 +147,7 @@ export default function Table({ data }: { data: Transaction[] }) {
     }),
     columnHelper.display({
       id: "actions",
-      header: "Actions",
+      header: () => t("transactions.actions"),
       cell: ({ row }) => {
         const transaction = row.original;
         return (
@@ -186,13 +186,22 @@ export default function Table({ data }: { data: Transaction[] }) {
 
   const selectedRows = Object.keys(rowSelection).length;
 
+  // Bulletproof double-container: this outer div owns the visual
+  // shell (border + bg + overflow-hidden clip); the inner overflow-x-auto
+  // div further down owns the actual horizontal scroll. Keeping the
+  // clip and the scroll on separate elements prevents the border from
+  // being "leaked through" by inner content on browsers/layouts where
+  // single-container overflow-x-auto + border+bg is ambiguous, and it's
+  // also required for rounded-lg corners to clip child backgrounds.
+  // `min-w-0` lets this wrapper shrink below the table's intrinsic
+  // ~800px width when the flex ancestors collapse (MainLayout + main +
+  // MainContent all set min-w-0 themselves in this same fix).
   return (
-    <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+    <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
       {selectedRows > 0 && (
         <div className="flex items-center justify-between rounded-lg bg-slate-50 p-2 dark:bg-slate-800">
           <span className="text-sm font-medium">
-            {selectedRows} {selectedRows === 1 ? "transaction" : "transactions"}{" "}
-            selected
+            {t("transactions.selected", { count: selectedRows })}
           </span>
           <Button
             variant="destructive"
@@ -206,11 +215,11 @@ export default function Table({ data }: { data: Transaction[] }) {
             }}
           >
             <Trash2 className="mr-1 h-4 w-4" />
-            Delete Selected
+            {t("transactions.deleteSelected")}
           </Button>
         </div>
       )}
-      <div className="overflow-x-auto max-w-[90vw]">
+      <div className="overflow-x-auto">
         <table className="w-full divide-y divide-slate-200 dark:divide-slate-700">
           <thead className="bg-slate-50 dark:bg-slate-700">
             {table.getHeaderGroups().map((headerGroup) => (
@@ -276,22 +285,22 @@ export default function Table({ data }: { data: Transaction[] }) {
             disabled={!table.getCanPreviousPage()}
             className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
           >
-            Anterior
+            {t("common.previous")}
           </button>
           <button
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
             className="ml-3 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
           >
-            Siguiente
+            {t("common.next")}
           </button>
         </div>
 
         <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
           <div className="text-sm text-slate-700 dark:text-slate-300">
-            Página{" "}
+            {t("common.page")}{" "}
             <strong>
-              {table.getState().pagination.pageIndex + 1} de{" "}
+              {table.getState().pagination.pageIndex + 1} {t("common.of")}{" "}
               {table.getPageCount()}
             </strong>
           </div>
@@ -300,7 +309,7 @@ export default function Table({ data }: { data: Transaction[] }) {
               htmlFor="pageSize"
               className="text-sm text-slate-700 dark:text-slate-300"
             >
-              Mostrar
+              {t("common.show")}
             </label>
             <select
               id="pageSize"

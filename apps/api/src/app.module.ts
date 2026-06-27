@@ -22,6 +22,7 @@ import { CookieService } from '@infrastructure/config/cookie.service';
 import { RedisService } from '@infrastructure/config/redis.service';
 import { DashboardModule } from '@infrastructure/dashboard/dashboard.module';
 import { CoreModule } from '@infrastructure/core/core.module';
+import { CurrencyModule } from '@infrastructure/currency/currency.module';
 import { UserSettingsService } from '@application/user/user-settings.service';
 import { UserSettingsModule } from '@infrastructure/user/user-settings.module';
 import { FirebaseAuthMiddleware } from '@infrastructure/auth/firebase-auth.strategy';
@@ -116,6 +117,7 @@ import { TestController } from '@adapters/app.controller';
     AiModule,
     DashboardModule,
     CoreModule,
+    CurrencyModule,
   ],
   controllers: [AppController, UserController, TestController],
   providers: [

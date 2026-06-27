@@ -63,27 +63,40 @@ export function AccountSettings() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (
-      settingsToUpdate.timezone === settings?.timezone &&
-      settingsToUpdate.currency === settings?.currency &&
-      settingsToUpdate.locale === settings?.locale
-    ) {
+    // Bug fix (#only-currency-updates): build a per-field delta so the
+    // PATCH only carries the fields the user actually changed. The
+    // previous "send all three" approach sent the *current* form
+    // value for every field, but the form value for the two fields
+    // the user did NOT touch is read from `settings` (Redux) and
+    // can lag behind the canonical slice when another component
+    // (e.g. `LanguageSwitcher`) dispatches `updateSettingsAction`
+    // between the form's mount and the user's submit. When that
+    // happens, the stale form value overwrites the fresh slice
+    // value on the backend, and the user perceives that "only
+    // currency updated" (the field they were actually editing).
+    // Sending only the changed fields restores the pre-regression
+    // per-field condition behaviour the user reported missing.
+    const delta: {
+      timezone?: string;
+      currency?: string;
+      locale?: string;
+    } = {};
+    if (settingsToUpdate.timezone !== settings?.timezone) {
+      delta.timezone = settingsToUpdate.timezone;
+    }
+    if (settingsToUpdate.currency !== settings?.currency) {
+      delta.currency = settingsToUpdate.currency;
+    }
+    if (settingsToUpdate.locale !== settings?.locale) {
+      delta.locale = settingsToUpdate.locale;
+    }
+
+    if (Object.keys(delta).length === 0) {
       errorToast(t("profile.noChangesDetected"), 3000, "settings-update");
       return;
     }
 
-    // if only change one field, update only that field
-    if (settingsToUpdate.timezone !== settings?.timezone) {
-      settingsToUpdate.timezone = settingsToUpdate.timezone;
-    }
-    if (settingsToUpdate.currency !== settings?.currency) {
-      settingsToUpdate.currency = settingsToUpdate.currency as Currency;
-    }
-    if (settingsToUpdate.locale !== settings?.locale) {
-      settingsToUpdate.locale = settingsToUpdate.locale;
-    }
-
-    updateSettings(settingsToUpdate);
+    updateSettings(delta);
   };
 
   const handleDeleteAccount = async () => {
