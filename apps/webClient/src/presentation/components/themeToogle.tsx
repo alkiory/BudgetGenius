@@ -40,16 +40,15 @@ export function ThemeToggle() {
       </Button>
 
       {isOpen && (
-        <div className="absolute right-0 z-10 mt-2 w-36 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none dark:bg-slate-800 dark:ring-slate-700">
+        <div className="absolute right-0 z-10 mt-2 w-36 origin-top-right rounded-md focus:outline-none dark:bg-slate-800 dark:ring-slate-700">
           <div className="py-1">
             <Button
               onClick={() => {
                 toggleTheme();
                 setIsOpen(false);
               }}
-              className={`w-full px-4 py-2 cursor-pointer text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700 ${
-                theme === "light" ? "bg-slate-100 dark:bg-slate-700" : ""
-              }`}
+              className={`w-full px-4 py-2 cursor-pointer text-left text-sm hover:bg-slate-500 dark:hover:bg-slate-700 ${theme === "light" ? "bg-slate-700 dark:bg-slate-700" : ""
+                }`}
             >
               {t("theme.light")}
             </Button>
@@ -58,9 +57,8 @@ export function ThemeToggle() {
                 toggleTheme();
                 setIsOpen(false);
               }}
-              className={`w-full px-4 py-2 cursor-pointer text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700 ${
-                theme === "dark" ? "bg-slate-100 dark:bg-slate-700" : ""
-              }`}
+              className={`w-full px-4 py-2 cursor-pointer text-left text-sm hover:bg-slate-500 dark:hover:bg-slate-500 ${theme === "dark" ? "bg-slate-100 dark:bg-slate-700" : ""
+                }`}
             >
               {t("theme.dark")}
             </Button>
