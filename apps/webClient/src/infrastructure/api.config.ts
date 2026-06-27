@@ -205,10 +205,10 @@ const refreshToken = async (): Promise<void> => {
   // and doesn't get picked up by Sentry as a fault.
   if (!refreshToken) {
     console.warn(
-      '[v1.3.1] /auth/refresh POSTing with empty body — ' +
-      'localStorage.refreshToken is null at this moment. ' +
-      'With the _retry: true guard below the cascade is now ' +
-      'bounded to one call before clearing auth state.',
+      "[v1.3.1] /auth/refresh POSTing with empty body — " +
+      "localStorage.refreshToken is null at this moment. " +
+      "With the _retry: true guard below the cascade is now " +
+      "bounded to one call before clearing auth state.",
     );
   }
 

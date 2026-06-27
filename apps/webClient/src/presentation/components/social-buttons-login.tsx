@@ -1,6 +1,5 @@
 import { loginAction, setUser } from "@adapters/slices/auth/authSlice";
 import { googleLogin } from "@application/auth/auth.service";
-import { app as firebaseApp } from "@infrastructure/firebaseConfig";
 import { RoutePaths } from "@presentation/utils/routes";
 import { errorToast, successToast } from "@presentation/utils/toast";
 import { useMutation } from "@tanstack/react-query";
@@ -15,13 +14,6 @@ export function SocialLoginButtons() {
 
   const [loading, setLoading] = useState(false);
 
-  // useMutation MUST be called every render to satisfy the rules-of-hooks.
-  // Render-side gating of the button JSX happens below in the firebaseApp
-  // check: when firebaseApp is null, the button never paints so the mutate
-  // function is set up but never invoked, which is harmless. The previous
-  // shape had the early-return above the hook, which React flagged as a
-  // conditional hook call (build error: "React Hook 'useMutation' is called
-  // conditionally").
   const { mutate: signInWithGoogle } = useMutation({
     mutationKey: ["google-auth"],
     mutationFn: googleLogin,
@@ -46,7 +38,6 @@ export function SocialLoginButtons() {
     try {
       signInWithGoogle();
     } catch (error) {
-      // eslint-disable-next-line no-console
       console.error("Google auth error:", error);
     }
   };
