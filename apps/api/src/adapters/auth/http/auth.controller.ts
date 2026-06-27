@@ -510,7 +510,30 @@ export class AuthController {
         : undefined;
 
     const token = cookieToken || bodyToken || headerToken;
-    if (!token) throw new UnauthorizedException('No refresh token provided');
+
+    // v1.3.1 — DIAGNOSTIC on the empty-channel case. This is the
+    // precondition for the v1.3.0 production trace where users on
+    // Capacitor Android APK saw an unbounded cascade of
+    // `POST /api/auth/refresh {}` curls. Logging here lets ops
+    // correlate the symptom against the Bitfirewall:: origin
+    // (X-Device-Id), the IP/CGNAT bucket, and the X-Forwarded-For
+    // chain. NEVER logs token material — only booleans + the buckets.
+    if (!token) {
+      this.logger.warn(
+        `🛡️ /auth/refresh received NO refresh token in any of the ` +
+          `three source channels ` +
+          `(cookie=${Boolean(cookieToken)} body=${Boolean(bodyToken)} ` +
+          `Authorization=${Boolean(headerToken)}). ` +
+          `device-id=${
+            (req.headers as Record<string, string | undefined>)[
+              'x-device-id'
+            ] ?? 'none'
+          } ` +
+          `remote=${req.socket?.remoteAddress ?? 'unknown'} — ` +
+          `v1.3.1 diagnostic.`,
+      );
+      throw new UnauthorizedException('No refresh token provided');
+    }
 
     try {
       const payload = this.jwtService.verify(token);

@@ -19,9 +19,9 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       if (!publicApiUrl || publicApiUrl.trim() === '') {
         throw new Error(
           '[GoogleStrategy] PUBLIC_API_URL is required in production. ' +
-          "Set it in the .env (or your hosting provider's env config) to the externally-reachable base URL of this API " +
-          '(e.g. https://api.budgetgeniusia.com). Without it, /api/auth/google-callback is registered with Google at an unreachable origin ' +
-          'and OAuth logins from the Android APK cancel with "redirected to localhost:5000".',
+            "Set it in the .env (or your hosting provider's env config) to the externally-reachable base URL of this API " +
+            '(e.g. https://api.budgetgeniusia.com). Without it, /api/auth/google-callback is registered with Google at an unreachable origin ' +
+            'and OAuth logins from the Android APK cancel with "redirected to localhost:5000".',
         );
       }
 
@@ -31,7 +31,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       } catch {
         throw new Error(
           `[GoogleStrategy] PUBLIC_API_URL="${publicApiUrl}" is not a valid URL. ` +
-          'It must include scheme + host (e.g. https://api.budgetgeniusia.com).',
+            'It must include scheme + host (e.g. https://api.budgetgeniusia.com).',
         );
       }
       const loopbackHosts = new Set([
@@ -47,9 +47,9 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       if (loopbackHosts.has(normalisedHost)) {
         throw new Error(
           `[GoogleStrategy] PUBLIC_API_URL="${publicApiUrl}" points at a loopback host (${normalisedHost}). ` +
-          'In production, this must be the actual public hostname of the API (e.g. https://api.budgetgeniusia.com). ' +
-          'Chrome Custom Tabs in the Android WebView cannot reach loopback after Google completes the OAuth round-trip; ' +
-          'the token exchange is silently cancelled.',
+            'In production, this must be the actual public hostname of the API (e.g. https://api.budgetgeniusia.com). ' +
+            'Chrome Custom Tabs in the Android WebView cannot reach loopback after Google completes the OAuth round-trip; ' +
+            'the token exchange is silently cancelled.',
         );
       }
     } else if (publicApiUrl) {
@@ -76,7 +76,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         // prod-only crash above is the authoritative signal for that.
         console.warn(
           `[GoogleStrategy] PUBLIC_API_URL="${publicApiUrl}" is not a valid URL. ` +
-          'It must include scheme + host (e.g. https://api.budgetgeniusia.com).',
+            'It must include scheme + host (e.g. https://api.budgetgeniusia.com).',
         );
       }
     }

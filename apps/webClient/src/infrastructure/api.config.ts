@@ -78,6 +78,33 @@ const STORAGE_KEY_ACCESS = "accessToken";
 const STORAGE_KEY_REFRESH = "refreshToken";
 
 /**
+ * Marker config that tells the response interceptor's 401 handler
+ * "this request has already been processed by the refresh-once path
+ * — do NOT recurse into another refresh-token attempt".
+ *
+ * v1.3.1 hotfix: previously the `refreshToken()` helper did
+ * `await api.post("/auth/refresh", refreshToken ? { refreshToken } : {})`
+ * with NO `_retry` flag. When /auth/refresh itself 401s (e.g. session
+ * revoked, empty body, token rejected), the interceptor's error
+ * handler saw the 401 without `_retry` and called `refreshToken()`
+ * AGAIN, which produced ANOTHER `api.post("/auth/refresh", ...)`
+ * with NO `_retry` flag — and that one's 401 spawned yet another,
+ * ad infinitum. This constant is the loophole the user saw in
+ * production: an unbounded cascade of `POST /api/auth/refresh {}`
+ * curls hitting the backend, capped only by ThrottlerModule hitting
+ * 429 on the device-id bucket.
+ *
+ * Now the nested refresh POST carries `_retry: true`, so the
+ * interceptor's 401 handler declines to recurse (it falls into
+ * `Promise.reject(error)`), the outer `await refreshToken()` rejects,
+ * and the parent request's `catch (refreshError)` block runs as
+ * designed: clears localStorage, fires the "sesión expirada" toast.
+ */
+const RETRY_GUARD = { _retry: true } as AxiosRequestConfig & {
+  _retry?: boolean;
+};
+
+/**
  * Persist the token pair to localStorage only.
  *
  * Why no JS-side `document.cookie` write: the server's response ALSO
@@ -165,7 +192,32 @@ const refreshToken = async (): Promise<void> => {
   // `refreshToken` cookie alongside the body), so backend-priority
   // cookie wins; the body fallback covers the broken-cookie case.
   const { refreshToken } = readPersistedTokens();
-  await api.post("/auth/refresh", refreshToken ? { refreshToken } : {});
+
+  // v1.3.1 — DIAGNOSTIC. When the body is empty, log the exact origin
+  // of the call so we can reconcile why `localStorage.refreshToken` is
+  // null at this moment. The most common upstream cause is a cold-start
+  // race: a dashboard fetch fires (and 401s) BEFORE the response
+  // interceptor of an in-flight `/auth/firebase-login` has had the
+  // chance to call `persistTokens`. Without this log line the cascade
+  // had no breadcrumb — the user only saw the infinite-loop curl
+  // trace with `--data-raw '{}'` and no hint of the trigger. Cap at
+  // `console.warn` (not `error`) so it doesn't slamm dev consoles
+  // and doesn't get picked up by Sentry as a fault.
+  if (!refreshToken) {
+    console.warn(
+      '[v1.3.1] /auth/refresh POSTing with empty body — ' +
+      'localStorage.refreshToken is null at this moment. ' +
+      'With the _retry: true guard below the cascade is now ' +
+      'bounded to one call before clearing auth state.',
+    );
+  }
+
+  await api.post(
+    "/auth/refresh",
+    refreshToken ? { refreshToken } : {},
+    // v1.3.1 — see RETRY_GUARD docblock above.
+    RETRY_GUARD,
+  );
 };
 
 api.interceptors.response.use(
@@ -187,7 +239,8 @@ api.interceptors.response.use(
 
     if (
       error.response?.status === 401 &&
-      originalRequest.url?.includes("/auth/login")
+      (originalRequest.url?.includes("/auth/login") ||
+        originalRequest.url?.includes("/auth/refresh"))
     ) {
       return Promise.reject(error);
     }
