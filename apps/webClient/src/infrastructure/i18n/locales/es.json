@@ -194,9 +194,22 @@
     "allocatedAmount": "Monto Asignado",
     "spentAmount": "Monto Gastado",
     "totalBudget": "Presupuesto Total",
+    "totalLimit": "Límite Total",
+    "spentLabel": "Gastado",
+    "limitLabel": "Límite",
+    "hasSpent": "Has gastado {{amount}}",
+    "available": "Disponible",
+    "availableAmount": "{{amount}} Disponible",
     "namePlaceholder": "ej., Presupuesto Mensual",
     "submitCreate": "Crear Presupuesto",
-    "submitUpdate": "Actualizar Presupuesto"
+    "submitUpdate": "Actualizar Presupuesto",
+    "spentOfAllocated": "{{spent}} de {{allocated}}",
+    "amountRemaining": "{{amount}} restante",
+    "amountOverBudget": "{{amount}} por encima del presupuesto",
+    "updateSpentLabel": "Actualizar Monto Gastado",
+    "addExpense": "Añadir gasto",
+    "addExpenseCurrent": "Actual: {{current}}",
+    "spentLabelAria": "Monto gastado en {{category}}"
   },
   "reports": {
     "title": "Informes Financieros",
@@ -431,6 +444,10 @@
   "investments": {
     "underConstruction": "Esta función está en construcción y estará disponible próximamente en nuestra aplicación."
   },
+  "theme": {
+    "light": "Claro",
+    "dark": "Oscuro"
+  },
   "sidebar": {
     "investments": "Inversiones",
     "savings": "Ahorros",
@@ -526,6 +543,8 @@
     "desktopExperienceDesc": "Nuestra interfaz de escritorio proporciona una vista completa de tus finanzas con potentes herramientas para rastrear, analizar y planificar.",
     "mobileExperience": "Experiencia Móvil",
     "mobileExperienceDesc": "Lleva tus finanzas a donde vayas con nuestra interfaz optimizada para móviles, diseñada para un fácil seguimiento y gestión.",
+    "desktopScreenshotAlt": "Captura de pantalla del escritorio de Budget Genius",
+    "mobileScreenshotAlt": "Captura de pantalla de la app móvil de Budget Genius",
     "monthlyOverview": "Resumen Mensual",
     "incomeVsExpenses": "Ingresos vs. Gastos",
     "monthlySummary": "Resumen del Mes",

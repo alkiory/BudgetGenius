@@ -1,7 +1,5 @@
 import { HttpTransactionRepository } from "@adapters/http/transaction.repository";
-import {
-  NewTransactionInput,
-} from "@domain/dashboard/transactions/transaction.entity";
+import { NewTransactionInput } from "@domain/dashboard/transactions/transaction.entity";
 import { Modal } from "@presentation/components/modal/modal";
 import { Button } from "@presentation/components/ui/button";
 import { successToast, errorToast } from "@presentation/utils/toast";
@@ -21,12 +19,24 @@ import AddTransactionForm from "./add-transaction";
 // income-page row's "Add Income" button). When omitted we render the
 // default primary CTA. Both paths share the same modal + mutation
 // behaviour so onSuccess invalidations remain identical.
+//
+// `triggerClassName` (Phase 3 T3.7b): optional Tailwind utility classes
+// forwarded onto the *default* trigger button (the `!trigger &&
+// !isHeader` branch below — the one the transactions page uses by
+// default). Callers that already supply a `trigger` handle their own
+// className on the Button they pass in. Used by the transactions page
+// to apply responsive `w-full sm:w-auto` so the trigger stretches to
+// the row width on mobile (where the buttons row is `flex-col`) and
+// shrinks back to its natural size on `sm:` and up (where the row is
+// `flex-row`).
 export function AddTransactionModal({
   isHeader,
   trigger,
+  triggerClassName,
 }: {
   isHeader?: boolean;
   trigger?: ReactNode;
+  triggerClassName?: string;
 }) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
@@ -62,9 +72,8 @@ export function AddTransactionModal({
     });
   };
 
-  const modalTitle = !trigger && !isHeader
-    ? ""
-    : t("transactions.addNewTransaction");
+  const modalTitle =
+    !trigger && !isHeader ? "" : t("transactions.addNewTransaction");
 
   return (
     <>
@@ -101,7 +110,9 @@ export function AddTransactionModal({
           variant="primary"
           onClick={() => setIsOpen(true)}
           size="lg"
-          className="inline-flex items-center gap-2 px-6 py-2.5 text-base font-semibold shadow-md hover:shadow-lg transition-all"
+          className={`inline-flex items-center gap-2 px-6 py-2.5 text-base font-semibold shadow-md hover:shadow-lg transition-all${
+            triggerClassName ? ` ${triggerClassName}` : ""
+          }`}
         >
           <Plus className="h-5 w-5" />
           {t("transactions.addTransaction")}

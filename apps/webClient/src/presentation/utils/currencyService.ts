@@ -3,6 +3,30 @@ import { httpCurrencyClient } from "@adapters/http/currency.client";
 export type Currency = "USD" | "EUR" | "COP";
 type ExchangeRates = Record<Currency, number>;
 
+const SUPPORTED_CURRENCIES: ReadonlyArray<Currency> = ["USD", "EUR", "COP"];
+
+/**
+ * Coerce an arbitrary string (e.g. backend-returned currency code, or
+ * `undefined` from legacy rows) into one of the three supported
+ * `Currency` values. Anything that isn't `"USD" | "EUR" | "COP"` falls
+ * back to `"USD"` so the formatter never receives garbage — without
+ * this guard a stray GBP, typo, or transport corruption would land in
+ * `formatCurrency`'s `convertAmount`, multiply by `undefined`, and
+ * render `NaN` strings in the UI.
+ *
+ * Use this anywhere the codebase reads an externally-sourced currency
+ * code (api entity mirrors, `user_settings.currency`, query params,
+ * form values). Single source of truth for the "is this a real
+ * currency" check — keeps unsupported-value handling consistent across
+ * every callsite without each consumer re-implementing the same
+ * fallback.
+ */
+export function toCurrency(value: string | undefined | null): Currency {
+  return SUPPORTED_CURRENCIES.includes(value as Currency)
+    ? (value as Currency)
+    : "USD";
+}
+
 // Exchange rates defaults (Should be fetched from an API)
 const DEFAULT_EXCHANGE_RATES: ExchangeRates = {
   USD: 1,

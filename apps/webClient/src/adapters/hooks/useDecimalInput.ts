@@ -43,6 +43,37 @@ interface UseDecimalInputReturn {
   symbol: string;
 }
 
+/**
+ * Raw text buffer + locale-aware helpers for a single decimal input.
+ *
+ * @remarks
+ *
+ * **`initial` is read once on mount.** The hook does NOT subscribe
+ * to `initial` changes after mount — the text buffer is the source
+ * of truth for the in-flight edit. If the parent's stored value
+ * changes from outside the hook, the buffer will not auto-sync.
+ *
+ * Consumers that need to re-sync (reset on cancel, re-pull from a
+ * parent refetch, etc.) must call `setText` explicitly. The
+ * legitimate ways to re-initialize the buffer are:
+ *
+ * 1. **Component remount via React `key`** — when the parent's
+ *    `key` changes, React unmounts the old component and mounts a
+ *    fresh one, which re-reads `initial` on mount.
+ * 2. **Explicit `setText(...)`** — call from an event handler
+ *    (e.g. a "Reset" button or a cancel action).
+ *
+ * Do NOT add a `useEffect(() => allocatedInput.setText(String(category.allocated)),
+ * [category.allocated])` to push the prop back into the buffer — that
+ * will fight the controlled `<input value={text} …>` and create an
+ * infinite render loop (the effect fires → `setText` → re-render →
+ * effect fires again).
+ *
+ * @example
+ *   const amount = useDecimalInput({ initial: 0, currency: "USD" });
+ *   <input value={amount.text} onChange={(e) => amount.setText(e.target.value)} />
+ *   <button onClick={() => api.save({ amount: amount.parseNumber() })} />
+ */
 export function useDecimalInput(
   options: UseDecimalInputOptions,
 ): UseDecimalInputReturn {

@@ -2,6 +2,56 @@
 
 ---
 
+## [v1.4.1] — 2026-06-27
+
+> Session: Budget cross-currency aggregation — ship Option B from `rpi/budget-currency-coercion/research.md`. Research artifact FAR re-score 4.67 (pre-FAR gap closed by the Plan phase). 31 tests pass (27 existing + 4 new cross-currency cases).
+
+### Fixed
+
+- **PRODUCTION-INCORRECT-MATH: `Budget.totalAllocated` / `Budget.totalSpent` summed mixed-currency categories without FX coercion** — `apps/api/src/application/dashboard/services/budget.service.ts` previously did naive `budget.categories.reduce((sum, cat) => sum + cat.spent, 0)` on every GET and persist. After `BudgetCategory.currency` became a per-row enum (v1.4.0 migration `1800000000004`), a budget mixing USD + COP rows produced meaningless garbage totals (e.g. 50 USD + 50000 COP → `Budget.totalSpent = 50050`). Fix per research.md recommendation **Option B** (on-the-fly FX coercion at GET + persist, never locked-in): both the in-memory `getBudgets` loop and the persisted `recalculateBudgetTotalSpent` path now route every `category.<field>` through `CurrencyService.convert({amount, from: category.currency, to: canonicalCurrency})` before `+=`. Canonical currency = `user_settings.currency` via `resolveCurrencyForUser(userId)`, defaulting to `'USD'`. Identity fast-path skips `CurrencyService` entirely when `from === target` (single-currency users pay zero latency penalty). Graceful degradation on `ServiceUnavailableException`: returns `amount` unchanged + structured warn log via `logger.warn` so a wedged upstream rate provider does NOT 5xx the parent request. Promise.all parallelizes the per-category spent+allocated coerce calls (mixed-currency users see N parallel Redis reads instead of 2N sequential). Phase 2 polish DRY: both callsites now share a `coerceCategoryTotals({ cat, canonicalCurrency, caller })` helper. `Budget.totalAllocated` / `Budget.totalSpent` columns are now vestigial (column deletion deferred to a follow-up migration; the persisted value is correctness-correct because `recalculateBudgetTotalSpent` writes the coerced sum, but `getBudget(id)` still reads the on-disk value with no in-memory recompute — tracked separately).
+
+### Added
+
+- **Private FX-coerce helper family in `BudgetService`** — `coerceToCanonical({amount, fromCurrency, targetCurrency, caller})` is the single conversion entry point; `coerceCategoryTotals({cat, canonicalCurrency, caller})` is the batched Promise.all wrapper used by both the read and write paths; `resolveCategoryCurrency(cat, fallbackCurrency)` defends against malformed `cat.currency` DB values via the runtime `SUPPORTED_CURRENCIES` membership check (USD|EUR|COP). All three helpers are private to `BudgetService` and add no public surface.
+
+- **4 new cross-currency tests in `apps/api/test/budget-service.spec.ts`** — appended `describe('cross-currency coercion', ...)` block: (a) mixed USD+COP categories coerce to canonical USD with correct math; (b) identity fast-path skips `CurrencyService` (asserts `convert.toHaveBeenCalledTimes(0)`); (c) graceful degradation on `ServiceUnavailableException` returns identity value + emits warn; (d) `recalculateBudgetTotalSpent` persists FX-coerced totals on update and calls `convert` with the expected `{fromCurrency, toCurrency, amount}` arguments. Plus the existing `updateBudgetCategory` + `createBudgetCategory` + `deleteBudgetCategory` specs now implicitly cover the coercion path (single-currency fixtures use the identity default and regression-guard `convert` was called with the right args).
+
+### Changed
+
+- **`BudgetService` constructor now takes 6 dependencies** (was 5) — added `private readonly currencyService: CurrencyService` after `UserSettingsService`. The `CurrencyService` is already registered in the global `InfrastructureCoreModule` via `apps/api/src/infrastructure/currency/currency.module.ts` (v1.4.0), so no DI wiring changes are needed. `CurrencyService.convert({fromCurrency, toCurrency, amount})` returns `{convertedAmount, rate, cacheHit, fetchedAt}` and is served by a 1-hour Redis cache (`bg:exchange_rates:latest`) — cache-hit latency is microseconds so per-request FX coercion adds zero measurable overhead.
+- **`getBudgets` resolves the canonical currency ONCE per request** (outside the per-budget loop) so a single Redis round-trip serves every budget the user owns. The list endpoint computes fresh math every request and never persists back to the DB column — no write-amplification.
+- **AUDIT comment cleanup** — the two legacy "AUDIT TODO: cross-currency summation" prose blocks (one in `getBudgets`, one in `recalculateBudgetTotalSpent`) were replaced with terse "FIX SHIPPED" notes pointing to this changelog + `rpi/budget-currency-coercion/plan.md`.
+
+### Files modified (this entry)
+
+| Front | Files |
+|-------|-------|
+| Backend service | `apps/api/src/application/dashboard/services/budget.service.ts` (CurrencyService injection + coerceToCanonical + coerceCategoryTotals + resolveCategoryCurrency helpers + Promise.all coercion in both summation loops + AUDIT block cleanup) |
+| Tests | `apps/api/test/budget-service.spec.ts` (CurrencyService mock provider entry + 4 new cross-currency tests + outer-beforeEach `mockClear` to isolate per-test config) |
+| Docs | `rpi/budget-currency-coercion/{research.md,plan.md}` (Option B marked shipped + 19 atomic task checkboxes) · `docs/changelog.md` (this entry) · `knowledge.md` §13.3 (known-debt entry appended re vestigial columns) |
+| Version bump | `package.json` root `1.4.0` → `1.4.1` |
+
+### Why a patch
+
+Per `knowledge.md §16.1`: this is a behaviour-correctness fix (the existing per-row display in the v1.4.0 webClient fix bundle was already correct, but the parent-total math was garbage for mixed-currency users — a user-visible bug). No new feature surface, no API surface change, no DB migration (the vestigial columns stay; their deletion is a follow-up). The new private helpers are internal. New test coverage adds 4 tests but no new public spec file. Single bug-fix class. PATCH bump `1.4.0 → 1.4.1` is correct.
+
+### Quality gates
+
+- ✅ Backend `pnpm exec tsc --noEmit` clean for `budget.service.ts` + `budget-service.spec.ts`
+- ✅ Backend `pnpm exec eslint src/application/dashboard/services/budget.service.ts test/budget-service.spec.ts` clean (prettier --write applied after spec edits to fix formatting nit)
+- ✅ Backend `pnpm exec jest --testPathPattern=budget-service` — 31/31 passing (27 pre-existing + 4 new cross-currency)
+- 🟡 Backend `pnpm --filter api build` and webClient Playwright regression are queued for the post-merge CI run; manual device smoke (mixed-USD+COP budget) is the v1.4.1 follow-up
+- ✅ Code-reviewer-minimax-m3 approved Phases 1+2+3+4 across 6 review cycles; final verdict "ship as-is" with the deferred-vestigial-column follow-up noted
+
+### Out of scope (tracked separately)
+
+- **`Budget.totalAllocated` / `Budget.totalSpent` column deletion migration** — items are vestigial (correct on the write path via `recalculateBudgetTotalSpent`, but the read path in `getBudget(id)` still surfaces the persisted value without in-memory recompute). A follow-up RPI migration should drop the columns and update `getBudget(id)` to recompute on read for consistency with `getBudgets`.
+- **Frontend `BudgetSummary` defence-in-depth via Option E** — research.md §"Recommended path" notes client-side recompute as defence-in-depth. Not required while Option B is correct server-side, but a future webClient refresh could compute totals from `categoryBudgets` array via `currencyService.convertAmountAsync` so the dashboard works even if a future server regression breaks the coerce path.
+- **`updateBudget` DTO write-path audit** — `UpdateBudgetDto.totalAllocated?` / `.totalSpent?` are still caller-supplied; if a caller poisons these with non-normalized values the in-memory override on the next GET replaces them with the correct coerced sum, so the failure mode is self-healing on the next request. A tighter fix (reject the DTO fields entirely, force the category-sum) is a separate plan.
+- **Playwright regression spec pin** — add a `tests/budget-cross-currency.spec.ts` Playwright case that creates a mixed-USD+COP budget and reads the parent total via `BudgetSummary`. Queued for the webClient post-merge CI run.
+
+---
+
 ## [v1.4.0] — 2026-06-27
 
 > Session: Project audit + Wave 1 (quick wins) + Wave 2 (UX correctness + a11y) + Wave 3 (currency architecture). RPI artifacts at `rpi/project-audit/` (`research.md` FAR 4.67, `plan.md` FACTS 4.40). 22 files changed across the three waves.

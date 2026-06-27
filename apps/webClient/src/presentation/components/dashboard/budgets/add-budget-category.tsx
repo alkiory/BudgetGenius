@@ -66,7 +66,7 @@ export default function AddBudgetCategory({
               id="new-category-allocated"
               type="text"
               inputMode="decimal"
-              name="allocated"
+              name="allocatedText"
               step={stepAttr}
               aria-label={t("budgets.allocatedAmount")}
               value={allocated}
@@ -86,7 +86,7 @@ export default function AddBudgetCategory({
               id="new-category-spent"
               type="text"
               inputMode="decimal"
-              name="spent"
+              name="spentText"
               step={stepAttr}
               aria-label={t("budgets.spentAmount")}
               value={spent}

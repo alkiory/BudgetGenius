@@ -4,15 +4,14 @@ import {
   BudgetCategory,
   PERIOD_OPTIONS,
 } from "@domain/dashboard/budgets/budget.entity";
-import { TRANSACTION_CATEGORIES } from "@domain/dashboard/transactions/transaction.entity";
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
-import { Trash2 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
+import { BudgetCategoryRow } from "./budget-category-row";
 
 interface BudgetFormProps {
   budget?: Budget;
@@ -20,13 +19,6 @@ interface BudgetFormProps {
   onCancel: () => void;
   isLoading?: boolean;
 }
-
-type CategoryInputRefs = {
-  [key: string]: {
-    // Key será `${index}-${fieldName}`
-    current: HTMLInputElement | HTMLSelectElement | null;
-  };
-};
 
 export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
   const { t } = useTranslation();
@@ -44,14 +36,20 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
   });
 
   const [categories, setCategories] = useState<BudgetCategory[]>([]);
-  const categoryInputRefs = useRef<CategoryInputRefs>({});
 
+  // Totals reducer — now safe with numeric `allocated` / `spent`
+  // because `BudgetCategoryRow` calls `onCategoryChange` with the
+  // parsed number (or 0 for empty / invalid). The pre-refactor
+  // `type="number"` path stored strings in some cases (the
+  // #stuck-at-zero fix widened the buffer to `string | number`),
+  // which would have caused `sum + "100"` to concatenate and the
+  // totals display to render `NaN.toFixed(2)`.
   const totalAllocated = categories.reduce(
-    (sum, category) => sum + category.allocated,
+    (sum, category) => sum + (Number(category.allocated) || 0),
     0,
   );
   const totalSpent = categories.reduce(
-    (sum, category) => sum + category.spent,
+    (sum, category) => sum + (Number(category.spent) || 0),
     0,
   );
 
@@ -75,10 +73,9 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
         totalAllocated: 0,
         totalSpent: 0,
       });
-      // Bug fix (#NaN-total): initialize amounts to 0 (not `undefined`) so
-      // the totalAllocated / totalSpent reduce below never produces NaN.
-      // The number input still renders blank when value === 0 because of the
-      // `value={category.allocated ?? ""}` fallback in the JSX.
+      // Bug fix (#NaN-total): initialize amounts to 0 (not `undefined`)
+      // so the totals reducer above never produces NaN. The text input
+      // still renders "0" via `useDecimalInput`'s `initial: 0` mapping.
       setCategories([
         {
           budgetId: 0,
@@ -104,14 +101,7 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
   ) => {
     setCategories((prev) => {
       const updated = [...prev];
-      // Bug fix (#NaN-total): empty input maps to 0 (not `undefined`) so the
-      // totals reducer never goes to NaN.
-      const currentValue =
-        typeof value === "string" &&
-        (field === "allocated" || field === "spent")
-          ? Number(value) || 0
-          : value;
-      updated[index] = { ...updated[index], [field]: currentValue };
+      updated[index] = { ...updated[index], [field]: value } as BudgetCategory;
       return updated;
     });
   };
@@ -136,14 +126,22 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
     e.preventDefault();
     // Bug fix (#currency-edit-mangling): previously each amount was
     // converted from the user's display currency to USD via
-    // `currencyService.normalizeAmount`, which means a user entering 2000
-    // EUR would store ~2150 USD — and on edit, the form would re-display
-    // 2150 with the user's currency symbol glued back on. Round-trip was
-    // only preserved when exchange rates did not shift between sessions.
-    // Now amounts are persisted as the user entered them in their
-    // configured currency; display reads (in `EditableBudgetCategory`
-    // and the BudgetSummary) already treat the value as a no-op
-    // identity conversion (source = targetCurrency).
+    // `currencyService.normalizeAmount`, which means a user entering
+    // 2000 EUR would store ~2150 USD — and on edit, the form would
+    // re-display 2150 with the user's currency symbol glued back on.
+    // Round-trip was only preserved when exchange rates did not
+    // shift between sessions. Now amounts are persisted as the user
+    // entered them in their configured currency; display reads (in
+    // `EditableBudgetCategory` and the BudgetSummary) already treat
+    // the value as a no-op identity conversion (source =
+    // targetCurrency).
+    //
+    // Belt-and-suspenders coercion: `BudgetCategoryRow` already
+    // stores parsed numbers via `onCategoryChange`, so
+    // `Number(...) || 0` here is a no-op in the happy path. It
+    // remains as a safety net for the `name`-only edit path (where
+    // the row sends a string and we never touch `allocated` /
+    // `spent`) and for any future caller that bypasses the row.
     const normalizedCategories = categories.map((cat) => ({
       ...cat,
       allocated: Number(cat.allocated) || 0,
@@ -252,113 +250,13 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
 
         <div className="space-y-4">
           {categories.map((category, index) => (
-            <div key={index} className="flex items-end gap-2">
-              <div className="flex-1 space-y-2">
-                <Label htmlFor={`category-name-${index}`}>
-                  {t("budgets.categoryName")}
-                </Label>
-                <select
-                  id={`category-name-${index}`}
-                  value={category.name}
-                  onChange={(e) =>
-                    handleCategoryInputChange(index, "name", e.target.value)
-                  }
-                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                  ref={(el) => {
-                    if (el) {
-                      categoryInputRefs.current[`${index}-name`] = {
-                        current: el,
-                      };
-                    }
-                  }}
-                  required
-                >
-                  {TRANSACTION_CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {t(`categories.${cat.toLowerCase()}`)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex-1 space-y-2">
-                <Label htmlFor={`category-allocated-${index}`}>
-                  {t("budgets.allocatedAmount")}
-                </Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
-                    {currencySymbol}
-                  </span>
-                  <Input
-                    id={`category-allocated-${index}`}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={category.allocated ?? ""}
-                    onChange={(e) =>
-                      handleCategoryInputChange(
-                        index,
-                        "allocated",
-                        e.target.value,
-                      )
-                    }
-                    className="pl-7"
-                    ref={(el) => {
-                      if (categoryInputRefs.current[`${index}-allocated`]) {
-                        categoryInputRefs.current[
-                          `${index}-allocated`
-                        ].current = el;
-                      } else {
-                        categoryInputRefs.current[`${index}-allocated`] = {
-                          current: el,
-                        };
-                      }
-                    }}
-                    required
-                  />
-                </div>
-              </div>
-              <div className="flex-1 space-y-2">
-                <Label htmlFor={`category-spent-${index}`}>
-                  {t("budgets.spentAmount")}
-                </Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
-                    {currencySymbol}
-                  </span>
-                  <Input
-                    id={`category-spent-${index}`}
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={category.spent ?? ""}
-                    onChange={(e) =>
-                      handleCategoryInputChange(index, "spent", e.target.value)
-                    }
-                    className="pl-7"
-                    ref={(el) => {
-                      if (categoryInputRefs.current[`${index}-spent`]) {
-                        categoryInputRefs.current[`${index}-spent`].current =
-                          el;
-                      } else {
-                        categoryInputRefs.current[`${index}-spent`] = {
-                          current: el,
-                        };
-                      }
-                    }}
-                    required
-                  />
-                </div>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => removeCategory(index)}
-                className="mb-0.5 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
+            <BudgetCategoryRow
+              key={index}
+              category={category}
+              index={index}
+              onCategoryChange={handleCategoryInputChange}
+              onRemove={removeCategory}
+            />
           ))}
         </div>
 

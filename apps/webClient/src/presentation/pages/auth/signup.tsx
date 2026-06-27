@@ -3,6 +3,7 @@
 import { setUser } from "@adapters/slices/auth/authSlice";
 import { signup } from "@application/auth/auth.service";
 import { ensureUserIsValid } from "@domain/user/user.entity";
+import { isNativePlatform } from "@infrastructure/platform";
 import { SocialLoginButtons } from "@presentation/components/social-buttons-login";
 import { Button } from "@presentation/components/ui/button";
 import {
@@ -36,8 +37,10 @@ export default function SignupPage() {
   const [error, setError] = useState("");
 
   const dispatch = useDispatch();
-
   const navigate = useNavigate();
+  // Module-scope lazy cache in @infrastructure/native makes this cheap
+  // (O(1) cache hit on every call after the first).
+  const isNative = isNativePlatform();
 
   const { mutate: createNewUser, isPending } = useMutation({
     mutationKey: ["signup"],
@@ -103,13 +106,15 @@ export default function SignupPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center">
-      <Button
-        variant="default"
-        className="absolute left-4 top-[max(env(safe-area-inset-top),1rem)] md:left-8 md:top-8 animate-shake"
-        onClick={() => navigate(RoutePaths.Home)}
-      >
-        {t("auth.goBack")}
-      </Button>
+      {!isNative && (
+        <Button
+          variant="default"
+          className="absolute left-4 top-[max(env(safe-area-inset-top),1rem)] md:left-8 md:top-8 animate-shake"
+          onClick={() => navigate(RoutePaths.Home)}
+        >
+          {t("auth.goBack")}
+        </Button>
+      )}
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center">
@@ -162,7 +167,7 @@ export default function SignupPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 {t("auth.passwordRequirements")}
               </p>
             </div>
@@ -208,7 +213,7 @@ export default function SignupPage() {
               <Separator className="w-full" />
             </div>
             <div className="relative flex justify-center">
-              <span className="bg-card px-2 text-xs text-slate-500">
+              <span className="bg-white px-2 text-xs text-slate-500 dark:bg-slate-900 dark:text-slate-400">
                 {t("auth.orContinueWith")}
               </span>
             </div>
@@ -217,7 +222,7 @@ export default function SignupPage() {
           <SocialLoginButtons />
         </CardContent>
         <CardFooter className="flex justify-center">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             {t("auth.alreadyHaveAccount")}{" "}
             <Link
               to={RoutePaths.Auth + "/" + RoutePaths.Login}

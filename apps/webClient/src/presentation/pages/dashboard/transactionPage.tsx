@@ -102,7 +102,7 @@ export default function TransactionsPage() {
         description={t("transactions.description")}
       />
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="flex flex-1 items-center gap-2">
           <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
             {t("transactions.title")}
@@ -113,10 +113,17 @@ export default function TransactionsPage() {
               `(${filteredTransactions.length})`}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+
+        {/* Buttons row: stacks on mobile (flex-col + items-stretch so
+            each button stretches to full row width), side-by-side on
+            `sm:` and up (flex-row + items-center, buttons back to
+            natural size). Together with the outer `flex-col sm:flex-row`
+            above, the title row gets its own line on mobile instead
+            of being squeezed to 0 width by the full-width buttons. */}
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
           <button
             onClick={() => setIsFilterModalOpen(true)}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+            className="inline-flex w-full items-center gap-1 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 sm:w-auto"
           >
             <Filter className="h-4 w-4" />
             {t("common.filter")}
@@ -126,7 +133,14 @@ export default function TransactionsPage() {
               </span>
             )}
           </button>
-          <AddTransactionModal />
+          {/* `triggerClassName` makes the default modal CTA respect
+              the same `w-full sm:w-auto` breakpoint contract as the
+              Filter button. Without it, the `+ Add Transaction`
+              button would stay at its natural "lg" button width while
+              the Filter button stretches — visually inconsistent on
+              mobile where both should be touch-sized full-width
+              rows. */}
+          <AddTransactionModal triggerClassName="w-full sm:w-auto" />
         </div>
       </div>
 

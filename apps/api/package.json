@@ -22,7 +22,7 @@
     "typeorm": "ts-node -P tsconfig.json -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
     "migration:generate": "pnpm typeorm migration:generate -d src/data-source.ts src/migrations/InitialMigration",
     "migration:run": "ts-node -P tsconfig.json -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d src/data-source.ts",
-    "premigration:run": "node -e \"const { Client } = require('pg'); const client = new Client({ host: process.env.DB_HOST || 'localhost', port: process.env.DB_PORT || 5432, user: process.env.DB_USER || 'postgres', password: process.env.DB_PASSWORD || process.env.DB_PASS || 'postgres', database: process.env.DB_NAME || 'budgetgenius' }); client.connect().then(() => client.query('CREATE SCHEMA IF NOT EXISTS bg_public;')).then(() => client.end()).catch(err => { console.error(err); process.exit(1); })\"",
+    "premigration:run": "ts-node -P tsconfig.json src/setup-db.ts",
     "migration:show": "pnpm exec typeorm-ts-node-commonjs migration:show -d src/data-source.ts",
     "migration:create": "pnpm exec typeorm-ts-node-commonjs migration:create",
     "migration:revert": "pnpm typeorm migration:revert -d src/data-source.ts",

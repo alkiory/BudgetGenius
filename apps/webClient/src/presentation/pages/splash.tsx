@@ -207,6 +207,8 @@ export function RootRoute() {
     // Build-time / SSR — defer; the route rule won't run.
     return null;
   }
+  // Module-scope lazy cache in @infrastructure/native: the 3-tier Capacitor
+  // detection runs at most once per module load; this call is an O(1) hit.
   const native = isNativePlatform();
   const alreadyShown = sessionStorage.getItem("mobile.splash.shown") === "1";
   if (native && !alreadyShown) {

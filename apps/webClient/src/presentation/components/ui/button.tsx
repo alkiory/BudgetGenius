@@ -25,11 +25,11 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       default: "bg-black text-white hover:bg-purple-500/90",
       destructive: "bg-red-500 text-white hover:bg-red-500/90",
       outline:
-        "border border-slate-200 bg-white hover:bg-slate-100 dark:text-white hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800 dark:hover:text-white",
+        "border border-slate-200 bg-white text-slate-900 hover:bg-slate-100 dark:text-white hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800 dark:hover:text-white",
       primary: "bg-purple-600 text-white hover:bg-purple-400/90",
       secondary: "bg-slate-100 text-slate-900 hover:bg-slate-100/80",
       ghost:
-        "hover:bg-slate-100 hover:text-slate-900 dark:text-white dark:hover:bg-slate-800 dark:hover:text-white",
+        "text-slate-900 hover:bg-slate-100 hover:text-slate-900 dark:text-white dark:hover:bg-slate-800 dark:hover:text-white",
       link: "text-purple-500 underline-offset-4 hover:underline",
     };
 

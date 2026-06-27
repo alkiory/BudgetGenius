@@ -11,7 +11,14 @@ import {
   ConvertCurrencyResponseDto,
 } from './dto/convert.dto';
 
-interface CachedRates {
+/**
+ * Shape persisted in Redis under `bg:exchange_rates:latest`. Exposed (with a
+ * stable field set) so the controller's public method signature can carry an
+ * explicit return type — otherwise tsc --declaration flags TS4053 because
+ * the inferred return type of `CurrencyController.getRates()` references a
+ * non-exported type from this module.
+ */
+export interface CachedRates {
   base: SupportedCurrency;
   rates: Record<SupportedCurrency, number>;
   fetchedAt: string;

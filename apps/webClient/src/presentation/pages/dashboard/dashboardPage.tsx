@@ -1,3 +1,4 @@
+import { useLocale } from "@adapters/hooks/useLocale";
 import {
   useFetchDashboard,
   useFetchExpenseCategories,
@@ -30,6 +31,13 @@ export default function DashboardPage() {
 
   const targetCurrency = (userSettings?.currency || "USD") as Currency;
 
+  // Shared dashboard-wide locale. Reads `state.userSettings.settings.locale`
+  // (BCP-47 tag) via the same `useLocale()` hook used by the four
+  // sibling files, so the page and its five presentational children
+  // cannot drift between two sources. `"en-US"` is the fallback while
+  // the sync effect below runs on first render.
+  const locale = useLocale();
+
   const formattedBalance = currencyService.formatCurrency(
     overview?.balance ?? 0,
     "USD" as Currency,
@@ -54,17 +62,17 @@ export default function DashboardPage() {
 
   const rawBreackdownLargest = breackdown?.largest?.value
     ? {
-      largest: {
-        name: breackdown.largest.name,
-        value: breackdown.largest.value,
-      },
-    }
+        largest: {
+          name: breackdown.largest.name,
+          value: breackdown.largest.value,
+        },
+      }
     : {
-      largest: {
-        name: t("common.noData"),
-        value: 0,
-      },
-    };
+        largest: {
+          name: t("common.noData"),
+          value: 0,
+        },
+      };
 
   const formattedBreackdown = {
     total: currencyService.formatCurrency(
@@ -118,7 +126,7 @@ export default function DashboardPage() {
             value: rawBreackdownLargest?.largest.value,
           }}
           timezone={userSettings?.timezone ?? "Europe/Paris"}
-          period={breackdown?.period ?? new Date().toLocaleDateString()}
+          period={breackdown?.period ?? new Date().toLocaleDateString(locale)}
         />
       </div>
     </div>

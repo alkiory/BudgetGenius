@@ -518,17 +518,25 @@ export class AuthController {
     // correlate the symptom against the Bitfirewall:: origin
     // (X-Device-Id), the IP/CGNAT bucket, and the X-Forwarded-For
     // chain. NEVER logs token material — only booleans + the buckets.
+    //
+    // Express Request always carries `headers` at runtime, but a
+    // stripped-down test mock (e.g. `{ cookies: {} }` in
+    // apps/api/test/auth-cookie-bridge.spec.ts) won't. Reading
+    // `req.headers['x-device-id']` against an absent `headers` would
+    // throw `TypeError: Cannot read properties of undefined` and mask
+    // the real "no refresh token" symptom in the diagnostic log itself.
+    // The `?? {}` guard keeps the diagnostic honest on both real reqs
+    // (where headers exist) and unit-test fixtures (where they may
+    // not).
     if (!token) {
+      const headers =
+        ((req.headers ?? {}) as Record<string, string | undefined>);
       this.logger.warn(
         `🛡️ /auth/refresh received NO refresh token in any of the ` +
           `three source channels ` +
           `(cookie=${Boolean(cookieToken)} body=${Boolean(bodyToken)} ` +
           `Authorization=${Boolean(headerToken)}). ` +
-          `device-id=${
-            (req.headers as Record<string, string | undefined>)[
-              'x-device-id'
-            ] ?? 'none'
-          } ` +
+          `device-id=${headers['x-device-id'] ?? 'none'} ` +
           `remote=${req.socket?.remoteAddress ?? 'unknown'} — ` +
           `v1.3.1 diagnostic.`,
       );

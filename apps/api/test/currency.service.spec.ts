@@ -13,6 +13,16 @@ describe('CurrencyService [Wave 3 T3.6]', () => {
   let service: CurrencyService;
   let redisSetCalls: number;
   let redisGetCalls: number;
+  // ReturnType<typeof jest.fn> avoids the TS2740 "bare jest.Mock requires
+  // <ReturnType, Args, C> generics" error reported by tsc and keeps the
+  // mock compatible with jest's runtime methods (mockResolvedValueOnce,
+  // mockClear, etc.) without forcing an explicit signature pegged to the
+  // global fetch overloads.
+  // Bare `jest.Mock` is fine here — the TS2740 originally flagged was
+  // emitted by the redis cast at L170/175 (not by this declaration),
+  // so we keep the simpler annotation that preserves the loaded mock
+  // surface (`mockResolvedValueOnce`, `mockClear`, …) without forcing
+  // a signature pegged to the global `fetch` overloads.
   let mockedFetch: jest.Mock;
 
   const RATES = { USD: 1, EUR: 0.93, COP: 4000 };
@@ -157,12 +167,27 @@ describe('CurrencyService [Wave 3 T3.6]', () => {
     expect(first.cacheHit).toBe(false);
     expect(mockedFetch).toHaveBeenCalledTimes(1);
 
+    // Type cast uses function signatures (not jest.Mock) so the literal
+    // `{...}` below satisfies the structural type without depending on
+    // jest.Mock's instance methods (mockImplementation, mockReturnValue,
+    // etc.) that a plain async function doesn't carry. This is what
+    // tripped the TS2740 the reviewer flagged in v1.4.x.
+    //
+    // Drop the generic here: the production `RedisService.getJson` is
+    // `<T>(key: string) => Promise<T | null>`, but at the mock layer we
+    // don't care about T's binding — the literal
+    // `{ base, rates, fetchedAt }` only needs to be assignable to a
+    // static `Promise<unknown> | Promise<null>` slot. Keeping `<T>`
+    // (even defaulted to `unknown`) tripped TS2322 at the assignment
+    // because TS didn't bind T from the literal at the call site — so
+    // the non-generic signature below is the simplest fix that's both
+    // type-safe AND runtime-compatible.
     (
       service as unknown as {
         redis: {
           isConnected: () => boolean;
-          getJson: jest.Mock;
-          set: jest.Mock;
+          getJson: () => Promise<unknown>;
+          set: (key: string, value: string, ttl?: number) => Promise<void>;
         };
       }
     ).redis = {

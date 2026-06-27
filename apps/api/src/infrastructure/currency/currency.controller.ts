@@ -11,7 +11,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { JwtAuthGuard } from '@infrastructure/auth/guards/jwt-auth.guard';
 
-import { CurrencyService } from './currency.service';
+import { CurrencyService, type CachedRates } from './currency.service';
 import {
   ConvertCurrencyDto,
   ConvertCurrencyResponseDto,
@@ -33,7 +33,7 @@ export class CurrencyController {
       'from Redis. Cache TTL is 1h by default (configurable via ' +
       'CURRENCY_CACHE_TTL_SECONDS).',
   })
-  public async getRates() {
+  public async getRates(): Promise<CachedRates> {
     const r = await this.currency.getRates();
     return r;
   }
