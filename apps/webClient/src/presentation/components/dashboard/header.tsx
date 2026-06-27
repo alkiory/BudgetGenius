@@ -4,8 +4,15 @@ import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 import { Link } from "react-router";
 import { ThemeToggle } from "../themeToogle";
-import { LanguageSwitcher } from "./language-switcher";
 import { AddTransactionModal } from "./transaction/add-transaction-modal";
+
+// Wave 1 [T1.1]: `<LanguageSwitcher />` was removed from the dashboard
+// navbar to reduce in-app chrome. The same control is still available
+// (a) to anonymous visitors on the public CTA/marketing site via
+// `HeaderComponent` (`@presentation/components/ui/header.tsx`), and
+// (b) to authenticated users at `/profile/account` via the
+// `Select` in `account-settings.tsx`. Removing the in-header switcher
+// ships the user's stated preference without breaking either surface.
 
 export function DashboardHeader() {
   const { t } = useTranslation();
@@ -21,7 +28,6 @@ export function DashboardHeader() {
           <div className="ml-3">
             <ThemeToggle />
           </div>
-          <LanguageSwitcher />
           <div className="relative ml-3">
             <div>
               <button

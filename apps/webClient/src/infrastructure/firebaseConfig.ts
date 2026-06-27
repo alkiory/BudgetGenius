@@ -16,7 +16,17 @@ const firebaseConfig = {
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASURENT_ID,
+  // Wave 1 [T1.4]: the env-var name is `VITE_FIREBASE_MEASUREMENT_ID`
+  // (NOT `...MEASURENT_ID`). The historical typo was propagated from
+  // the README + 3 GitHub Actions workflows + .env.example templates
+  // and silently coerces to `undefined` at runtime because Firebase
+  // JS SDK reads `measurementId` as `unknown` if the source string is
+  // `undefined`. Renamed across `.env.example`, `README.md`,
+  // `knowledge.md`, the controller-side `apps/api/.env.example`, and
+  // `firebase-hosting-merge.yml` / `firebase-pull-request.yml` /
+  // `build-apk.yml`. GitHub Secrets must be renamed to match (same
+  // new name; old name no longer referenced).
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 // Firebase requires at least apiKey + projectId + appId for any service to

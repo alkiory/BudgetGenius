@@ -1,4 +1,5 @@
 import { RootState } from "@adapters/store/rootStore";
+import { useDecimalInput } from "@adapters/hooks/useDecimalInput";
 import {
   INCOME_RECURRENCES,
   IncomeRecurrence,
@@ -9,9 +10,9 @@ import {
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
-import { Currency, currencyService } from "@presentation/utils/currencyService";
+import type { Currency } from "@presentation/utils/currencyService";
 import { errorToast } from "@presentation/utils/toast";
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import type React from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
@@ -35,7 +36,6 @@ export function TransactionForm({
   const { t } = useTranslation();
   const userSetting = useSelector((state: RootState) => state.userSettings);
   const targetCurrency = (userSetting?.settings?.currency || "USD") as Currency;
-  const currencySymbol = currencyService.getSymbol(targetCurrency);
 
   const [transactionType, setTransactionType] = useState<"income" | "expense">(
     "expense",
@@ -50,16 +50,36 @@ export function TransactionForm({
     recurrence: null,
   });
 
-  // Bug fix (separate amountInput string): the input element is displayed
-  // from this raw string so the user's literal keystrokes (`.` or `,`)
-  // are preserved while typing. Without this, every keystroke ran
-  // through parseAmountInput and React's controlled <input> would
-  // immediately re-render with the parsed NUMBER, erasing the trailing
-  // `.` or `,` the user just pressed (so "10.5" turned into "105" and
-  // dot/comma entry appeared broken). The numeric submission reads from
-  // `amount` (re-parsed at submit time); `amountInput` is purely the
-  // displayed buffer.
-  const [amountInput, setAmountInput] = useState<string>("");
+  // Wave 2 [T2.2]: locale-aware decimal input backed by
+  // `useDecimalInput`. Replaces the previous ad-hoc `amountInput` raw
+  // string buffer plus the monolithic `parseAmountInput` call. The
+  // hook owns:
+  //   - the `<input type="text" inputMode="decimal">` value
+  //   - the parse-at-submit gate (no per-keystroke numeric coercion)
+  //   - the currency-aware `step` and `placeholder` for the input
+  //   - the locale-aware currency symbol prefix
+  const amountInput = useDecimalInput({
+    initial: undefined,
+    currency: targetCurrency,
+  });
+
+  const seedAmountBuffer = useCallback(
+    (raw: number | undefined) => {
+      if (raw === undefined) {
+        amountInput.setText("");
+        return;
+      }
+      const abs = Math.abs(raw);
+      // Round to the currency's precision so the buffer opens with the
+      // exact value the parent will see on submit (avoids a wondering
+      // "the form showed 10.1 but the value was 10.100000000000001"
+      // from a JSON numeric round-trip).
+      const precision = amountInput.precision;
+      const rounded = Number(abs.toFixed(precision));
+      amountInput.setText(Number.isFinite(rounded) ? String(rounded) : "");
+    },
+    [amountInput],
+  );
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
@@ -71,9 +91,10 @@ export function TransactionForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Re-parse the raw string at submit time so the trailing separators
-    // the user typed (`10.5`, `23,15`) resolve to the right number.
-    const parsedAtSubmit = currencyService.parseAmountInput(amountInput);
+    // Parse at submit time — the hook's invariant is that intermediate
+    // typing states (`"1."`, `"23,15"`) round-trip to the right number
+    // because the raw buffer is preserved verbatim.
+    const parsedAtSubmit = amountInput.parseNumber();
     const absAmount = Math.abs(parsedAtSubmit);
 
     if (Number.isNaN(absAmount) || absAmount === 0) {
@@ -118,11 +139,11 @@ export function TransactionForm({
       // Seed the input buffer with a locale-neutral representation so
       // existing rows open with a sensible value and edits keep the
       // exact numeric magnitude.
-      setAmountInput(String(abs));
+      seedAmountBuffer(transaction.amount);
       // Derive the toggle from the original amount sign
       setTransactionType(transaction.amount >= 0 ? "income" : "expense");
     }
-  }, [transaction]);
+  }, [transaction, seedAmountBuffer]);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -194,23 +215,32 @@ export function TransactionForm({
         <Label htmlFor="amount">{t("transactions.amount")}</Label>
         <div className="relative">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
-            {currencySymbol}
+            {amountInput.symbol}
           </span>
           <Input
             id="amount"
             name="amount"
             type="text"
             inputMode="decimal"
-            // Controlled by the raw string buffer `amountInput` so the
+            // Controlled by `useDecimalInput`'s raw string buffer so the
             // user's typing (including the `.` or `,` they just pressed)
             // is preserved character-for-character. Parsing happens once
             // at submit time in `handleSubmit`.
-            value={amountInput}
+            step={
+              amountInput.precision === 0
+                ? 1
+                : 1 / 10 ** amountInput.precision
+            }
+            value={amountInput.text}
             onChange={(e) => {
-              setAmountInput(e.target.value);
+              amountInput.setText(e.target.value);
             }}
+            aria-label={t("transactions.amount")}
+            aria-invalid={
+              amountInput.text !== "" && !amountInput.isValid()
+            }
             className="pl-7"
-            placeholder="0.00"
+            placeholder={amountInput.livePreview() || "0.00"}
             required
           />
         </div>

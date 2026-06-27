@@ -93,7 +93,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Guard: returns true when the client is available */
-  private isConnected(): boolean {
+  public isConnected(): boolean {
     if (!this.client) {
       this.logger.warn('⚠️ Redis not available — call skipped');
       return false;

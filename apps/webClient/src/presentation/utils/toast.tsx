@@ -59,21 +59,41 @@ const customToast = ({
 
   return toast.custom(
     (t) => (
+      // Wave 2 [T2.6]: WAI-ARIA `role` + `aria-live` per toast type.
+      //   - `alert`/`assertive` for warning + error: screen readers
+      //     interrupt the current read-out so destructive outcomes
+      //     aren't missed.
+      //   - `status`/`polite` for success + info: announce when the AT
+      //     user's current utterance finishes, the canonical
+      //     non-intrusive pattern.
+      // `aria-atomic="true"` ensures the entire toast message is
+      // re-announced on change (rather than only the delta). The icon
+      // and dismiss button are marked `aria-hidden` so AT users hear
+      // only the message text — the icon glyph would otherwise be
+      // read aloud.
       <div
+        role={type === "error" || type === "warning" ? "alert" : "status"}
+        aria-live={
+          type === "error" || type === "warning" ? "assertive" : "polite"
+        }
+        aria-atomic="true"
         className={`${t.visible ? "animate-enter" : "animate-leave"}
           max-w-md w-full ${toastStyles[type].bg} ${toastStyles[type].border}
           shadow-lg rounded-lg pointer-events-auto flex items-center p-4 border
           transition-all duration-300`}
       >
-        <div className="flex-shrink-0 mr-3">{toastStyles[type].icon}</div>
+        <div className="flex-shrink-0 mr-3" aria-hidden="true">
+          {toastStyles[type].icon}
+        </div>
         <div className={`flex-1 text-sm ${toastStyles[type].text}`}>
           {message}
         </div>
         <button
           onClick={() => toast.dismiss(t.id)}
           className="ml-4 flex-shrink-0 rounded-md inline-flex text-slate-400 hover:text-slate-500 focus:outline-none"
+          aria-label="Dismiss notification"
         >
-          <X className="h-5 w-5" />
+          <X className="h-5 w-5" aria-hidden="true" />
         </button>
       </div>
     ),
@@ -100,14 +120,25 @@ export const confirmToast = (
 ) => {
   return toast.custom(
     (t) => (
+      // Wave 2 [T2.6 follow-through]: confirmToast uses `role="alert"` +
+      // `aria-live="assertive"` because the user must acknowledge it
+      // (Cancel/Delete buttons). We previously used `role="alertdialog"`
+      // which is INCORRECT for this UI: `alertdialog` requires modal
+      // semantics + a focus trap, neither of which this bottom-of-page
+      // toast implements. The choice mirrors the `errorToast`/`warningToast`
+      // assertive announcement pattern. Migrating to a true modal
+      // (`<dialog>` element + focus trap) is a Wave 3 follow-up.
       <div
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
         className={`${t.visible ? "animate-enter" : "animate-leave"}
           max-w-md w-full bg-card dark:bg-card dark:text-neutral
           shadow-lg rounded-lg pointer-events-auto flex flex-col items-center justify-between p-4 border
           transition-all duration-300`}
       >
         <div className="flex items-center">
-          <div className="flex-shrink-0 mr-3">
+          <div className="flex-shrink-0 mr-3" aria-hidden="true">
             <AlertTriangle className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
           </div>
           <div className="flex-1 text-sm text-slate-400">{message}</div>
@@ -116,6 +147,7 @@ export const confirmToast = (
           <button
             onClick={() => toast.dismiss(t.id)}
             className="rounded-md px-3 py-2 text-sm font-medium text-slate-400 hover:text-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-500 dark:text-slate-300 dark:hover:text-slate-200 dark:focus-visible:ring-slate-400"
+            aria-label={options.labelCancel || "Cancel"}
           >
             {options.labelCancel || "Cancel"}
           </button>
@@ -125,9 +157,10 @@ export const confirmToast = (
               toast.dismiss(t.id);
             }}
             className="flex gap-4 rounded-md px-3 py-2 text-sm font-medium text-red-500 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-red-500 dark:text-red-400 dark:hover:text-red-300 dark:focus-visible:ring-red-400"
+            aria-label={options.labelConfirm || "Accept"}
           >
             {options.labelConfirm || "Accept"}
-            <Check className="ml-1 h-4 w-4 inline-block" />
+            <Check className="ml-1 h-4 w-4 inline-block" aria-hidden="true" />
           </button>
         </div>
       </div>

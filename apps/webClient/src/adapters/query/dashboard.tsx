@@ -5,13 +5,24 @@ import { QueryParam } from "@domain/dashboard/budgets/budget.repository";
 import { TransactionTypeFilter } from "@domain/dashboard/transactions/transaction.entity";
 import { useQuery } from "@tanstack/react-query";
 
+// Wave 2 [T2.8]: budget-related queries now use `staleTime: 30 * 1000`
+// (30s) instead of the previous 60s. The tighter window ensures that
+// mobile users on flaky cellular networks don't see stale numbers after
+// focus/blur cycles, while still avoiding the default-`0` thrashing
+// (every focus = full refetch). `gcTime` is kept at 5 min so an
+// inactive cache stays warm enough to avoid a re-fetch storm after
+// short tab switches.
+
+const STALE_TIME_MS = 30 * 1000;
+const GC_TIME_MS = 1000 * 60 * 5;
+
 export const useFetchDashboard = () => {
   return useQuery({
     queryKey: ["dashboard"],
     queryFn: HttpDashboardRepository.getAll,
     retry: 3,
-    staleTime: 1000 * 60,
-    gcTime: 1000 * 60 * 5,
+    staleTime: STALE_TIME_MS,
+    gcTime: GC_TIME_MS,
   });
 };
 
@@ -20,8 +31,8 @@ export const useFetchExpenseCategories = () => {
     queryKey: ["expense-categories"],
     queryFn: HttpDashboardRepository.getExpenseCategorys,
     retry: 3,
-    staleTime: 1000 * 60,
-    gcTime: 1000 * 60 * 5,
+    staleTime: STALE_TIME_MS,
+    gcTime: GC_TIME_MS,
   });
 };
 
@@ -43,8 +54,8 @@ export const useFetchTransactions = (
       : ["transactions", offset, limit],
     queryFn: () => HttpTransactionRepository.getAll(offset, limit, type),
     retry: 3,
-    staleTime: 1000 * 60,
-    gcTime: 1000 * 60 * 5,
+    staleTime: STALE_TIME_MS,
+    gcTime: GC_TIME_MS,
   });
 };
 
@@ -53,8 +64,8 @@ export const useFetchBudgets = () => {
     queryKey: ["budgets"],
     queryFn: HttpBudgetRepository.getAll,
     retry: 3,
-    staleTime: 1000 * 60,
-    gcTime: 1000 * 60 * 5,
+    staleTime: STALE_TIME_MS,
+    gcTime: GC_TIME_MS,
   });
 };
 
@@ -65,8 +76,8 @@ export const useFetchBudgetCategories = ({ budgetId, name }: QueryParam) => {
     queryFn: () => HttpBudgetRepository.getAllCategoriesByQuery(query),
     retry: 3,
     enabled: !!budgetId,
-    staleTime: 1000 * 60,
-    gcTime: 1000 * 60 * 5,
+    staleTime: STALE_TIME_MS,
+    gcTime: GC_TIME_MS,
   });
 };
 
@@ -75,10 +86,11 @@ export const useFetchRecentSummary = (limit: number = 50) => {
     queryKey: ["recent-summary", limit],
     queryFn: () => HttpDashboardRepository.getRecentSummary(limit),
     retry: 3,
-    // 30s — the dashboard widget surfaces recently added transactions
-    // (mutation invalidates via ["transactions"]; this staleTime keeps the
-    // background refetch responsive under tab focus / page re-entry).
-    staleTime: 1000 * 30,
-    gcTime: 1000 * 60 * 5,
+    // 30s — kept conservative; matches the dashboard widget refresh
+    // cadence after a transaction mutation (mutation invalidates via
+    // ["transactions"]; this window keeps the background refetch
+    // responsive under tab focus / page re-entry on mobile).
+    staleTime: STALE_TIME_MS,
+    gcTime: GC_TIME_MS,
   });
 };

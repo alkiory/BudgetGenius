@@ -21,6 +21,8 @@ import {
 import { User } from '@domain/user/user.entity';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { QueryFailedError } from 'typeorm';
+import { UserSettingsService } from '@application/user/user-settings.service';
+import { SupportedCurrency } from '@domain/user/user-settings.entity';
 
 @Injectable()
 export class BudgetService {
@@ -29,6 +31,12 @@ export class BudgetService {
     private readonly categoryRepo: BudgetRepository,
     private readonly userRepo: UserRepositoryImpl,
     private readonly logger: LoggingService,
+    // Wave 3 [T3.5]: dependency for resolving per-user default
+    // currency. The `getSettings(userId)` call returns the user's
+    // `user_settings` row (or `null` for cold-start users). Service
+    // failures (network blip vs DB down) fall through to 'USD' so
+    // the create/update path is never blocked on settings lookup.
+    private readonly userSettingsService: UserSettingsService,
   ) {}
 
   async createBudget(userId: number, dto: CreateBudgetDto): Promise<Budget> {
@@ -126,8 +134,21 @@ export class BudgetService {
       );
     }
 
+    // Wave 3 [T3.5]: resolve the row's currency. If the caller
+    // provided one (e.g. a forward-looking client that already
+    // learned the new field), honour it. Otherwise default to the
+    // user's `user_settings.currency` (cold-start -> 'USD'). The
+    // DB-level NOT NULL constraint introduced by migration
+    // `1800000000004-AddCurrencyToBudgetCategory` is therefore
+    // guaranteed to be satisfied even by clients that pre-date
+    // Wave 3, so re-deploys don't get blocked behind a schema
+    // mismatch.
+    const resolvedCurrency: SupportedCurrency =
+      dto.currency ?? (await this.resolveCurrencyForUser(userId));
+
     const newCategory = {
       ...dto,
+      currency: resolvedCurrency,
       budget: { id: budgetId } as Budget,
     };
 
@@ -283,9 +304,20 @@ export class BudgetService {
       throw new NotFoundException(`Category ${dto.id} not found`);
     }
 
+    // Wave 3 [T3.5]: preserve the row's existing `currency` unless
+    // the patch explicitly provides one. Mirrors the create path's
+    // default-to-user-settings behavior as a final rescue (the row's
+    // own stored currency is preferred over a fresh settings lookup
+    // because it reflects the user's deliberate past choice).
+    const resolvedCurrency: SupportedCurrency =
+      dto.currency ??
+      (category.currency as SupportedCurrency | undefined) ??
+      (await this.resolveCurrencyForUser(userId));
+
     const updatedCategory = await this.repo.updateBudgetCategory(
       {
         ...dto,
+        currency: resolvedCurrency,
         updatedAt: new Date(),
       },
       userId,
@@ -295,6 +327,30 @@ export class BudgetService {
     await this.recalculateBudgetTotalSpent(category.budget.id, userId);
 
     return updatedCategory;
+  }
+
+  /**
+   * Wave 3 [T3.5]: resolve the per-user default currency for
+   * backwards-compatible budget-category inserts. The contract:
+   *   - User has `user_settings.currency` -> use it.
+   *   - Cold-start user (no settings row / null currency) -> 'USD'.
+   *   - Service failure -> 'USD' (we never block a write on settings
+   *     lookup; the alternative is a 500 leaking into the API surface
+   *     for what should be a benign default).
+   */
+  private async resolveCurrencyForUser(
+    userId: number,
+  ): Promise<SupportedCurrency> {
+    try {
+      const settings = await this.userSettingsService.getOrCreateSettings(userId);
+      return (settings?.currency as SupportedCurrency) ?? 'USD';
+    } catch (err) {
+      this.logger.warn(
+        `[resolveCurrencyForUser] settings lookup failed for user ${userId}; ` +
+          `defaulting to USD (${(err as Error)?.message ?? err})`,
+      );
+      return 'USD';
+    }
   }
 
   private async recalculateBudgetTotalSpent(

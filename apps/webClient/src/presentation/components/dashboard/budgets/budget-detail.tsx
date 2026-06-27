@@ -13,6 +13,7 @@ import {
   warningToast,
   infoToast,
 } from "@presentation/utils/toast";
+import { currencyService } from "@presentation/utils/currencyService";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useState, useMemo, useCallback } from "react";
@@ -45,13 +46,27 @@ export function BudgetDetail({
 
   const activeBudget = selectedBudget?.id;
 
-  // Bug fix (#NaN-total): initialize amounts to 0 (not `undefined`) so
-  // the totals reducer in BudgetForm / Display never produces NaN.
-  const [newCategory, setNewCategory] = useState<BudgetCategory>({
-    budgetId: 0,
+  // Wave 2 [T2.3]: the inline new-category form switches to **string
+  // buffers** for `allocatedText` and `spentText` so the user's literal
+  // keystrokes are preserved while typing. The previous shape mapped
+  // `Number(value) || 0` on every keystroke, which collapsed the
+  // intermediate `1.` or `1,` to `1` mid-edit (the input would visually
+  // "skip" the decimal separator). On submit we re-parse via
+  // `currencyService.parseAmountInput` and feed the numeric value to
+  // the parent mutation — the canonical pattern also used by the
+  // transaction forms' `useDecimalInput` hook.
+  //
+  // The numeric `allocated` / `spent` fields are kept for any consumer
+  // (display paths) that reads them, so this is an additive change; the
+  // raw string buffer is the source of truth for input + submit.
+  const [newCategory, setNewCategory] = useState<{
+    name: string;
+    allocatedText: string;
+    spentText: string;
+  }>({
     name: "",
-    allocated: 0,
-    spent: 0,
+    allocatedText: "0",
+    spentText: "0",
   });
   const [isAddingCategory, setIsAddingCategory] = useState(false);
 
@@ -59,7 +74,17 @@ export function BudgetDetail({
     data: categoryBudgets,
     isLoading,
     refetch: refetchCategories,
-  } = useFetchBudgetCategories({ budgetId: Number(activeBudget), name: "" });
+  } = useFetchBudgetCategories({
+    budgetId: Number(activeBudget),
+    // Wave 1 [T1.3]: forward `undefined` instead of `""` so the
+    // `name` key reads as "not provided" rather than "empty filter".
+    // Backend (`budget.service.ts:167`) already strips `""` via
+    // `if (filters.name)`, but the falsy-empty path also makes the
+    // URL param in the browser Network tab read as `?budgetId=N`
+    // rather than `?budgetId=N&name=` — easier to diff, easier to
+    // spot accidental name-based filtering regressions later.
+    name: undefined,
+  });
 
   // Mutations invalidate the above query so list auto‑refreshes
   const invalidate = useCallback(() => {
@@ -76,17 +101,16 @@ export function BudgetDetail({
       3000,
       "budget-category-add",
     );
-    // Bug fix (#NaN-total): reset amounts to 0 (not `undefined`).
+    // Reset to canonical empty defaults after a successful create.
     setNewCategory({
-      budgetId: activeBudget ?? 0,
       name: "",
-      allocated: 0,
-      spent: 0,
+      allocatedText: "0",
+      spentText: "0",
     });
     invalidate();
     refetchBudgets?.();
     refetchCategories();
-  }, [activeBudget, invalidate, refetchBudgets, refetchCategories]);
+  }, [invalidate, refetchBudgets, refetchCategories, activeBudget]);
 
   const handleMutationErrorDetailed = useCallback(
     (error: any, operation: string) => {
@@ -211,16 +235,12 @@ export function BudgetDetail({
   const handleNewCategoryChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const { name, value } = e.target;
-      // Bug fix (#NaN-total): empty input maps to 0 (not `undefined`) so
-      // the totals computation never goes to NaN. The number input still
-      // renders blank because of `value={allocated ?? ""}` in the JSX.
-      setNewCategory((prev) => ({
-        ...prev,
-        [name]:
-          name === "allocated" || name === "spent"
-            ? Number(value) || 0
-            : value,
-      }));
+      // Wave 2 [T2.3]: every keystroke lands in the string buffer
+      // verbatim, including partial decimals like `1.` or `1,42`.
+      // No numeric coercion at the input layer — that's what previously
+      // collapsed `1.` to `1` on every render. Parsing happens once at
+      // submit time via `parseAmountInput`.
+      setNewCategory((prev) => ({ ...prev, [name]: value }));
     },
     [],
   );
@@ -228,15 +248,31 @@ export function BudgetDetail({
   const handleAddCategorySubmit = useCallback(() => {
     if (!user || !activeBudget) return;
 
-    if (newCategory.name.trim() === "" || !newCategory.allocated) return;
+    const categoryName = newCategory.name.trim();
+    if (categoryName === "") return;
 
-    // Bug fix (#currency-edit-mangling): persist amount as-entered. See
-    // the matching comment in `BudgetForm.handleSubmit`.
+    // Parse text buffers once at submit time. `parseAmountInput` returns
+    // NaN for empty / invalid input; coerce to 0 to match historical
+    // behavior (`Number(value) || 0`).
+    const allocatedNum = currencyService.parseAmountInput(
+      newCategory.allocatedText,
+    );
+    const spentNum = currencyService.parseAmountInput(
+      newCategory.spentText,
+    );
+    const allocated = Number.isFinite(allocatedNum) ? Math.max(0, allocatedNum) : 0;
+    const spent = Number.isFinite(spentNum) ? Math.max(0, spentNum) : 0;
+
+    // Don't submit a fully-blank row (mirrors the legacy `!newCategory.allocated`
+    // exit — was checking falsiness which covered 0/empty/undefined; here we
+    // also catch the all-empty case explicitly).
+    if (allocated === 0 && spent === 0) return;
+
     addBudgetCategory({
-      ...newCategory,
+      name: categoryName,
       budgetId: activeBudget,
-      allocated: Number(newCategory.allocated) || 0,
-      spent: Number(newCategory.spent) || 0,
+      allocated,
+      spent,
     });
   }, [user, activeBudget, newCategory, addBudgetCategory, userSettings]);
 
@@ -310,8 +346,10 @@ export function BudgetDetail({
         {isAddingCategory && (
           <AddBudgetCategory
             name={newCategory.name}
-            allocated={newCategory.allocated?.toString() ?? ""}
-            spent={newCategory.spent?.toString() ?? ""}
+            // Wave 2 [T2.3]: pass raw string buffers straight through.
+            // All parsing happens at submit time in handleAddCategorySubmit.
+            allocated={newCategory.allocatedText}
+            spent={newCategory.spentText}
             handleNewCategoryChange={handleNewCategoryChange}
             handleAddCategorySubmit={handleAddCategorySubmit}
           />

@@ -1,4 +1,5 @@
 import { RootState } from "@adapters/store/rootStore";
+import { useDecimalInput } from "@adapters/hooks/useDecimalInput";
 import { BudgetCategory } from "@domain/dashboard/budgets/budget.entity";
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
@@ -19,33 +20,55 @@ export const EditableBudgetCategory: React.FC<Props> = ({
   onDeleteCategory,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [localSpent, setLocalSpent] = useState(category.spent);
 
   const userSetting = useSelector((state: RootState) => state.userSettings);
 
   const { settings } = userSetting;
 
+  const targetCurrency = (settings?.currency || "USD") as Currency;
+
+  // Wave 2 [T2.1]: locale-aware decimal input backed by the shared
+  // `useDecimalInput` hook. Replaces the legacy `<Input type="number"
+  // step="0.01">` which (a) ignored non-US decimal separators for COP
+  // users, (b) collapsed intermediate states like `"1."` to `1`,
+  // c) was hardcoded to 2-decimal precision even for COP (precision 0).
+  // The buffer is re-seeded from `category.spent` on every edit session
+  // start AND on cancel so the user sees the canonical parent value,
+  // not a stale buffer from a previous edit cycle. The numeric value
+  // round-trips to the parent via `parseNumber()` at save time.
+  const spentInput = useDecimalInput({
+    initial: category.spent,
+    currency: targetCurrency,
+  });
+
   const handleEditClick = () => {
     setIsEditing(true);
+    // Re-seed the buffer from the canonical category.spent so concurrent
+    // updates to the parent budget (e.g. another tab saving) are picked
+    // up when the local user clicks Edit.
+    spentInput.setText(
+      Number.isFinite(category.spent) ? String(category.spent) : "",
+    );
   };
 
   const handleCancelClick = () => {
     setIsEditing(false);
-    setLocalSpent(category.spent);
+    spentInput.setText(
+      Number.isFinite(category.spent) ? String(category.spent) : "",
+    );
   };
 
   const handleSaveClick = () => {
     if (!category) return;
-    onUpdateSpent(category.id as number, localSpent);
+    // Parse at submit time so intermediate keystroke states (`"1."`,
+    // `"10,42"`) resolve to the right number. `parseNumber` returns
+    // NaN for empty/invalid buffer and we coerce to 0 to match the
+    // pre-Wave-2 fallback (`Number(value) || 0`).
+    const parsed = spentInput.parseNumber();
+    const numeric = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+    onUpdateSpent(category.id as number, numeric);
     setIsEditing(false);
   };
-
-  const handleLocalSpentChange = (value: string) => {
-    const spent = Number(value) || 0;
-    setLocalSpent(spent);
-  };
-
-  const targetCurrency = (settings?.currency || "USD") as Currency;
 
   // Bug fix (#currency-edit-mangling): previously the source currency was
   // hardcoded to "USD" on the assumption that all amounts were normalized
@@ -73,11 +96,23 @@ export const EditableBudgetCategory: React.FC<Props> = ({
           {isEditing ? (
             <Input
               id={`category-spent-${category.id}`}
-              type="number"
-              min="0"
-              step="0.01"
-              value={localSpent}
-              onChange={(e) => handleLocalSpentChange(e.target.value)}
+              // Locale-aware: hardcoded dot step ignored COP-precision and
+              // Spanish-locale users. The precision parameter derives
+              // from `CURRENCY_PRECISION_MAP[currency]` (2 for USD/EUR,
+              // 1 for COP because 1/10^0 = 1 entire unit).
+              type="text"
+              inputMode="decimal"
+              step={
+                spentInput.precision === 0 ? 1 : 1 / 10 ** spentInput.precision
+              }
+              value={spentInput.text}
+              onChange={(e) => spentInput.setText(e.target.value)}
+              aria-label={`Spent amount for ${category.name}`}
+              aria-describedby={
+                Number.isFinite(spentInput.parseNumber())
+                  ? undefined
+                  : `category-spent-error-${category.id}`
+              }
               className="pl-7"
             />
           ) : (

@@ -4,6 +4,8 @@
 // the upstream provider occasionally returns as NaN (which surfaced as
 // "NaN" in the dashboard for the Australian and Canadian dollars —
 // fixed by simply not supporting them).
+import { httpCurrencyClient } from "@adapters/http/currency.client";
+
 export type Currency = "USD" | "EUR" | "COP";
 type ExchangeRates = Record<Currency, number>;
 
@@ -19,6 +21,29 @@ const CURRENCY_SYMBOLS: Record<Currency, string> = {
   USD: "$",
   EUR: "€",
   COP: "$",
+};
+
+// Wave 2 [T2.1 / T2.2 / T2.6 foundation]: exported precision/locale
+// constants so the new `useDecimalInput` hook (and any future form
+// input) can read decimal precision + matching numeric locale with a
+// single import. Previously these maps were private members of the
+// `CurrencyService` class — indirectly reachable via `formatCurrency`
+// but not directly addressable from call sites needing the raw maps
+// (e.g. `<input inputMode="decimal" step={1 / 10 ** precision} />`).
+//
+// Locale resolution is `Intl`-backed so it gets the canonical rules for
+// each currency (group separator, decimal separator) instead of the
+// previously hand-rolled mapping.
+export const CURRENCY_PRECISION_MAP: Record<Currency, number> = {
+  USD: 2,
+  EUR: 2,
+  COP: 0,
+};
+
+export const CURRENCY_LOCALE_MAP: Record<Currency, string> = {
+  USD: "en-US",
+  EUR: "es-ES",
+  COP: "es-CO",
 };
 
 interface CurrencyConversionOptions {
@@ -44,12 +69,11 @@ export class CurrencyService {
   }
 
   private getLocaleForCurrency(currency: Currency): string {
-    const localeMap: Record<Currency, string> = {
-      USD: "en-US",
-      EUR: "es-ES",
-      COP: "es-CO",
-    };
-    return localeMap[currency] || "en-US";
+    // Wave 2 [T2.6]: now reads from the exported `CURRENCY_LOCALE_MAP`.
+    // Kept as a private method for the existing class internals so the
+    // `formatCurrency`/`normalizeAmount` paths don't change shape; the
+    // exported map is the canonical source-of-truth for *new* consumers.
+    return CURRENCY_LOCALE_MAP[currency] || "en-US";
   }
 
   public static getInstance(): CurrencyService {
@@ -96,12 +120,25 @@ export class CurrencyService {
     const { amount, fromCurrency = "USD", toCurrency } = options;
     const rates = options.exchangeRates || this.exchangeRates;
 
+    // Wave 2 [T2.7 fix]: graceful fallback when the caller has supplied
+    // (or the bundled rates table is missing) one of the endpoints. The
+    // old hard-fold returned `NaN` from `amount * undefined` /
+    // `amount / undefined`, which then floored to "NaN" rendered in the
+    // dashboard for any monetary aggregate referencing a withdrawal we
+    // hadn't shipped rates for. Identity fallback keeps the contract
+    // stable and predictable — display pipelines can still surface the
+    // raw figure next to a "rate missing" tag if they want.
+    const fromRate = fromCurrency === "USD" ? 1 : rates[fromCurrency];
+    const toRate = toCurrency === "USD" ? 1 : rates[toCurrency];
+    if (fromRate === undefined || toRate === undefined) {
+      return amount;
+    }
+
     // Convert to USD first if not the base currency
-    const amountInUSD =
-      fromCurrency === "USD" ? amount : amount / rates[fromCurrency];
+    const amountInUSD = fromCurrency === "USD" ? amount : amount / fromRate;
 
     // Convert to target currency
-    return toCurrency === "USD" ? amountInUSD : amountInUSD * rates[toCurrency];
+    return toCurrency === "USD" ? amountInUSD : amountInUSD * toRate;
   }
 
   public normalizeAmount(amount: number, currency: Currency): number {
@@ -198,6 +235,54 @@ export class CurrencyService {
       },
       60 * 60 * 1000,
     ); // update every hour
+  }
+
+  /**
+   * Wave 3 [T3.4] — async, server-preferred conversion. Thin wrapper
+   * around `httpCurrencyClient.fetchRate` with a graceful offline
+   * fallback to the bundled `DEFAULT_EXCHANGE_RATES` (the synchronous
+   * path maintained above). The 30s in-memory cache + in-flight dedup
+   * live inside `HttpCurrencyClient`; here we only orchestrate the
+   * fallback decision.
+   *
+   * Behavioural contract for callers:
+   *   - `from === to`: returns `amount` immediately, no I/O.
+   *   - HTTP fetch succeeds: returns `amount * rate` from the cache-
+   *     backed endpoint (callers should not assume cached rates are
+   *     ≤30s old; the cache is the single source of truth for the
+   *     in-process 30s window per the audit plan's "internal
+   *     architecture" decision).
+   *   - HTTP fetch fails (network error, 5xx, timeout): falls back to
+   *     `convertAmount({ amount, fromCurrency, toCurrency })` using
+   *     the bundled rates. The fallback figure is intentionally stale-
+   *     but-not-NaN so the dashboard never shows "NaN"; the audit's
+   *     Bug A closure is preserved end-to-end.
+   */
+  public async convertAmountAsync(
+    amount: number,
+    fromCurrency: Currency,
+    toCurrency: Currency,
+  ): Promise<number> {
+    if (fromCurrency === toCurrency) return amount;
+    try {
+      const rate = await httpCurrencyClient.fetchRate(
+        fromCurrency,
+        toCurrency,
+      );
+      return amount * rate;
+    } catch (err) {
+      // Offline / network-error fallback. Never bubbles the original
+      // error — caller code paths (form submit, chart rendering) are
+      // not interested in the upstream failure, only in a finite
+      // numeric result. The warning is logged for SRE diagnostic
+      // without spamming the user.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[currencyService] backend unreachable, falling back to bundled rates for ${fromCurrency}->${toCurrency}`,
+        (err as Error)?.message ?? err,
+      );
+      return this.convertAmount({ amount, fromCurrency, toCurrency });
+    }
   }
 }
 

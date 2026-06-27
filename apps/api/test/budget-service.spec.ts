@@ -4,6 +4,7 @@ import { BudgetRepository } from '@adapters/dashboard/persistence/budget.reposit
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggingService } from '@infrastructure/log/logger.service';
+import { UserSettingsService } from '@application/user/user-settings.service';
 import { QueryFailedError } from 'typeorm';
 import { BUDGET_CATEGORY_UNIQUE_CONSTRAINT_NAME } from '@domain/dashboard/budget-category.entity';
 
@@ -84,6 +85,12 @@ const mockCategoryShape = {
   name: 'Medical',
   allocated: 550,
   spent: 250,
+  // Wave 3 [T3.5]: `currency` is NOT NULL after the
+  // `1800000000004-AddCurrencyToBudgetCategory` migration. Mock
+  // fixtures include it so `repo.createBudgetCategory(...)
+  // .mockResolvedValue(buildCategory())` satisfies the entity
+  // type signature without `as any` casting on every assertion.
+  currency: 'USD' as const,
   createdAt: new Date(),
   updatedAt: new Date(),
   budget: { ...categoryBudget },
@@ -147,6 +154,22 @@ describe('BudgetService', () => {
             log: jest.fn(),
             warn: jest.fn(),
             error: jest.fn(),
+          },
+        },
+        // Wave 3 [T3.5]: `BudgetService` now injects
+        // `UserSettingsService.getOrCreateSettings(userId)` to
+        // resolve the row's currency. The stub returns a settings
+        // bundle with `currency: 'USD'` so the resolver surfaces
+        // the canonical MVP default.
+        {
+          provide: UserSettingsService,
+          useValue: {
+            getOrCreateSettings: jest.fn().mockResolvedValue({
+              id: 1,
+              timezone: 'UTC',
+              currency: 'USD',
+              locale: 'en-US',
+            }),
           },
         },
       ],

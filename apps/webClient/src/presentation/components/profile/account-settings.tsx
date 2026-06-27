@@ -72,17 +72,16 @@ export function AccountSettings() {
       return;
     }
 
-    // if only change one field, update only that field
-    if (settingsToUpdate.timezone !== settings?.timezone) {
-      settingsToUpdate.timezone = settingsToUpdate.timezone;
-    }
-    if (settingsToUpdate.currency !== settings?.currency) {
-      settingsToUpdate.currency = settingsToUpdate.currency as Currency;
-    }
-    if (settingsToUpdate.locale !== settings?.locale) {
-      settingsToUpdate.locale = settingsToUpdate.locale;
-    }
-
+    // Wave 1 [T1.2]: the three `x !== y → x = x as T` blocks used
+    // to sit above this line as no-op self-assignments (no actual
+    // narrowing or coupling to the payload). The mutation hook
+    // `updateUserSettings` already accepts `Partial<UserSettings>`,
+    // so we forward the form's already-typed `settingsToUpdate`
+    // directly. The leading `settingsToUpdate` `useState` widens
+    // `currency` to `string` (via the `<Select value→string>` callback),
+    // so no per-call cast is required — the type narrows at the
+    // precise boundary (the Select handler) and stays narrow in
+    // the React Query payload.
     updateSettings(settingsToUpdate);
   };
 

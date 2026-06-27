@@ -3,7 +3,11 @@ import { TRANSACTION_CATEGORIES } from "@domain/dashboard/transactions/transacti
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
-import { Currency, currencyService } from "@presentation/utils/currencyService";
+import {
+  CURRENCY_PRECISION_MAP,
+  Currency,
+  currencyService,
+} from "@presentation/utils/currencyService";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 
@@ -26,6 +30,13 @@ export default function AddBudgetCategory({
   const userSetting = useSelector((state: RootState) => state.userSettings);
   const targetCurrency = (userSetting?.settings?.currency || "USD") as Currency;
   const currencySymbol = currencyService.getSymbol(targetCurrency);
+
+  // Wave 2 [T2.3]: step is derived from the user's currency precision
+  // (1 for COP because 1/10^0 = 1 whole unit; 0.01 for USD/EUR). Was
+  // previously hardcoded `step="0.01"` which blocked decimal entry for
+  // COP users.
+  const precision = CURRENCY_PRECISION_MAP[targetCurrency] ?? 2;
+  const stepAttr = precision === 0 ? 1 : 1 / 10 ** precision;
 
   return (
     <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
@@ -58,10 +69,16 @@ export default function AddBudgetCategory({
             </span>
             <Input
               id="new-category-allocated"
-              type="number"
+              // Wave 2 [T2.3]: type="text" + inputMode="decimal" so the
+              // raw string buffer (parent state) survives intermediate
+              // states like `1.` and locale-specific separators. Was
+              // previously `type="number" step="0.01"` which had the
+              // integer-collapse bug class.
+              type="text"
+              inputMode="decimal"
               name="allocated"
-              min="0"
-              step="0.01"
+              step={stepAttr}
+              aria-label={t("budgets.allocatedAmount")}
               value={allocated}
               onChange={handleNewCategoryChange}
               className="pl-7"
@@ -77,10 +94,11 @@ export default function AddBudgetCategory({
             </span>
             <Input
               id="new-category-spent"
-              type="number"
+              type="text"
+              inputMode="decimal"
               name="spent"
-              min="0"
-              step="0.01"
+              step={stepAttr}
+              aria-label={t("budgets.spentAmount")}
               value={spent}
               onChange={handleNewCategoryChange}
               className="pl-7"

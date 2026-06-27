@@ -8,6 +8,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Budget } from './budget.entity';
+import { SupportedCurrency } from '@domain/user/user-settings.entity';
 
 @Entity('budget_categories')
 export class BudgetCategory {
@@ -16,6 +17,25 @@ export class BudgetCategory {
 
   @Column()
   name: string;
+
+  // Wave 3 [T3.1 + T3.7]: per-row currency tag. The migration
+  // `1800000000004-AddCurrencyToBudgetCategory` ADDed this column,
+  // backfilled it from `user_settings.currency` (COALESCE USD for
+  // orphans), then SET NOT NULL. The entity mirrors that final
+  // state so TypeORM INSERTs without an explicit `currency` field
+  // get the DB-level DEFAULT 'USD' (see the matching `ALTER ...
+  // DEFAULT 'USD'` in the migration's `up()`). The enum reuses the
+  // existing `bg_public.currency_enum` so adding a 4th currency
+  // (out of MVP scope) requires both a migration AND the
+  // `SupportedCurrency` union update.
+  @Column({
+    type: 'enum',
+    enum: ['USD', 'EUR', 'COP'],
+    enumName: 'currency_enum',
+    nullable: false,
+    default: 'USD',
+  })
+  currency: SupportedCurrency;
 
   @Column('numeric', {
     transformer: {
