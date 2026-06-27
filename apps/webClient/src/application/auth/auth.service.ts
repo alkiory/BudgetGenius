@@ -9,9 +9,7 @@ import {
 } from "@domain/user/UserPassword";
 import { ensureUserIsValid } from "@domain/user/user.entity";
 
-export const signup = async (
-  user: Omit<User, "id">,
-): Promise<Auth> => {
+export const signup = async (user: Omit<User, "id">): Promise<Auth> => {
   ensureUserIsValid(user);
   return authRepository.signup(user) as unknown as Promise<Auth>;
 };

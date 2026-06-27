@@ -1,5 +1,8 @@
 import { HttpTransactionRepository } from "@adapters/http/transaction.repository";
-import { Transaction } from "@domain/dashboard/transactions/transaction.entity";
+import {
+  NewTransactionInput,
+  TransactionPatch,
+} from "@domain/dashboard/transactions/transaction.entity";
 
 export const getAllTransactions = async () => {
   return await HttpTransactionRepository.getAll(0, 50);
@@ -8,7 +11,7 @@ export const getAllTransactions = async () => {
 export const createTransaction = async ({
   dto,
 }: {
-  dto: Omit<Transaction, "id">;
+  dto: NewTransactionInput;
 }) => {
   return await HttpTransactionRepository.createTransaction({ dto });
 };
@@ -16,7 +19,7 @@ export const createTransaction = async ({
 export const updateTransaction = async ({
   dto,
 }: {
-  dto: Partial<Transaction>;
+  dto: TransactionPatch;
 }) => {
   return await HttpTransactionRepository.updateTransaction({ dto });
 };

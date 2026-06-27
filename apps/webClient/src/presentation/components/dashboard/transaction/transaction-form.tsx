@@ -4,6 +4,7 @@ import {
   IncomeRecurrence,
   TRANSACTION_CATEGORIES,
   Transaction,
+  TransactionPatch,
 } from "@domain/dashboard/transactions/transaction.entity";
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
@@ -17,7 +18,7 @@ import { useSelector } from "react-redux";
 
 interface TransactionFormProps {
   transaction?: Transaction;
-  onSubmit: (transaction: Partial<Transaction>) => void;
+  onSubmit: (transaction: TransactionPatch) => void;
   onCancel: () => void;
 }
 

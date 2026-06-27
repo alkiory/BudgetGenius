@@ -1,7 +1,6 @@
 import {
   OverBudgetContainer,
   OverBudgetHeader,
-  OverBudgetBadge,
 } from "@presentation/components/ui/budget-status";
 import {
   ResponsiveContainer,

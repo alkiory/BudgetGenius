@@ -21,7 +21,7 @@ export function SessionExpiredModal({
 
   const handleLoginAgain = () => {
     dispatch(logoutAction());
-    navigate(`${RoutePaths.Auth}/${RoutePaths.Login}`);
+    navigate(`${RoutePaths.Auth}/${RoutePaths.Login}`, { replace: true });
     onClose();
   };
 

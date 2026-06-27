@@ -1,5 +1,8 @@
 import { HttpTransactionRepository } from "@adapters/http/transaction.repository";
-import { Transaction } from "@domain/dashboard/transactions/transaction.entity";
+import {
+  NewTransactionInput,
+  TransactionPatch,
+} from "@domain/dashboard/transactions/transaction.entity";
 
 export const getIncomes = async (offset?: number, limit?: number) => {
   if (!offset) offset = 0;
@@ -10,12 +13,12 @@ export const getIncomes = async (offset?: number, limit?: number) => {
 export const createIncome = async ({
   dto,
 }: {
-  dto: Omit<Transaction, "id">;
+  dto: NewTransactionInput;
 }) => {
   return await HttpTransactionRepository.createTransaction({ dto });
 };
 
-export const updateIncome = async ({ dto }: { dto: Partial<Transaction> }) => {
+export const updateIncome = async ({ dto }: { dto: TransactionPatch }) => {
   return await HttpTransactionRepository.updateTransaction({ dto });
 };
 

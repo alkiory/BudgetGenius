@@ -75,7 +75,6 @@ export default function CategoryTab({
                       cx,
                       cy,
                       midAngle,
-                      innerRadius,
                       outerRadius,
                     }: any) => {
                       const RADIAN = Math.PI / 180;

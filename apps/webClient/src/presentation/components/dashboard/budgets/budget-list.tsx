@@ -45,7 +45,6 @@ export function BudgetList({
       {budgets && budgets.length > 0 ? (
         <div className="space-y-2">
           {budgets.map((budget) => {
-            const isActive = activeBudget?.id === budget.id;
             const percentSpent =
               budget.totalAllocated > 0
                 ? (budget.totalSpent / budget.totalAllocated) * 100

@@ -1,5 +1,6 @@
 import {
-  Transaction,
+  NewTransactionInput,
+  TransactionPatch,
   TransactionTypeFilter,
 } from "@domain/dashboard/transactions/transaction.entity";
 import { TransactionRepository } from "@domain/dashboard/transactions/transactionRepository";
@@ -18,12 +19,12 @@ export const HttpTransactionRepository: TransactionRepository = {
     return response.data;
   },
 
-  async createTransaction({ dto }: { dto: Omit<Transaction, "id"> }) {
+  async createTransaction({ dto }: { dto: NewTransactionInput }) {
     const response = await api.post("/transactions", dto);
     return response.data;
   },
 
-  async updateTransaction({ dto }: { dto: Partial<Transaction> }) {
+  async updateTransaction({ dto }: { dto: TransactionPatch }) {
     const response = await api.put("/transactions", dto);
     return response.data;
   },

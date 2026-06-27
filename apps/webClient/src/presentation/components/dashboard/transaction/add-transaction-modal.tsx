@@ -1,5 +1,7 @@
 import { HttpTransactionRepository } from "@adapters/http/transaction.repository";
-import { Transaction } from "@domain/dashboard/transactions/transaction.entity";
+import {
+  NewTransactionInput,
+} from "@domain/dashboard/transactions/transaction.entity";
 import { Modal } from "@presentation/components/modal/modal";
 import { Button } from "@presentation/components/ui/button";
 import { successToast, errorToast } from "@presentation/utils/toast";
@@ -47,7 +49,7 @@ export function AddTransactionModal({
     },
   });
 
-  const handleAddTransaction = (transaction: Omit<Transaction, "id">) => {
+  const handleAddTransaction = (transaction: NewTransactionInput) => {
     if (transaction.amount === 0) {
       errorToast("Amount cannot be 0", 3000, "invalid-amount");
       return;

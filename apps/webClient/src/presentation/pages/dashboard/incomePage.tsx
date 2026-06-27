@@ -15,11 +15,6 @@ import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 
-// Phase 5 (T5.1 + T5.2): the legacy `income.*` i18n namespace has been
-// dropped from both en.json + es.json. Metric-card labels and PageHeader
-// copy now live under `transactions.heading.*` (income-page-local
-// variants). The shared `<Table>` + `<AddTransactionModal>` + `<FilterModal>`
-// continue to read from `transactions.*` + `common.*` namespaces.
 export default function IncomePage() {
   const { t } = useTranslation();
   const [offset] = useState(0);
@@ -72,7 +67,7 @@ export default function IncomePage() {
         !filters.recurrences ||
         filters.recurrences.length === 0 ||
         filters.recurrences.includes("All") ||
-        filters.recurrences.includes(income.recurrence ?? "");
+        (filters.recurrences as readonly string[]).includes(income.recurrence ?? "");
 
       return dateMatch && categoryMatch && amountMatch && recurrenceMatch;
     });
@@ -135,11 +130,11 @@ export default function IncomePage() {
     averageIncome !== null && Number.isFinite(averageIncome);
   const totalIncomeToDisplay = averageIncomeIsFinite
     ? currencyService.formatCurrency(
-        averageIncome,
-        "USD" as Currency,
-        targetCurrency,
-        false,
-      ).formatted
+      averageIncome,
+      "USD" as Currency,
+      targetCurrency,
+      false,
+    ).formatted
     : t("common.noData");
 
   if (isLoading) {
@@ -191,24 +186,23 @@ export default function IncomePage() {
           </div>
           <p className="mt-2 text-xl font-bold sm:text-2xl">
             {incomeByCategory.length > 0
-              ? `${
-                  currencyService.formatCurrency(
-                    incomeByCategory[0].amount,
-                    "USD" as Currency,
-                    targetCurrency,
-                    false,
-                  ).formatted
-                }
+              ? `${currencyService.formatCurrency(
+                incomeByCategory[0].amount,
+                "USD" as Currency,
+                targetCurrency,
+                false,
+              ).formatted
+              }
               `
               : t("common.noData")}
           </p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {incomeByCategory.length > 0
               ? translateCategory(
-                  incomeByCategory.sort((a, b) => b.amount - a.amount)[0]
-                    ?.category || "",
-                  t,
-                )
+                incomeByCategory.sort((a, b) => b.amount - a.amount)[0]
+                  ?.category || "",
+                t,
+              )
               : t("transactions.heading.noIncomeSources")}
           </p>
         </div>

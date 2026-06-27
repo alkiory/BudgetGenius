@@ -1,6 +1,6 @@
 import {
   INCOME_RECURRENCES,
-  IncomeRecurrence,
+  RecurrenceFilter,
   TRANSACTION_CATEGORIES,
 } from "@domain/dashboard/transactions/transaction.entity";
 import { Modal } from "@presentation/components/modal/modal";
@@ -15,11 +15,12 @@ import { useTranslation } from "react-i18next";
 // Tipos más estrictos
 type Category = (typeof TRANSACTION_CATEGORIES)[number];
 
-// Phase 3 (T3.6): "All" + the IncomeRecurrence union. `RecurrenceFilter`
-// is optional on FilterCriteria so existing transaction-page callers
-// (which never set recurrences) continue to work — the chip row is
-// rendered only when the parent provides a non-empty recurrence list.
-export type RecurrenceFilter = "All" | IncomeRecurrence;
+// `RecurrenceFilter` is imported from the entity file (Phase 3 T3.6
+// — moved there so presentation components share one source of truth).
+// The element type of `recurrences?` below is intentionally optional
+// so existing transaction-page callers (which never set recurrences)
+// continue to work without changes — the chip row is rendered only
+// when the parent supplies a non-empty recurrences array.
 
 export interface FilterCriteria {
   dateFrom: string;

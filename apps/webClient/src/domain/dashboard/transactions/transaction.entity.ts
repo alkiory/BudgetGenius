@@ -14,6 +14,20 @@ export type Transaction = {
   recurrence: string | null;
 };
 
+// Phase 3 (T3.7 — type centralization): shape of a brand-new transaction
+// payload that hasn't been persisted yet (no `id` assigned). Used by
+// `createTransaction` / `createIncome` ports + services + presentation
+// `AddTransactionForm` / `AddTransactionModal` so a future reshape of
+// `Transaction` (adding a column, renaming a field) doesn't require
+// touching 6+ call-sites that all inline-redefined the Omit.
+export type NewTransactionInput = Omit<Transaction, "id">;
+
+// Same rationale as `NewTransactionInput` but for update flows where any
+// subset of fields can be PATCHed. Used by `updateTransaction` /
+// `updateIncome` ports + services + `EditTransaction` / `TransactionForm`
+// presentation components.
+export type TransactionPatch = Partial<Transaction>;
+
 // Phase 3 (Income → Transaction strangler facade):
 // Backend `transactions.recurrence` accepts arbitrary strings for legacy
 // compatibility, but the FRONTEND form surface a fixed enum so the filter
@@ -30,6 +44,13 @@ export const INCOME_RECURRENCES = [
 ] as const;
 
 export type IncomeRecurrence = (typeof INCOME_RECURRENCES)[number];
+
+// Phase 3 (T3.6): UI union for recurrence filtering ("All" + the
+// IncomeRecurrence subset). Lives in the entity file alongside
+// IncomeRecurrence / TransactionTypeFilter so presentation
+// components (filter-transaction-modal, incomePage) consume the
+// alias instead of redefining the union locally.
+export type RecurrenceFilter = "All" | IncomeRecurrence;
 
 export interface RootPromise {
   transactions: Transaction[];
@@ -73,3 +94,10 @@ export const TRANSACTION_CATEGORIES = [
 ];
 
 export type Category = (typeof TRANSACTION_CATEGORIES)[number];
+
+// Phase 3 (T3.2): "income" | "expense" filter for transactions, used
+// by `useFetchTransactions`'s incomePage strangler-facade to request
+// only positive-amount rows from the backend via `?type=income`. Lives
+// in the entity file alongside `Category` / `IncomeRecurrence` — it is
+// a domain-level categorization, not a repository behavior.
+export type TransactionTypeFilter = "income" | "expense";

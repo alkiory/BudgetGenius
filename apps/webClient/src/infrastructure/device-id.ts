@@ -1,46 +1,7 @@
-/**
- * Per-install device identity, persisted in `localStorage`.
- *
- * Generated once on first read of the module, then cached at module
- * scope so subsequent reads are free (a no-op `if (cached) return cached`).
- * Survives page reloads because the value is also stored in
- * `localStorage.bgDeviceId`. Survives browser restarts on the same
- * machine too because localStorage is what the user-login session
- * itself uses — so an installed PWA / Capacitor APK and a return visit
- * in the same browser share an id by construction.
- *
- * Used by `apps/webClient/src/infrastructure/api.config.ts` to emit
- * the `X-Device-Id` request header. Backend `apps/api/src/app.module.ts`
- * reads that header in `ThrottlerModule.getTracker()`, so the value
- * must be:
- *   - **stable across reloads** (so the throttle bucket the user
- *     gets is consistent with where their previous requests landed),
- *   - **distinct per install** (so two phones sharing a public IP
- *     don't fold into one throttle bucket — that's the
- *     "v1.3.0 mobile-cookies-persistence" fix's underlying threat
- *     model).
- *
- * Generating strategy:
- *   1. Prefer `crypto.randomUUID()` if available. That ships with
- *      Chrome 92+ (October 2021), so every Android WebView from
- *      2026-era Android 12+ (Chrome ≥ 119) has it.
- *   2. Fallback to a 16-byte hex v4 manual generator from
- *      `crypto.getRandomValues` for older WebViews.
- *   3. If `crypto` itself is undefined (very old browser), fall back
- *      to a time-based + Math.random() pseudo-id. Not cryptographically
- *      strong, but stable enough for per-install throttle-bucket
- *      discrimination.
- */
-
 const STORAGE_KEY = "bgDeviceId";
 
 let cached: string | null = null;
 
-/**
- * Returns a stable per-install device id. The first call performs the
- * crypto-generate + localStorage-write step; subsequent calls are a
- * module-cache lookup.
- */
 export function getDeviceId(): string {
   if (cached) return cached;
 

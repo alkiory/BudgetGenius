@@ -1,5 +1,8 @@
 import { HttpTransactionRepository } from "@adapters/http/transaction.repository";
-import { Transaction } from "@domain/dashboard/transactions/transaction.entity";
+import {
+  Transaction,
+  TransactionPatch,
+} from "@domain/dashboard/transactions/transaction.entity";
 import { Modal } from "@presentation/components/modal/modal";
 import { Button } from "@presentation/components/ui/button";
 import { successToast, errorToast } from "@presentation/utils/toast";
@@ -47,9 +50,7 @@ export function EditTransaction({
     },
   });
 
-  const handleUpdateTransaction = (
-    updatedTransaction: Partial<Transaction>,
-  ) => {
+  const handleUpdateTransaction = (updatedTransaction: TransactionPatch) => {
     if (updatedTransaction.id === undefined) {
       errorToast(t("transactions.idRequired"), 3000, "transaction-update");
       return;

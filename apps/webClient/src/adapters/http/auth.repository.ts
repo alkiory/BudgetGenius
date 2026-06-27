@@ -1,6 +1,4 @@
 import { createGoogleLoginStrategy } from "@adapters/auth";
-import { logoutAction } from "@adapters/slices/auth/authSlice";
-import { store } from "@adapters/store/rootStore";
 import { AuthRepository } from "@domain/auth/AuthRepository";
 import { User } from "@domain/index";
 import api from "@infrastructure/api.config";
@@ -19,7 +17,6 @@ export const authRepository: AuthRepository = {
 
   async logout() {
     await api.post("/auth/logout");
-    store.dispatch(logoutAction());
   },
 
   async signup(user: Omit<User, "id">) {

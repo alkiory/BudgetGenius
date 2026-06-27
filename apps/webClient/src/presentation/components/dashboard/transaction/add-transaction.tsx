@@ -1,7 +1,7 @@
 import { RootState } from "@adapters/store/rootStore";
 import {
+  NewTransactionInput,
   TRANSACTION_CATEGORIES,
-  Transaction,
 } from "@domain/dashboard/transactions/transaction.entity";
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 
 interface AddTransactionFormProps {
-  onSubmit: (transaction: Omit<Transaction, "id">) => void;
+  onSubmit: (transaction: NewTransactionInput) => void;
   onCancel: () => void;
 }
 
@@ -29,12 +29,15 @@ export default function AddTransactionForm({
   const [transactionType, setTransactionType] = useState<"income" | "expense">(
     "expense",
   );
-  const [formData, setFormData] = useState<Omit<Transaction, "id">>({
+  const [formData, setFormData] = useState<NewTransactionInput>({
     date: new Date(),
     category: "Other",
     description: "",
     amount: undefined as unknown as number,
     currency: userCurrency,
+    // Required by `Transaction` even though the form has no recurrence
+    // UI; `null` per the entity docstring (legacy non-recurring = nullable).
+    recurrence: null,
   });
 
   // Bug fix (separate amountInput string): mirrors the same fix as in
