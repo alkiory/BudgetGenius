@@ -2,6 +2,43 @@
 
 ---
 
+## [v1.3.1] — 2026-06-27
+
+### Changed
+- **Centralized `Omit<Transaction, "id">` and `Partial<Transaction>` as domain-level aliases** — added `export type NewTransactionInput = Omit<Transaction, "id">` and `export type TransactionPatch = Partial<Transaction>` to `apps/webClient/src/domain/dashboard/transactions/transaction.entity.ts`. Replaced twelve inline `Omit<Transaction, "id">` / `Partial<Transaction>` occurrences across nine files (`domain/dashboard/transactions/transactionRepository.ts`, `adapters/http/transaction.repository.ts`, `application/dashboard/transactions/transactions.service.ts`, `application/dashboard/income/income.service.ts`, `presentation/components/dashboard/transaction/{add-transaction,add-transaction-modal,edit-transaction,transaction-form}.tsx`) with the new alias names. Centralizing the shape moves the locus of any future `Transaction` reshape (added field, renamed field, nullability change) to a single source of truth instead of nine call-sites, and documents intent at the type level (`NewTransactionInput` reads as the input shape for a creation flow; `TransactionPatch` reads as the body of a PATCH-style update).
+- **`RecurrenceFilter` moved from presentation into the domain entity** — the prior definition `export type RecurrenceFilter = "All" | IncomeRecurrence` lived in `apps/webClient/src/presentation/components/dashboard/transaction/filter-transaction-modal.tsx` (a presentation component redefining a Domain sibling type locally). Moved the alias to `apps/webClient/src/domain/dashboard/transactions/transaction.entity.ts` immediately below `IncomeRecurrence`, alongside the existing `TransactionTypeFilter` family. The modal now re-imports the type instead of re-declaring it; the cross-reference note that was left in the modal still documents the relationship for future readers.
+- **Widened `incomePage.tsx:75` `.includes(…)` receiver to `readonly string[]`** — the strict union `RecurrenceFilter[]` rejected the wider `string` argument `income.recurrence ?? ""` (backend's `Transaction.recurrence: string | null` per `transaction.entity.ts` allows legacy arbitrary strings). Cast the receiver to `readonly string[]` so `.includes(…)` accepts the wider string — `RecurrenceFilter ⊆ string` is true so the subset check is type-safe, AND the cast does not lie about `income.recurrence`'s runtime type. The canonical idiomatic TS strict-includes widening pattern.
+- **`apps/webClient/src/infrastructure/device-id.ts` — header comment block trimmed** — collapsed the explanatory block to a single-line `const STORAGE_KEY = "bgDeviceId";` import. The reader-pointing explanation (about `crypto.randomUUID` ladder, throttle bucket semantics, the v1.3.0 mobile-cookies-persistence defence-in-depth) remains fully accurate but is now documented at the call-site (`apps/webClient/src/infrastructure/api.config.ts` and the backend `ThrottlerModule.getTracker()`) so the helper stays self-contained — no separate docstring needed.
+
+### Fixed
+- **`TS2345` at `apps/webClient/src/presentation/components/dashboard/transaction/add-transaction.tsx(32,69)`** — the `useState<NewTransactionInput>({…})` initial literal listed five of the six required fields and was missing `recurrence: string | null`. Added `recurrence: null` to the literal (the documented semantic default per the entity docstring "legacy non-recurring = nullable") with a two-line comment explaining why `null` is the right default for a form that does not expose a recurrence picker. The `handleSubmit` spread `{ ...formData, … }` propagates the new field through to the parent unchanged.
+- **`TS6133` "Transaction declared but its value is never read"** in five files after the alias centralization — removed the now-redundant bare `Transaction` import from `application/dashboard/transactions/transactions.service.ts`, `application/dashboard/income/income.service.ts`, `presentation/components/dashboard/transaction/add-transaction.tsx`, `presentation/components/dashboard/transaction/add-transaction-modal.tsx`, and `adapters/http/transaction.repository.ts`. Kept the bare import in `domain/dashboard/transactions/transactionRepository.ts` (uses `Promise<Transaction>` return type), `presentation/components/dashboard/transaction/edit-transaction.tsx` (uses `Transaction` in prop type), and `presentation/components/dashboard/transaction/transaction-form.tsx` (uses `Transaction` in prop type and in `useState<Transaction>`) — those files still reference the entity by name as the full type, not as an `Omit`/`Partial` derivation.
+
+### Files modified (this entry)
+
+| Front | Files |
+|-------|-------|
+| Domain | `apps/webClient/src/domain/dashboard/transactions/transaction.entity.ts` (`NewTransactionInput` + `TransactionPatch` aliases added); `apps/webClient/src/domain/dashboard/transactions/transactionRepository.ts` (port inline `Omit`/`Partial` replaced) |
+| HTTP adapter | `apps/webClient/src/adapters/http/transaction.repository.ts` (inline replaced + orphan `Transaction` import dropped) |
+| Application services | `apps/webClient/src/application/dashboard/transactions/transactions.service.ts` (inline replaced + orphan `Transaction` import dropped); `apps/webClient/src/application/dashboard/income/income.service.ts` (same) |
+| Presentation | `apps/webClient/src/presentation/components/dashboard/transaction/{add-transaction,add-transaction-modal,edit-transaction,transaction-form}.tsx` (inline replaced; orphan `Transaction` imports dropped where applicable) |
+| Caller fix | `apps/webClient/src/presentation/pages/dashboard/incomePage.tsx` (`RecurrenceFilter` array cast to `readonly string[]`); `apps/webClient/src/presentation/components/dashboard/transaction/add-transaction.tsx` (`recurrence: null` added to `useState` literal) |
+| Modal / Entity consolidation | `apps/webClient/src/presentation/components/dashboard/transaction/filter-transaction-modal.tsx` (cross-ref note left in-place after `RecurrenceFilter` was moved to entity) |
+| Helpers | `apps/webClient/src/infrastructure/device-id.ts` (header comment trim — no functional change) |
+| Release | `package.json` (root, version `1.3.0` → `1.3.1`) · `docs/changelog.md` (this entry) |
+
+### Why a patch
+
+Per `knowledge.md §16.1`: this release is purely code-quality refactoring and small TS error fixes — no new feature surface, no API contract change, no endpoint change, no DB migration. The `Transaction` type is **byte-identical** to v1.3.0; only the call-site vocabulary moved from inline `Omit`/`Partial` literals to two named aliases. The single UX-affecting change (`add-transaction.tsx` adds `recurrence: null` to the literal) was already correct-by-construction in production: the existing submit handler spread `{ ...formData, ... }` propagated whatever value was in `formData.recurrence`, and `useState<Omit<Transaction, "id">>` was rejecting the literal only because the literal hadn't been exhaustive yet. PATCH bump `1.3.0 → 1.3.1` is correct.
+
+### Quality gates
+
+- ✅ Frontend `pnpm exec tsc --noEmit -p tsconfig.app.json` clean for all nine refactored files (the 14 pre-existing diagnostics elsewhere — `useLoadUser.tsx` / `splash.tsx` `_retry` on `AxiosRequestConfig`, `notification-settings.tsx` `SwitchProps` mismatch, `personal-info-form.tsx` `User | null`, `privacy-policy-page.tsx` / `terms-of-service-page.tsx` `$SpecialObject.map` — are unchanged from v1.3.0 and out of scope of this cycle)
+- ✅ Code-reviewer-minimax-m3 approved the four rounds of cleanup (RecurrenceFilter move, `recurrence: null` add, alias centralization, orphan-`Transaction` import removal) — final round delivered "ship as-is"
+- 🟡 Backend untouched in this release
+
+---
+
 ## [v1.3.0] — 2026-06-26
 
 > Session: Capacitor Android APK third-party cookie outage — body-token + Authorization-header defense-in-depth, no native cookies plugin (npm 404 fallback). RPI artifacts at `rpi/mobile-cookies-persistence/`.
