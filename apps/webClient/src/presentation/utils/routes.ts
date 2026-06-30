@@ -9,18 +9,18 @@ export enum RouteNames {
   Login = "Login",
   Signup = "Signup",
   Logout = "Log out",
-  HowItWorks = "How it works",
   PrivacyPolicy = "Privacy Policy",
   TersmsAndConditions = "Terms and conditions",
   ContactSales = "Contact Sales",
+  Changelog = "Changelog",
 }
 
 export enum RoutePaths {
   Home = "/",
-  HowItWorks = "/how-it-works",
   PrivacyPolicy = "/privacy-policy",
   TersmsAndConditions = "/terms-and-conditions",
   ContactSales = "/contact-sales",
+  Changelog = "/changelog",
   // Auth
   Auth = "/auth",
   GoogleAuth = "/auth/firebase-login",

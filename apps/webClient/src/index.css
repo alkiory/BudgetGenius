@@ -185,3 +185,52 @@
 .progress-shim.is-fast::after {
     animation-duration: 1.5s;
 }
+
+/* ---- Testimonials placeholder carousel ----
+   Three vertical marquees that scroll in opposite directions. The inner
+   list of cards is rendered twice so translateY(-50%) produces a seamless
+   loop. Hover pauses the column being read; prefers-reduced-motion disables
+   the animation and lifts container overflow so motion-sensitive users see
+   a static stacked grid instead of a moving surface.
+*/
+@keyframes marquee-down {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+
+@keyframes marquee-up {
+  from {
+    transform: translateY(-50%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-marquee-down {
+  animation: marquee-down 24s linear infinite;
+}
+
+.animate-marquee-up {
+  animation: marquee-up 24s linear infinite;
+}
+
+.hover-pause:hover .animate-marquee-down,
+.hover-pause:hover .animate-marquee-up {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee-down,
+  .animate-marquee-up {
+    animation: none;
+  }
+  .hover-pause {
+    height: auto !important;
+    overflow: visible !important;
+  }
+}

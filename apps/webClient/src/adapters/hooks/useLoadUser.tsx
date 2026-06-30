@@ -11,7 +11,6 @@ import { useLocation } from "react-router";
 
 const SKIP_VERIFY_ROUTES = [
   RoutePaths.Home,
-  RoutePaths.HowItWorks,
   RoutePaths.PrivacyPolicy,
   RoutePaths.TersmsAndConditions,
   RoutePaths.ContactSales,

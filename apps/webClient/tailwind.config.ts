@@ -13,6 +13,15 @@ const config = {
     extend: {
       fontFamily: {
         display: ['"system-ui"', '"Avenir"', '"Helvetica"', '"Arial"', 'sans-serif'],
+        serif: [
+          '"Playfair Display"',
+          'ui-serif',
+          'Georgia',
+          'Cambria',
+          '"Times New Roman"',
+          'Times',
+          'serif',
+        ],
       },
       colors: {
         border: "rgb(var(--border) / <alpha-value>)",

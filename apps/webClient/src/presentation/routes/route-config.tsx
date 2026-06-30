@@ -33,8 +33,8 @@ import ProtectedRoute from "./protected-route";
 //   - ProfilePage, UserList (user protected routes)
 //   - LoginPage, SignupPage, ForgotPasswordPage,
 //     ForgotPasswordConfirmationPage, ResetPasswordPage (auth routes)
-//   - HowItWorksPage, PrivacyPolicyPage, TermsOfServicePage,
-//     ContactSalesPage (Phase 6.8 round-2 polish: these public
+//   - PrivacyPolicyPage, TermsOfServicePage, ContactSalesPage (Phase 6.8
+//     round-2 polish: these public
 //     chrome pages were the last >500 kB source on the main entry;
 //     lazy-loading them drops the warning without touching the
 //     landing-page first-paint).
@@ -73,10 +73,9 @@ const ResetPasswordPage = lazy(
   () => import("@presentation/pages/auth/reset-password"),
 );
 
-// Public chrome pages (Phase 6.8 round-2 polish)
-const HowItWorksPage = lazy(
-  () => import("@presentation/pages/demo/how-it-works"),
-);
+// Public chrome pages
+// How-it-works lives as a section on the landing page (no standalone route
+// since the v1.4+ redesign). See presentation/components/landing/how-it-works.tsx.
 const PrivacyPolicyPage = lazy(
   () => import("@presentation/pages/contact/privacy-policy-page"),
 );
@@ -85,6 +84,9 @@ const TermsOfServicePage = lazy(
 );
 const ContactSalesPage = lazy(
   () => import("@presentation/pages/contact/contact-sales-page"),
+);
+const ChangelogPage = lazy(
+  () => import("@presentation/pages/changelog"),
 );
 
 const RouteConfig = () => {
@@ -95,7 +97,6 @@ const RouteConfig = () => {
           subsequent visit inside the same session). */}
       <Route path={RoutePaths.Home} element={<RootRoute />} />
       <Route element={<LandingLayout />}>
-        <Route path={RoutePaths.HowItWorks} element={<HowItWorksPage />} />
         <Route
           path={RoutePaths.PrivacyPolicy}
           element={<PrivacyPolicyPage />}
@@ -105,6 +106,7 @@ const RouteConfig = () => {
           element={<TermsOfServicePage />}
         />
         <Route path={RoutePaths.ContactSales} element={<ContactSalesPage />} />
+        <Route path={RoutePaths.Changelog} element={<ChangelogPage />} />
       </Route>
       <Route path={RoutePaths.Auth} element={<AuthLayout />}>
         <Route path={RoutePaths.Login} element={<LoginPage />} />
