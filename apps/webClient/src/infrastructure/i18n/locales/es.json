@@ -107,7 +107,6 @@
     "noTransactionsYet": "¡Empieza a añadir transacciones a tu cuenta!",
     "noBudgetsYet": "¡Comienza tu viaje creando un presupuesto!",
     "noSavingsYet": "¡Comienza tu viaje creando una meta de ahorro!",
-    "upgradeForSavings": "¡Comienza tu viaje actualizando a premium!",
     "manageBudgets": "Gestionar presupuestos",
     "overBudget": "(Sobre presupuesto)",
     "left": "restantes",
@@ -452,8 +451,6 @@
     "investments": "Inversiones",
     "savings": "Ahorros",
     "settings": "Configuración",
-    "upgrade": "Mejorar",
-    "premium": "Premium",
     "logout": "Cerrar sesión"
   },
   "profile": {
@@ -505,9 +502,10 @@
     "settingsSavedSuccessfully": "Configuración actualizada exitosamente"
   },
   "landing": {
-    "heroTitle": "Toma el control de tus finanzas",
-    "heroSubtitle": "Gestiona gastos, establece presupuestos y alcanza tus metas financieras con nuestra herramienta fácil de usar.",
-    "getStarted": "Comienza gratis",
+    "heroBadge": "100% Gratis · Todas las funciones incluidas",
+    "heroTitle": "Toma el control de tu dinero — 100% gratis.",
+    "heroSubtitle": "Registra gastos, planifica presupuestos, alcanza tus metas — y conversa con Finny, tu asistente de IA bilingüe. Todas las funciones, desde el primer día. Sin paywalls, sin tarjeta.",
+    "getStarted": "Empieza gratis",
     "seeHowItWorks": "Mira cómo funciona",
     "featuresTitle": "Todo lo que necesitas para gestionar tu dinero",
     "expenseTracking": "Seguimiento de Gastos",
@@ -516,19 +514,196 @@
     "budgetPlanningDesc": "Crea presupuestos personalizados para diferentes categorías y sigue tu progreso.",
     "financialGoals": "Metas Financieras",
     "financialGoalsDesc": "Establece metas de ahorro y sigue tu progreso para alcanzarlas.",
-    "trustedBy": "Confiado por miles de usuarios",
-    "testimonial1": "\"Budget Genius ha cambiado completamente cómo gestiono mis finanzas. ¡He ahorrado más en los últimos 3 meses que en todo el año pasado!\"",
-    "testimonial2": "\"Los informes visuales hacen que sea muy fácil ver a dónde va mi dinero. He reducido gastos innecesarios y aumentado mi tasa de ahorro.\"",
-    "testimonial3": "\"Como freelancer con ingresos irregulares, Budget Genius me ayuda a planificar meses flacos y ahorrar durante los abundantes. ¡Cambió mi vida!\"",
-    "finalCta": "¿Listo para tomar el control de tus finanzas?",
-    "finalCtaDesc": "Únete a miles de usuarios que han transformado su vida financiera con Budget Genius.",
-    "noCreditCard": "No se requiere tarjeta de crédito. Plan gratuito disponible con mejoras premium.",
+    "finalCta": "¿Listo para tomar el control de tu dinero — gratis?",
+    "finalCtaDesc": "Únete a miles de personas que gestionan sus finanzas con Budget Genius — totalmente gratis, sin tarjeta, sin letra pequeña.",
+    "noCreditCard": "Sin tarjeta de crédito. Todas las funciones incluidas.",
     "features": "Características",
     "pricing": "Precios",
     "blog": "Blog",
     "support": "Soporte",
     "allRightsReserved": "Todos los derechos reservados.",
-    "dashboardTitle": "Panel de Budget Genius"
+    "dashboardTitle": "Panel de Budget Genius",
+    "heroBadgeSub": "Multi-moneda · Bilingüe EN/ES · 100% gratis",
+    "goToDashboard": "Ir al panel",
+    "heroTitleLead": "Administra tu",
+    "heroTitleAccent1": "dinero",
+    "heroTitleBody": "con claridad y",
+    "heroTitleAccent2": "control",
+    "sectionFeatures": {
+      "badge": "Funciones",
+      "title": "Todo lo que necesitas, nada que sobre",
+      "subtitle": "Tres pilares de BudgetGenius que mantienen tu dinero en orden, cada día.",
+      "items": {
+        "track": {
+          "eyebrow": "01 / Seguimiento",
+          "title": "Registra cada transacción",
+          "description": "Anota un café o un sueldo en segundos. La categorización inteligente sugiere el grupo correcto; tú confirmas con un toque."
+        },
+        "finny": {
+          "eyebrow": "02 / IA",
+          "title": "Conversa con Finny",
+          "description": "Tu asistente financiero de IA bilingüe. Pregunta en inglés o español — recibe ideas por categoría, sugerencias de presupuesto y análisis de tendencias al instante."
+        },
+        "goals": {
+          "eyebrow": "03 / Metas",
+          "title": "Cumple tus metas",
+          "description": "Define una meta de ahorro para un fondo de emergencia, un viaje o un enganche. Mira el progreso avanzar en tiempo real."
+        }
+      },
+      "finnyChat": {
+        "tap": "Comida está 18% por encima del presupuesto esta semana.",
+        "reply": "¿Quieres un plan de cena de 3 noches para recuperarte? Sí, por favor."
+      }
+    },
+    "sectionHow": {
+      "badge": "Cómo funciona",
+      "title": "Del registro a los insights en tres pasos",
+      "subtitle": "Sin conexión bancaria. Sin importar PDFs. Escribe y listo.",
+      "steps": {
+        "01": {
+          "label": "Paso 01",
+          "title": "Registra ingresos y gastos",
+          "description": "Añade una transacción en menos de 5 segundos. Categoriza una vez; las siguientes se sugieren automáticamente."
+        },
+        "02": {
+          "label": "Paso 02",
+          "title": "Define presupuestos y metas",
+          "description": "Elige una categoría, establece un límite y vincúlalo a una meta de ahorro. BudgetGenius hace las cuentas mientras avanzas."
+        },
+        "03": {
+          "label": "Paso 03",
+          "title": "Recibe insights de Finny",
+          "description": "Abre el chat, pregunta en inglés o español. Finny lee tus datos y detecta patrones relevantes."
+        }
+      }
+    },
+    "sectionShowcase": {
+      "badge": "Resumen",
+      "title": "Dos pantallas. Un flujo inteligente.",
+      "subtitle": "Tu panel de un vistazo, tus metas a un toque."
+    },
+    "sectionSecurity": {
+      "badge": "Confianza y Seguridad",
+      "title": "Tu dinero, tus datos, tu control",
+      "subtitle": "Protecciones reales, no eslóganes de marketing. Así es exactamente cómo BudgetGenius cuida tu información.",
+      "items": {
+        "auth": {
+          "title": "Autenticación con múltiples proveedores",
+          "description": "Inicia sesión con correo, Google o Firebase — el que prefieras. Las sesiones rotan automáticamente para mantener tu cuenta segura."
+        },
+        "encryption": {
+          "title": "Cifrado en tránsito y en reposo",
+          "description": "Tus datos están cifrados tanto en tránsito como en reposo — como un sobre alrededor de cada mensaje y una cerradura en cada cajón donde se guardan."
+        },
+        "ownership": {
+          "title": "Tus datos son tuyos",
+          "description": "Exporta todo tu historial de transacciones en cualquier momento desde tu perfil. Nunca vendemos ni compartimos tus datos financieros."
+        },
+        "bilingual": {
+          "title": "Asesoría de IA bilingüe",
+          "description": "Finny lee y responde en inglés o español. Sin selector extra — sigue automáticamente el idioma de la app."
+        },
+        "transparency": {
+          "title": "Vista transparente por transacción",
+          "description": "Cada monto, categoría y fecha es editable. Como BudgetGenius es 100% gratis, nunca hay un paywall en tu camino."
+        }
+      }
+    },
+    "sectionFaq": {
+      "badge": "Preguntas",
+      "title": "Preguntas frecuentes",
+      "subtitle": "Si tu pregunta no aparece aquí, escríbenos a support@budgetgenius.com.",
+      "items": {
+        "reallyFree": {
+          "question": "¿BudgetGenius es realmente 100% gratis?",
+          "answer": "Sí. Cada función — transacciones, presupuestos, metas, reportes, Finny — está incluida para todos los usuarios. Sin prueba, sin tarjeta, sin paywall. No vendemos anuncios ni tus datos."
+        },
+        "dataStorage": {
+          "question": "¿Cómo se almacenan mis datos?",
+          "answer": "Tus datos están cifrados y protegidos en todo momento, tanto cuando se guardan como cuando viajan entre tu dispositivo y nuestros servidores. La seguridad de tu información financiera es una de nuestras prioridades."
+        },
+        "mobileApp": {
+          "question": "¿Hay aplicación móvil?",
+          "answer": "Sí — BudgetGenius está disponible como app nativa para Android, con la misma experiencia que en la web. La versión para iOS está en camino."
+        },
+        "bankConnection": {
+          "question": "¿Se conecta a mi banco?",
+          "answer": "No. BudgetGenius es de captura manual por diseño. Tus datos nunca salen de la plataforma ni se usan para decisiones crediticias. Esto es una funcionalidad, no una limitación."
+        },
+        "language": {
+          "question": "¿Finny habla español?",
+          "answer": "Sí. Finny es completamente bilingüe EN/ES. Cambia el idioma de la app en ajustes y Finny responde en ese idioma automáticamente."
+        },
+        "export": {
+          "question": "¿Puedo exportar mis datos?",
+          "answer": "Sí. La sección de Reportes exporta a PDF y Excel. Tu historial completo de transacciones también está disponible en CSV desde tu perfil."
+        }
+      }
+    },
+    "sectionFinalCta": {
+      "badge": "Empezar",
+      "title": "Tu dinero está esperando.",
+      "subtitle": "Regístrate en menos de un minuto. Sin tarjeta, sin compromiso. Cada función incluida desde el primer día."
+    },
+    "hamburger": {
+      "open": "Abrir menú",
+      "close": "Cerrar menú",
+      "label": "Menú principal"
+    },
+    "sectionMobileApp": {
+      "badge": "Disponible en Android",
+      "title": "Tu dinero en tu bolsillo",
+      "subtitle": "Registra un café o consulta tus metas desde cualquier lugar. Android nativo, paridad total de funciones con la web — y la versión para iOS viene en camino.",
+      "regionAria": "Capturas de la app móvil"
+    },
+    "sectionTestimonials": {
+      "badge": "Confianza de nuestros usuarios",
+      "title": "Personas que confían en BudgetGenius para su dinero",
+      "subtitle": "Estamos recogiendo feedback real de los primeros usuarios — aquí vivirán sus citas.",
+      "cta": "Sé uno de los primeros",
+      "regionAria": "Carrusel de testimonios de clientes",
+      "placeholder": {
+        "name": "Espacio reservado",
+        "role": "Usuario temprano de BudgetGenius",
+        "rating": "★★★★★ (5/5 esperado)",
+        "body": "Tu testimonio puede vivir aquí. Escríbenos y el tuyo podría aparecer en esta columna en cuanto se publique."
+      },
+      "ctaHref": "mailto:support@budgetgenius.com"
+    },
+    "social": {
+      "twitter": "Twitter",
+      "instagram": "Instagram",
+      "facebook": "Facebook"
+    },
+    "changelog": {
+      "badge": "Novedades",
+      "title": "Qué hay de nuevo en BudgetGenius",
+      "subtitle": "Cómo la app fue mejorando, una release a la vez.",
+      "regionAria": "Cronología del changelog",
+      "footerLink": "Novedades",
+      "entries": {
+        "moneyEntry": {
+          "title": "Entrada de montos más natural",
+          "body": "Escribe $1,50 o 1, lo que uses en tu locale — BudgetGenius lo interpreta como querías. COP, EUR o USD: tú eliges la precisión y nosotros redondeamos."
+        },
+        "multiCurrency": {
+          "title": "Presupuestos multi-moneda",
+          "body": "Elige la moneda de cada categoría — USD, EUR o COP — y el total refleja dinero real, no dígitos sueltos. EUR es nuevo: antes, todo estaba bloqueado en USD."
+        },
+        "mobileSignin": {
+          "title": "Tu inicio de sesión persiste en el móvil",
+          "body": "Abre la app, inicia sesión y la sesión sobrevive a cierres del app y a caídas breves de conexión. Ya no te regresará a la pantalla de inicio de sesión."
+        },
+        "googleSignin": {
+          "title": "Inicia sesión con Google dentro de la app",
+          "body": "El inicio de sesión nativo en Android abre el selector de cuentas sin sacarte de la app. Ni paso por el navegador, ni escribir tu contraseña dos veces."
+        },
+        "launched": {
+          "title": "Donde empezamos",
+          "body": "Registra ingresos, planifica presupuestos, alcanza tus metas y conversa con Finny — todo en un mismo lugar, 100% gratis, sin tarjeta."
+        }
+      }
+    }
   },
   "demo": {
     "title": "Mira cómo funciona Budget Genius",
@@ -536,8 +711,8 @@
     "desktop": "Escritorio",
     "mobile": "Móvil",
     "backToHome": "Volver al inicio",
-    "readyToStart": "¿Listo para tomar el control de tus finanzas?",
-    "getStarted": "Comienza gratis",
+    "readyToStart": "¿Listo para tomar el control de tu dinero — gratis?",
+    "getStarted": "Empieza gratis",
     "logIn": "Iniciar sesión",
     "desktopExperience": "Experiencia de Escritorio",
     "desktopExperienceDesc": "Nuestra interfaz de escritorio proporciona una vista completa de tus finanzas con potentes herramientas para rastrear, analizar y planificar.",

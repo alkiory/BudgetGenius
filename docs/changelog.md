@@ -2,6 +2,88 @@
 
 ---
 
+## [v1.5.0] — 2026-06-30
+
+> Session: Landing polish + responsive navbar overflow fix. New persistent parallax `MobileAppSection` + breakpoint-driven hamburger drawer with proper a11y. Web-only — no backend changes, no DB migrations.
+
+### Added
+
+- **`MobileAppSection` landing component — `apps/webClient/src/presentation/components/landing/mobile-showcase.tsx`** (NEW) — A new section between `<Features />` and `<HowItWorks />` on the public landing page (Option C of the original spec). Two layered phone mockups from the assets directory — `starting_mobile.png` (background, tilted 3° for depth) + `create_budget_mobile.png` (foreground, the lead device) — translated via **persistent scroll-driven parallax**.
+
+  **How the parallax works**:
+  - An `IntersectionObserver` (rootMargin `200px`) detects when the section enters / exits the viewport.
+  - A `requestAnimationFrame` loop continuously applies `transform: translate3d(0, ${offset * factor}px, 0)` directly to `fgRef.current` and `bgRef.current` while the section is intersecting. Math: `offset = window.innerHeight - rect.top`; foreground factor `-0.15`, background factor `-0.05` — foreground moves up faster, creating a clean depth illusion.
+  - Direct DOM mutation bypasses React reconciliation, so 60 fps scrolling produces zero React re-renders. GPU compositing via `translate3d()` + `will-change-transform` on each layer.
+  - **Persistent** — the rAF loop runs continuously while intersecting, NOT a one-shot reveal on entry.
+
+  **Accessibility (live + deterministic)**:
+  - `prefers-reduced-motion: reduce` is checked via `matchMedia("(prefers-reduced-motion: reduce)")` at mount AND live via `mq.addEventListener("change", onMqChange)` — users who flip OS-level "Reduce Motion" mid-session see the parallax stop immediately and both layers snap back to their natural CSS positions (`resetStatic()` wipes both `fgRef.current.style.transform` + `bgRef.current.style.transform`). Re-enabling while still on-screen auto-resumes the effect from the current scroll position.
+  - The decorative foreground phone uses `aria-hidden="true"`; the region wrapper carries an `aria-label` read via `t("landing.sectionMobileApp.regionAria")` so screen-reader users get a labelled landmark instead of unlabelled decoration.
+
+  **Layout defence-in-depth**:
+  - Stage height `h-[42rem] sm:h-[46rem]` keeps both layers and their parallax range inside the section (foreground translateY max ≈ -120 px with the foreground phone's `-bottom-4` positioning + `h-[34rem]` height — math reviewed by code-reviewer across multiple cycles).
+  - Background phone rotation narrowed to 3° (was 5°) so its rotated bounding box stays inside the 320–414 px viewport stage.
+  - `tick()` is **idempotent** — entry-time `cancelAnimationFrame(rafId)` prevents parallel rAF chains if IntersectionObserver / `mq` fire while a previous tick is queued. Defensive against races between IO callback, MediaQuery change handler, and the rAF loop.
+
+- **i18n keys added to `en.json` + `es.json`**:
+  - `landing.sectionMobileApp.{badge, title, subtitle, regionAria}` — the section copy ("See it on mobile" / "Track and plan anywhere" / "Mobile app screenshots" EN; "Ver en móvil" / "Registra y planifica estés donde estés" / "Capturas de la app móvil" ES).
+  - `landing.hamburger.{open, close, label}` — hamburger button + drawer landmark labels ("Open menu" / "Close menu" / "Primary navigation" EN; "Abrir menú" / "Cerrar menú" / "Menú principal" ES).
+
+### Fixed
+
+- **PRODUCTION-DETECTED: Public landing navbar overflows on 320–414 px viewports** — `apps/webClient/src/presentation/components/ui/header.tsx` previously rendered every desktop nav item inline regardless of breakpoint (theme toggle · language switcher · Novedades · login CTA). At viewports ≤ 414 px this produced a horizontal overflow bar — the logo's right neighbour got pushed off-screen. **Fix**: `header.tsx` is now breakpoint-driven:
+  - `< md` (≤ 768 px, per Tailwind defaults): only the `<Logo>` + (Sign Up CTA if logged-out) + hamburger button render.
+  - `≥ md`: every nav item renders inline in a single `<nav className="hidden md:flex">` (identical visual layout to the pre-fix desktop layout — zero regression on existing views).
+  - Hamburger toggles a floating-right drawer `<nav aria-label={t("landing.hamburger.label")}>` with `aria-expanded` / `aria-controls="mobile-primary-menu"` wired to the button — proper AT landmark labelling and state announcement.
+
+  **Drawer UX edge cases handled**:
+  - **Closes on Escape key** — `useEffect` attaches a `document.keydown` listener that fires `setMenuOpen(false)` on key === "Escape"; cleanup symmetric.
+  - **Closes on outside tap** — `useEffect` attaches `document.pointerdown` (NOT `click` — see Rationale below) that checks `headerRef.current.contains(e.target as Node)` outside the header element. Cleanup symmetric.
+  - **Closes on route change** — `useEffect` keyed on `window.location.pathname` resets `setMenuOpen(false)` on cleanup, so navigating from a hamburger tap auto-clears.
+  - **Closes on link tap inside the drawer** — every `<Link>` inside `menuOpen === true` calls `closeMenu()` so the next navigation paints the destination without a leftover drawer overlay.
+
+  **Rationale — why `pointerdown` not `click` for outside-tap detection**:
+  Browser event order: `pointerdown` → `mousedown` → `mouseup` → `click`. The `click` event fires AFTER `mousedown` / `mouseup` and synthesizes on each click. With a hamburger `onClick` that toggles state via React (state-update is async), a `document.click` listener can race the toggle — the listener captures `menuOpen` from the previous render and closes the menu the toggle just opened. `pointerdown` fires BEFORE React's click handler runs, so the toggle-handler always sees the fresh Open state. Bonus: `pointerdown` covers mouse + touch + pen on a single listener (no separate `touchstart` / `mousedown` handlers needed).
+
+### Changed
+
+- **`apps/webClient/src/presentation/components/ui/header.tsx` rewritten end-to-end** — header now has a clean mobile/desktop split, drawer with proper a11y landmark, four edge-case closedown paths (Esc / outside-tap / route-change / link-tap), and explicit comments documenting each design choice for the next maintainer. The hamburger `onClick` intentionally does NOT call `e.stopPropagation()` — comment in-file explains: outside-tap detection uses `pointerdown` (a separate event), and any future document-level capture-phase click-tracker (analytics / telemetry / session-replay) should still observe the tap.
+- **`apps/webClient/src/presentation/components/landing/mobile-showcase.tsx` (NEW)** — see "Added" above.
+- **`apps/webClient/src/presentation/pages/cta.tsx` mounts `<MobileAppSection />`** between `<Features />` and `<HowItWorks />`. Imported at the top with the other landing-section imports; rendered as a sibling in the landing-page flow.
+- **i18n files deduped** — `en.json` had a duplicate-key artefact from an earlier str_replace cycle where the `landing.hamburger` and `landing.sectionMobileApp` blocks were inserted twice (`str_replace` matches the FIRST `oldString` by default, leaving the second copy in place when a follow-up insertion targets the prior comment anchor). A `python3` cleanup using `json.loads(text, object_pairs_hook=OrderedDict)` (last-wins-per-key) collapsed both blocks back to one canonical copy. `es.json` was unaffected by the deduplication pass.
+
+### Files modified (this entry)
+
+| Front | Files |
+|-------|-------|
+| Frontend (NEW) | `apps/webClient/src/presentation/components/landing/mobile-showcase.tsx` |
+| Frontend (MODIFIED) | `apps/webClient/src/presentation/components/ui/header.tsx` (full rewrite + pointerdown + stopPropagation-removal rationale) · `apps/webClient/src/presentation/pages/cta.tsx` (mount `<MobileAppSection />` between Features + HowItWorks) · `apps/webClient/src/infrastructure/i18n/locales/en.json` (7 new i18n keys + dedup cleanup) · `apps/webClient/src/infrastructure/i18n/locales/es.json` (7 new i18n keys) |
+| Docs / Release | `docs/changelog.md` (this entry) · `package.json` (root, version 1.4.1 → 1.5.0) |
+
+### Why a minor-bump, not a patch
+
+Per `knowledge.md §16.1`: this is a **feature-bearing release** adding a new landing section (`MobileAppSection`) with non-trivial visual behaviour (persistent parallax + live OS-level `prefers-reduced-motion` respect) — fits the "New feature" row of the table. The mobile navbar overflow is technically a UX bug fix, but the deliverable is a **rewrite of `header.tsx`** with new a11y landmarks + new drawer state machine + new outside-tap detection — the breadth of file-bound changes fits the "refactor" row, not the "hotfix / typo / CSS fix" row. Combined: minor bump `1.4.1 → 1.5.0`.
+
+### Quality gates
+
+- ✅ Frontend `pnpm exec tsc --noEmit -p tsconfig.app.json` clean for all 5 touched files (mobile-showcase / header / cta / en.json / es.json). The `tsc` exit 2 is unchanged from v1.4.1 — 14 pre-existing diagnostics in un-touched files per `knowledge.md §13.3` (`useLoadUser.tsx` / `splash` / `account-settings` / `personal-info-form` / `privacy-policy-page` / `notification-settings` / `terms-of-service-page` — unchanged from v1.4.1 baseline).
+- ✅ Frontend `pnpm --filter frontend-web build` exit 0.
+- ✅ Frontend i18n files `JSON.parse`-valid — dedup enforced during pre-commit cleanup (single canonical `hamburger` + single canonical `sectionMobileApp` block per file).
+- ✅ Code-reviewer-minimax-m3 approved across 5 review cycles: (1) initial MobileAppSection + header → ship-ready with 5 polish nits; (2) post-polish (all 5 nits applied) → ship-ready; (3) live `mq.addEventListener('change', onMqChange)` → ship-ready with 1 nit; (4) rAF-idempotency polish at `tick()` entry → ship-ready; (5) `e.stopPropagation()` removal for analytics compatibility → ship-ready.
+- 🟡 Playwright regression — mobile-viewport hamburger drawer spec (375 px wide, click hamburger, assert drawer renders Novedades / theme / language / login) queued as a follow-up. The accessibility fundamentals (aria-expanded flips + aria-label landmark + keyboard close) are wired correctly, but we have no ground-truth Playwright spec asserting the full end-to-end flow until it ships.
+- 🟡 Manual device smoke — recommended for the hamburger drawer on 375 px Android WebView (verify Esc + outside-tap + route-change + link-tap all close the drawer; verify `prefers-reduced-motion` mid-session toggle stops the parallax immediately without remounting). Not executed in this sandbox (no Android device attached).
+- 🟡 Pointer-down on iOS Safari < 14 — `pointerdown` is supported on iOS Safari 13+; the project browserlist doesn't include Safari 13 so this is acceptable but tracked.
+
+### Out of scope (tracked separately)
+
+- **Playwright regression spec for mobile hamburger — `apps/webClient/tests/header-mobile-drawer.spec.ts`** — drives an iPhone SE viewport (375 × 667), asserts hamburger click toggles `aria-expanded` true → drawer renders with all 4 secondary items → click Novedades → drawer closes + URL changed → re-open → tap outside header → drawer closes. Plus an OS-level `prefers-reduced-motion: reduce` toggle spec that asserts `tick()` does not run after the toggle.
+- **Stage-height edge-clip audit at extreme viewports** — reviewer note flagged a cosmetic 6 px clip at the very-top scroll position on 320 px viewports where the foreground phone's bounding box could touch the section title. `h-[42rem] sm:h-[46rem]` with the section's `py-20` buffer absorbs this in practice; the Playwright spec above would pin the behaviour under device-accurate DPR.
+- **`getSnapshot should be cached` ESLint rule** — `knowledge.md §6.8` documents the broken `useSelector` pattern that bit `protected-route.tsx` in 2026-06. Still no `react-redux/no-new-object-selectors` rule installed. The `useSelector` calls in `MobileAppSection` (zero) and `header.tsx` (single-leaf `state.auth.user`) are safe by §6.8's rule, so this PR is not at risk; the rule install is a separate ticket.
+- **`MediaQueryListEvent.change` on iOS Safari 13** — silently no-ops (eventlistener fallback to polling). iOS Safari 14+ is fine. Project browserlist target is Safari 14+ so this is acceptable-but-tracked.
+- **Other working-tree changes — NOT in v1.5.0** — `git status` at release-time shows several unrelated WIP changes (3 deprecated demo pages deleted, `routes.ts` / `route-config.tsx` / `tailwind.config.ts` / `useLoadUser.tsx` / `index.html` / `index.css` / new `scripts/` directory / `changelog.tsx`). These remain in the working tree unstaged for separate review. The v1.5.0 commit stages only the 7 files documented above.
+
+---
+
 ## [v1.4.1] — 2026-06-27
 
 > Session: Budget cross-currency aggregation — ship Option B from `rpi/budget-currency-coercion/research.md`. Research artifact FAR re-score 4.67 (pre-FAR gap closed by the Plan phase). 31 tests pass (27 existing + 4 new cross-currency cases).
