@@ -46,27 +46,7 @@ jobs:
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           VITE_GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-
-      # ── Firebase Hosting preview (with retry) ─────────────────────────
-      # Three-step retry chain around `FirebaseExtended/action-hosting-deploy@v0.11.0`
-      # to recover from the transient `oauth2/v4/token: Premature close`
-      # failure mode of firebase-tools when it auto-refreshes the
-      # service-account OAuth token. The action wraps the JSON-key
-      # → OAuth swap correctly (passing the blob through `firebaseServiceAccount`
-      # does NOT confuse the wrapper the way passing it through `FIREBASE_TOKEN`
-      # does — `FIREBASE_TOKEN` only expects a single refresh-token string).
-      #
-      # Each attempt runs the same wrapper; later steps are conditionally
-      # triggered on the previous one's failure. `continue-on-error: true`
-      # lets the post-step propagate the failure so the next step's `if`
-      # can re-run. No wall-clock sleep between attempts is not added —
-      # the upstream `oauth2/v4/token` request is fast and the next
-      # attempt usually hits a fresh token without a sleep.
-      #
-      # Pin BOTH the action AND firebase-tools version (the latter is
-      # the action's default; firebase-tools 15.22.2+ started returning
-      # `Premature close` reliably, 15.20.0 does not). Bump either with
-      # care and re-run this workflow on a known PR to verify.
+          VITE_APK_DOWNLOAD_URL: ${{ secrets.VITE_APK_DOWNLOAD_URL }}
 
       - name: Firebase Hosting preview (1/3)
         id: deploy_1
