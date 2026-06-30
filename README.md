@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/status-active-brightgreen" alt="Status" />
   <img src="https://img.shields.io/badge/license-UNLICENSED-blue" alt="License" />
-  <img src="https://img.shields.io/badge/version-v1.5.0-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v1.6.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen" alt="Node" />
 </p>
 
