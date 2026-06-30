@@ -84,6 +84,88 @@ Per `knowledge.md §16.1`: this is a **feature-bearing release** adding a new la
 
 ---
 
+## [v1.6.0] — 2026-06-30
+
+> Session: Landing mobile-app download CTA + GitHub Releases URL config + FAQ anchor link. Web-only — no backend changes, no DB migrations, no native changes.
+
+### Added
+
+- **`DownloadApp` landing section — `apps/webClient/src/presentation/components/landing/download-app.tsx`** (NEW). A new section mounted in `apps/webClient/src/presentation/pages/cta.tsx` immediately after `<Faq />` and before `<FinalCta />` (the funnel's conversion slot — captures mobile-first visitors before the generic web signup). Component is a centred column on a slate-50 background: badge pill, headline ("Take BudgetGenius in your pocket" / "Lleva BudgetGenius en tu bolsillo"), grey subheadline ("Download the Android app … " / "Descarga la app para Android … "), primary download CTA, version caption (`vX.Y.Z · Direct APK` / `APK directo` derived from `__APP_VERSION__`), an "iOS — coming soon" informational badge, and a discreet "⚠" disclaimer about Android's "Install unknown apps" toggle.
+
+  **Button states (fixed-URL strategy — no GitHub-API call at runtime)**:
+  - **Ready** — when `VITE_APK_DOWNLOAD_URL` is a real release URL, the CTA renders as an `<a href={APK_DOWNLOAD_URL} target="_blank" rel="noopener noreferrer" download>` styled with the same purple→violet gradient that the existing `Hero` / `FinalCta` buttons use. `target="_blank"` works because GitHub Releases asset URLs go through their CDN which sets `Content-Disposition: attachment`; the `download` attribute is a cross-browser hint for the suggested filename.
+  - **Disabled / "Coming soon"** — when the env var is empty or contains any of the sentinel tokens `REPLACE_ME` / `TODO` / `PLACEHOLDER` / `YOUR_ORG` / `YOUR_REPO`, the CTA swaps to a `<button type="button" disabled>` rendered with a slate background + `cursor-not-allowed` + the i18n-localised "Próximamente" / "Coming soon" label. The version caption is still rendered in this state (showing what _would_ download once the URL is filled in) so the section never silently disappears.
+
+  **Iconography** — inline Android bugdroid SVG (antennae + dome + eyes) drawn over `currentColor` so the parent Tailwind `text-*` palette (white-on-purple) drives the fill without a per-theme fork. Lucide ships no Android-brand icon; `Smartphone` / `Bot` are too generic to convey the brand. Used together with a Lucide `Smartphone` icon for the iOS-coming-soon badge and an inline downward chevron on the active button for download affordance.
+
+  **Accessibility**:
+  - `aria-label` on `<section>` reads from `t("landing.sectionDownloadApp.regionAria")` so screen-reader users land on a labelled landmark instead of unlabelled decoration.
+  - `focus-visible:ring-4 focus-visible:ring-purple-400/40` on the active button so keyboard navigation shows a visible focus halo.
+  - 48-px `min-h-12` button + `max-w-sm` on mobile — easy tap target on phone screens.
+  - Disabled button uses native `disabled` (which already implies `aria-disabled` for AT — the manual `aria-disabled="true"` from the first draft was removed per code-reviewer nit).
+
+  **Architecture** — pure presentation component: no repository layer (the URL is a static build-time constant read from an env var). Env-var reading happens at module-load time (`const APK_DOWNLOAD_URL = (import.meta.env.VITE_APK_DOWNLOAD_URL as string ?? "").trim()`), so the disabled-state derivation is a single-line `isConfiguredUrl()` test against a sentinel token list. No `useState` / no `useEffect` / no AsyncStorage / no React dependency tree — the section is SSR-friendly if the project later adopts server-rendering.
+
+  **`__APP_VERSION__` typing** — the build-time global injected by `apps/webClient/vite.config.ts define: { __APP_VERSION__: JSON.stringify(appVersion) }` is typed in `apps/webClient/src/vite-env.d.ts:4` (`declare const __APP_VERSION__: string;`), so `tsc --noEmit` is clean without an inline cast. `normalizeVersion()` strips a leading `v` and trims any `git describe` / `-dev` / `-dirty` suffix so the visible caption is always a clean `vMAJOR.MINOR.PATCH`.
+
+- **i18n keys added to `apps/webClient/src/infrastructure/i18n/locales/en.json` and `es.json`**:
+  - `landing.sectionDownloadApp.{badge, title, subtitle, buttonLabel, comingSoonLabel, versionSuffix, warning, iosSoon, regionAria}` — section copy + disabled-state label + iOS informational label + section landmark name (EN: "Get the app" / "Take BudgetGenius in your pocket" / "Download the Android app and manage your finances from anywhere — even offline." / "Download for Android" / "Coming soon" / "Direct APK" / "You may need to enable \"Install unknown apps\" from sources outside the Play Store in your Android settings." / "iOS — coming soon" / "Mobile app download"; ES: "Descarga la app" / "Lleva BudgetGenius en tu bolsillo" / "Descarga la app para Android y gestiona tus finanzas desde cualquier lugar — incluso sin conexión." / "Descargar para Android" / "Próximamente" / "APK directo" / "Puede requerirse habilitar \"Instalar apps de fuentes desconocidas\" en los ajustes de tu dispositivo Android." / "iOS — Próximamente" / "Descarga de la app móvil").
+  - `landing.sectionFaq.items.mobileApp.{answerPre, answerLink, answerPost}` — the existing FAQ row is split so the answer can carry a real `<a href="#download">` anchor mid-sentence without dragging HTML markup into the i18n keys. Translators see three text fragments; the component stitches them together with the link element in the middle.
+
+- **`VITE_APK_DOWNLOAD_URL` env var** — `apps/webClient/.env.example` documents the new var with a placeholder URL (`https://github.com/REPLACE_ME/YOUR_REPO/releases/download/v0.0.0/BudgetGenius-v0.0.0.apk`) + the operator release-procedure comment block above the var. Single source of truth for the APK URL — no GitHub-API call at runtime, so the landing page is unaffected by the anonymous 60-requests-per-hour GitHub rate limit. Disabled-state sentinel tokens are listed in BOTH the env-file comment AND the runtime `PLACEHOLDER_TOKENS` array — single source of truth for "is this URL a real release?" so the doc and the code can never drift.
+
+### Changed
+
+- **`apps/webClient/src/presentation/components/landing/faq.tsx`** — special-cased the `mobileApp` row to render `pre + <a href="#download">link</a> + post` inside the expanded answer panel. The anchor is a SIBLING of the toggle button so clicking it does NOT collapse/expand the accordion (it scrolls to the `<section id="download">` instead). The link is rendered with `text-white underline decoration-white/60 underline-offset-4 hover:decoration-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 rounded-sm` so it reads cleanly on the open-row's purple→fuchsia gradient and matches the in-app link treatment. Other 5 FAQ rows untouched and still read their own `.answer` keys.
+- **`apps/webClient/src/presentation/components/landing/download-app.tsx` — `<section id="download">`** carries `scroll-mt-16` to match the `#how-it-works` / `#faq` offset convention already used elsewhere, so the FAQ anchor-jump lands the section title flush with the top of the viewport instead of under the sticky header.
+- **`apps/webClient/src/presentation/pages/cta.tsx`** — imports `<DownloadApp />` (sorted alphabetically into the landing-component import block alongside the other 9 sections) and mounts it inside `<main>` immediately after `<Faq />` and before `<FinalCta />` (the funnel's conversion slot).
+- **`apps/webClient/src/infrastructure/i18n/locales/en.json` and `es.json` — `landing.sectionFaq.items.mobileApp`** — single `answer` key replaced with the three subkeys `answerPre` / `answerLink` / `answerPost` (see "Added" above for translated values); the legacy `answer` key removed under that row only (the other 5 FAQ items keep their own `.answer` keys untouched).
+
+### Files modified (this entry)
+
+| Front | Files |
+|-------|-------|
+| Frontend (NEW) | `apps/webClient/src/presentation/components/landing/download-app.tsx` |
+| Frontend (MODIFIED) | `apps/webClient/src/presentation/components/landing/faq.tsx` (mobileApp special-case with embedded `<a href="#download">` link + 3-fragment i18n read) · `apps/webClient/src/presentation/pages/cta.tsx` (alphabetic import + mount `<DownloadApp />` after `<Faq />`) · `apps/webClient/src/infrastructure/i18n/locales/en.json` (16 new i18n keys: 9 for `sectionDownloadApp` + 3 fragments for FAQ `mobileApp`, with the legacy `mobileApp.answer` removed) · `apps/webClient/src/infrastructure/i18n/locales/es.json` (16 new i18n keys: 9 for `sectionDownloadApp` + 3 fragments for the FAQ `mobileApp`, with the legacy `mobileApp.answer` removed; the existing 5 FAQ rows' `.answer` keys untouched) · `apps/webClient/.env.example` (`VITE_APK_DOWNLOAD_URL` placeholder + release-procedure comment block above the var) |
+| Docs / Release | `docs/changelog.md` (this entry) · `package.json` (root, version `1.5.0` → `1.6.0`) |
+
+### Why a minor-bump, not a patch
+
+Per `knowledge.md §16.1`: this is a **feature-bearing release** that adds a NEW landing component (`DownloadApp` with disabled-state derivation, version-caption normalisation, inline brand icon, accessibility wiring) AND a NEW top-level operator-facing env var (`VITE_APK_DOWNLOAD_URL`). The FAQ row restructure is a smaller i18n-grade change but the breadth of file-bound changes (1 NEW + 5 MODIFIED + 2 release artefacts) and the new operator-facing configuration surface fit the "New feature" row of the table. Minor bump `1.5.0 → 1.6.0` is correct.
+
+### Operator action required (release procedure)
+
+**Creating a new APK release that the `VITE_APK_DOWNLOAD_URL` env var can point at**:
+
+1. Tag the commit with the new version: `git tag -a vX.Y.Z -m "vX.Y.Z"` then `git push origin main --tags` (annotated tag — `git describe` source for `__APP_VERSION__`).
+2. On github.com → Releases → "Create release from tag `vX.Y.Z`".
+3. Upload the APK binary with the **exact name `BudgetGenius-vX.Y.Z.apk`** — the v + version + `.apk` slug must match the URL template.
+4. Update `apps/webClient/.env.production` (and `.env.development` for local parity) setting `VITE_APK_DOWNLOAD_URL=https://github.com/<owner>/<repo>/releases/download/vX.Y.Z/BudgetGenius-vX.Y.Z.apk`.
+5. Redeploy the web frontend (Vercel / Firebase Hosting).
+
+While `VITE_APK_DOWNLOAD_URL` still contains a placeholder token (or is empty), the landing-page download button automatically degrades to "Coming soon" / "Próximamente" — a partial rollout never points to a 404. Operators can land the v1.6.0 frontend BEFORE the first APK is uploaded; the disabled state means there is no UI pressure to race the upload.
+
+### Quality gates
+
+- ✅ Frontend `pnpm exec tsc --noEmit -p tsconfig.app.json` clean for all 3 touched TS files (`download-app.tsx` · `faq.tsx` · `cta.tsx`). The 14 pre-existing diagnostics in un-touched files (`useLoadUser.tsx` / `splash` / `notification-settings` / `personal-info-form` / `privacy-policy-page` / `terms-of-service-page`) are unchanged from v1.5.0 baseline per `knowledge.md §13.3`.
+- ✅ Frontend `pnpm --filter frontend-web build` exit 0.
+- ✅ Frontend `npx prettier --check` clean on the 3 touched `.tsx` files (initial draft had 3 prettier formatting complaints on lines 35 / 36 / 102 of `download-app.tsx`; all 3 corrected before ship).
+- ✅ Frontend ESLint focused on `download-app.tsx` + `faq.tsx` clean (the 139 workspace-wide pre-existing diagnostics in un-touched files per v1.5.0 baseline do not include any of the files touched in this entry).
+- ✅ i18n files `JSON.parse`-valid; `sectionDownloadApp` block present in `en.json` and `es.json`; the FAQ `mobileApp` row has exactly the three sub-keys `answerPre / answerLink / answerPost` and NO legacy `answer` key under that row; the other 5 FAQ rows each have their `.answer` key intact.
+- ✅ Code-reviewer-minimax-m3 approved across 2 review cycles: (1) initial DownloadApp + faq.tsx + .env implementation → ship-ready with 4 polish nits (3 prettier formatting complaints + redundant `aria-disabled="true"` on the disabled button + `<`-token listed in `.env.example` comment but missing from the runtime `PLACEHOLDER_TOKENS` array + unnecessary `as string | undefined` cast on the env-var read); (2) post-polish — all four applied → ship-ready.
+- ✅ The v1.6.0 changelog entry above was written on the same day as v1.5.0 (`2026-06-30`) — same-day minor release is intentional: the v1.5.0 work landed in the morning session and the v1.6.0 download-CTA work landed in the afternoon session, batched into one release because the operator-side change set is the GitHub Release upload (tracked separately in "Operator action required" above).
+- 🟡 Playwright regression — e2e spec for the new section (`apps/webClient/tests/download-app.spec.ts`) is queued as a follow-up. Two scenarios: (a) `VITE_APK_DOWNLOAD_URL` set to a real release → button renders the gradient style + `target="_blank"` + the version caption from `__APP_VERSION__` + the warning disclaimer + the `#download` anchor in the FAQ expansion; (b) `VITE_APK_DOWNLOAD_URL` set to a placeholder token → button renders the disabled state with "Próximamente" text and no `href`, and the FAQ anchor is still present. The disabled-state UX is wired correctly but has no ground-truth Playwright pin until a follow-up commit.
+- 🟡 Manual device smoke — recommended for the new section on an Android device (verify "Download for Android" button opens the GitHub Release asset through the device's download manager; verify "Install unknown apps" toggle copy warns at the right granularity; verify the FAQ "Download it from the section below" anchor jump lands the section at the right offset under the system status bar). Not executed in this sandbox (no Android device attached to the runner).
+
+### Out of scope (tracked separately)
+
+- **Playwright regression spec for the new section — `apps/webClient/tests/download-app.spec.ts`** — drives the two scenarios in the Quality Gates section. Queued alongside the user-facing APK rollout.
+- **Global `scroll-behavior: smooth` on `<html>`** — anchors throughout the landing page (existing `#features`, `#faq`, `#how-it-works`; new `#download`) jump-snap today instead of smooth-scrolling. Tailwind's `scroll-smooth` on the root `<html>` would cost one CSS line and apply uniformly. Out of scope for v1.6.0 because it changes behaviour for every existing anchor on the site and the bounded JS-controlled anchor (the rework in `header.tsx`'s `useEffect` keyed on `pathname`) was not part of this release.
+- **iOS App Store CTA swap-in** — when the Capacitor iOS team delivers an `ipa` (or App Store URL), the existing "iOS — coming soon" informational badge in the new section is the single swap point: replace the `<Smartphone>` icon + label with a real `<a href={iosAppStoreUrl}>` CTA next to the Android button. The section's centred column layout already leaves room for a second button without redesigning the section.
+- **`VITE_APP_VERSION` injection on plain HTML** — `__APP_VERSION__` is inlined by Vite's `define` and is typed in `vite-env.d.ts`. If a future maintainer ports any of these sections to a vanilla HTML/zustand-variant bundle, `__APP_VERSION__` will be `undefined` at runtime and `normalizeVersion(undefined)` falls back to `"v0.0.0"` per its truthiness guard. Tracked here so a future regression does not surface as the landing-page showing "v0.0.0".
+
+---
+
 ## [v1.4.1] — 2026-06-27
 
 > Session: Budget cross-currency aggregation — ship Option B from `rpi/budget-currency-coercion/research.md`. Research artifact FAR re-score 4.67 (pre-FAR gap closed by the Plan phase). 31 tests pass (27 existing + 4 new cross-currency cases).

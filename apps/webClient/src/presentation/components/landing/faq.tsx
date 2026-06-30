@@ -43,7 +43,10 @@ export function Faq() {
           {FAQ_KEYS.map((key, idx) => {
             const isOpen = openIndex === idx;
             const question = t(`landing.sectionFaq.items.${key}.question`);
-            const answer = t(`landing.sectionFaq.items.${key}.answer`);
+            // Special-case `mobileApp` so the answer can include a real
+            // <a href="#download"> anchor (split into pre / link / post
+            // i18n keys to keep translators out of HTML markup).
+            const isDownloadFaq = key === "mobileApp";
             return (
               <div
                 key={key}
@@ -88,7 +91,22 @@ export function Faq() {
                       : "grid-rows-[0fr]"
                   }`}
                 >
-                  <div className="min-h-0 overflow-hidden">{answer}</div>
+                  <div className="min-h-0 overflow-hidden">
+                    {isDownloadFaq ? (
+                      <>
+                        {t("landing.sectionFaq.items.mobileApp.answerPre")}
+                        <a
+                          href="#download"
+                          className="font-semibold text-white underline decoration-white/60 underline-offset-4 transition-colors hover:decoration-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-sm"
+                        >
+                          {t("landing.sectionFaq.items.mobileApp.answerLink")}
+                        </a>
+                        {t("landing.sectionFaq.items.mobileApp.answerPost")}
+                      </>
+                    ) : (
+                      t(`landing.sectionFaq.items.${key}.answer`)
+                    )}
+                  </div>
                 </div>
               </div>
             );

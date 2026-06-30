@@ -1,3 +1,4 @@
+import { DownloadApp } from "@presentation/components/landing/download-app";
 import { Faq } from "@presentation/components/landing/faq";
 import { Features } from "@presentation/components/landing/features";
 import { FinalCta } from "@presentation/components/landing/final-cta";
@@ -37,6 +38,7 @@ export default function HomePage() {
         <Security />
         <Testimonials />
         <Faq />
+        <DownloadApp />
       </main>
 
       <FinalCta />

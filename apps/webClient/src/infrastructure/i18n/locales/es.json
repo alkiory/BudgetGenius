@@ -624,7 +624,9 @@
         },
         "mobileApp": {
           "question": "¿Hay aplicación móvil?",
-          "answer": "Sí — BudgetGenius está disponible como app nativa para Android, con la misma experiencia que en la web. La versión para iOS está en camino."
+          "answerPre": "Sí — BudgetGenius está disponible como app nativa para Android, con la misma experiencia que en la web. ",
+          "answerLink": "Descárgala desde la sección de abajo",
+          "answerPost": " — La versión para iOS está en camino."
         },
         "bankConnection": {
           "question": "¿Se conecta a mi banco?",
@@ -656,6 +658,17 @@
       "subtitle": "Registra un café o consulta tus metas desde cualquier lugar. Android nativo, paridad total de funciones con la web — y la versión para iOS viene en camino.",
       "regionAria": "Capturas de la app móvil"
     },
+    "sectionDownloadApp": {
+      "badge": "Descarga la app",
+      "title": "Lleva BudgetGenius en tu bolsillo",
+      "subtitle": "Descarga la app para Android y gestiona tus finanzas desde cualquier lugar — incluso sin conexión.",
+      "buttonLabel": "Descargar para Android",
+      "comingSoonLabel": "Próximamente",
+      "versionSuffix": "APK directo",
+      "warning": "Puede requerirse habilitar \"Instalar apps de fuentes desconocidas\" en los ajustes de tu dispositivo Android.",
+      "iosSoon": "iOS — Próximamente",
+      "regionAria": "Descarga de la app móvil"
+    },
     "sectionTestimonials": {
       "badge": "Confianza de nuestros usuarios",
       "title": "Personas que confían en BudgetGenius para su dinero",
@@ -681,28 +694,7 @@
       "subtitle": "Cómo la app fue mejorando, una release a la vez.",
       "regionAria": "Cronología del changelog",
       "footerLink": "Novedades",
-      "entries": {
-        "moneyEntry": {
-          "title": "Entrada de montos más natural",
-          "body": "Escribe $1,50 o 1, lo que uses en tu locale — BudgetGenius lo interpreta como querías. COP, EUR o USD: tú eliges la precisión y nosotros redondeamos."
-        },
-        "multiCurrency": {
-          "title": "Presupuestos multi-moneda",
-          "body": "Elige la moneda de cada categoría — USD, EUR o COP — y el total refleja dinero real, no dígitos sueltos. EUR es nuevo: antes, todo estaba bloqueado en USD."
-        },
-        "mobileSignin": {
-          "title": "Tu inicio de sesión persiste en el móvil",
-          "body": "Abre la app, inicia sesión y la sesión sobrevive a cierres del app y a caídas breves de conexión. Ya no te regresará a la pantalla de inicio de sesión."
-        },
-        "googleSignin": {
-          "title": "Inicia sesión con Google dentro de la app",
-          "body": "El inicio de sesión nativo en Android abre el selector de cuentas sin sacarte de la app. Ni paso por el navegador, ni escribir tu contraseña dos veces."
-        },
-        "launched": {
-          "title": "Donde empezamos",
-          "body": "Registra ingresos, planifica presupuestos, alcanza tus metas y conversa con Finny — todo en un mismo lugar, 100% gratis, sin tarjeta."
-        }
-      }
+      "newBadge": "Nuevo"
     }
   },
   "demo": {

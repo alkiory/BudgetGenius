@@ -635,7 +635,9 @@
                 },
                 "mobileApp": {
                     "question": "Is there a mobile app?",
-                    "answer": "Yes — BudgetGenius is available as a native Android app, with the same experience as the web. An iOS version is in the works."
+                    "answerPre": "Yes — BudgetGenius is available as a native Android app, with the same experience as the web. ",
+                    "answerLink": "Download it from the section below",
+                    "answerPost": " — An iOS version is in the works."
                 },
                 "bankConnection": {
                     "question": "Do you connect to my bank?",
@@ -666,6 +668,17 @@
             "subtitle": "Log a coffee or check your goals from anywhere. Native Android, full feature parity with the web — and iOS is on the way.",
             "regionAria": "Mobile app screenshots"
         },
+        "sectionDownloadApp": {
+            "badge": "Get the app",
+            "title": "Take BudgetGenius in your pocket",
+            "subtitle": "Download the Android app and manage your finances from anywhere — even offline.",
+            "buttonLabel": "Download for Android",
+            "comingSoonLabel": "Coming soon",
+            "versionSuffix": "Direct APK",
+            "warning": "You may need to enable \"Install unknown apps\" from sources outside the Play Store in your Android settings.",
+            "iosSoon": "iOS — coming soon",
+            "regionAria": "Mobile app download"
+        },
         "sectionTestimonials": {
             "badge": "Trusted by users",
             "title": "People trust BudgetGenius with their money",
@@ -691,28 +704,7 @@
             "subtitle": "How the app got better, one release at a time.",
             "regionAria": "Changelog timeline",
             "footerLink": "What's new",
-            "entries": {
-                "moneyEntry": {
-                    "title": "Smarter money entry everywhere",
-                    "body": "Whether you type $1.50 or 1,50, BudgetGenius reads it the way you meant it. COP, EUR or USD: pick a precision and we round correctly."
-                },
-                "multiCurrency": {
-                    "title": "Multi-currency budgets",
-                    "body": "Pick a currency for each category — USD, EUR or COP — and totals reflect real money, not raw digits. EUR is new: before, every category was locked to USD."
-                },
-                "mobileSignin": {
-                    "title": "Your sign-in sticks on mobile",
-                    "body": "Open the app, log in, and your session survives app restarts and short offline gaps. No more getting bounced back to the login screen."
-                },
-                "googleSignin": {
-                    "title": "Sign in with Google inside the app",
-                    "body": "The native Android sign-in opens your account picker without leaving the app. No browser handoff, no typing your password twice."
-                },
-                "launched": {
-                    "title": "Where we started",
-                    "body": "Track income, plan budgets, hit your goals, and chat with Finny — all in one place, 100% free, no card required."
-                }
-            }
+            "newBadge": "New"
         }
     },
     "demo": {
