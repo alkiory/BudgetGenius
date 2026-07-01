@@ -522,4 +522,257 @@ describe('AuthService', () => {
       }),
     ).rejects.toMatchObject({ status: 409 });
   });
+
+  // Production-hot-fix (2026-07-02) regression specs for validateOAuthUser().
+  // Defended contracts:
+  //   1. Existing users must short-circuit — no eager settings seed.
+  //   2. Settings-seed failure must NEVER fail OAuth — login wins,
+  //      onboarding can be backfilled lazily on the first
+  //      GET /user-settings call.
+  describe('validateOAuthUser (Google OAuth regression specs)', () => {
+    let oauthService: AuthService;
+    // The QueryRunner stub is Partial<QueryRunner> + custom flag —
+    // TypeORM's real `isTransactionActive` is a property, not a method.
+    type RunnerStub = {
+      connect: jest.Mock;
+      startTransaction: jest.Mock;
+      commitTransaction: jest.Mock;
+      rollbackTransaction: jest.Mock;
+      release: jest.Mock;
+      isTransactionActive: boolean;
+      manager: {
+        findOne: jest.Mock;
+        create: jest.Mock;
+        save: jest.Mock;
+      };
+    };
+    let queryRunnerStub: RunnerStub;
+    let userSettingsServiceMock: { getOrCreateSettings: jest.Mock };
+    let loggerMock: jest.Mocked<LoggingService>;
+    let dataSourceMock: { createQueryRunner: jest.Mock };
+
+    const makeQueryRunnerStub = (): RunnerStub => ({
+      connect: jest.fn().mockResolvedValue(undefined),
+      startTransaction: jest.fn().mockResolvedValue(undefined),
+      commitTransaction: jest.fn().mockResolvedValue(undefined),
+      rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn().mockResolvedValue(undefined),
+      // Default: a freshly-started transaction is active. Per-test
+      // commit flips to false — same lifecycle the real TypeORM
+      // runner tracks.
+      isTransactionActive: true,
+      manager: {
+        findOne: jest.fn(),
+        create: jest.fn(),
+        save: jest.fn(),
+      },
+    });
+
+    /** Stub a successful commit path: flip isTransactionActive to false. */
+    const wireSuccessfulCommit = (): void => {
+      queryRunnerStub.commitTransaction.mockImplementation(() => {
+        queryRunnerStub.isTransactionActive = false;
+      });
+    };
+
+    beforeEach(async () => {
+      queryRunnerStub = makeQueryRunnerStub();
+
+      loggerMock = {
+        log: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+        debug: jest.fn(),
+        verbose: jest.fn(),
+      } as unknown as jest.Mocked<LoggingService>;
+
+      userSettingsServiceMock = {
+        // Default: the happy path resolves. Per-test overrides inject
+        // the failure that produced the production regression.
+        getOrCreateSettings: jest.fn().mockResolvedValue({
+          id: 1,
+          timezone: 'UTC',
+          currency: 'USD',
+          locale: 'en-US',
+          hasCompletedOnboarding: false,
+        }),
+      };
+
+      dataSourceMock = {
+        createQueryRunner: jest.fn().mockReturnValue(queryRunnerStub),
+      };
+
+      const passwordResetRepositoryMock = {
+        saveToken: jest.fn().mockResolvedValue(undefined),
+        findToken: jest.fn(),
+        deleteToken: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const configServiceMock = {
+        get: jest.fn((key: string) => {
+          if (key === 'JWT_SECRET') return 'test-secret';
+          if (key === 'FRONTEND_URL') return 'https://budgetgeniusia.web.app';
+          return undefined;
+        }),
+      };
+
+      const mailerMock = {
+        sendPasswordReset: jest.fn().mockResolvedValue('mock-message-id'),
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          AuthService,
+          { provide: JwtService, useValue: { sign: jest.fn() } },
+          {
+            provide: UserRepositoryImpl,
+            useValue: { findByEmail: jest.fn(), createUser: jest.fn() },
+          },
+          {
+            provide: RedisService,
+            useValue: {
+              set: jest.fn().mockResolvedValue('OK'),
+              get: jest.fn(),
+              incr: jest.fn(),
+              delete: jest.fn(),
+            },
+          },
+          { provide: LoggingService, useValue: loggerMock },
+          {
+            provide: PasswordResetRepository,
+            useValue: passwordResetRepositoryMock,
+          },
+          { provide: DataSource, useValue: dataSourceMock },
+          { provide: ConfigService, useValue: configServiceMock },
+          { provide: ResendMailerService, useValue: mailerMock },
+          { provide: UserSettingsService, useValue: userSettingsServiceMock },
+        ],
+      }).compile();
+
+      oauthService = module.get<AuthService>(AuthService);
+    });
+
+    it('returns the existing user without invoking eagerCreateUserSettingsRow', async () => {
+      const existingUser = {
+        ...user,
+        id: 42,
+        email: 'returning@user.com',
+      } as User;
+      queryRunnerStub.manager.findOne.mockResolvedValue(existingUser);
+      wireSuccessfulCommit();
+
+      const result = await oauthService.validateOAuthUser({
+        providerId: 'g-123',
+        email: 'returning@user.com',
+        name: 'Returning User',
+      });
+
+      expect(result.id).toBe(42);
+      expect(result.email).toBe('returning@user.com');
+      // No new user → no save, no settings seed.
+      expect(queryRunnerStub.manager.save).not.toHaveBeenCalled();
+      expect(userSettingsServiceMock.getOrCreateSettings).not.toHaveBeenCalled();
+      expect(queryRunnerStub.commitTransaction).toHaveBeenCalledTimes(1);
+      expect(queryRunnerStub.release).toHaveBeenCalledTimes(1);
+      expect(queryRunnerStub.rollbackTransaction).not.toHaveBeenCalled();
+    });
+
+    it('creates a new user when none exists and eagerly seeds user_settings', async () => {
+      queryRunnerStub.manager.findOne.mockResolvedValue(null);
+      const newUser = {
+        id: 99,
+        name: 'Fresh',
+        surname: 'User',
+        email: 'fresh@user.com',
+        role: 'user',
+        authProvider: 'google',
+        password: null,
+      } as unknown as User;
+      queryRunnerStub.manager.create.mockReturnValue(newUser);
+      queryRunnerStub.manager.save.mockResolvedValue(newUser);
+      wireSuccessfulCommit();
+
+      const result = await oauthService.validateOAuthUser({
+        providerId: 'g-456',
+        email: 'fresh@user.com',
+        name: 'Fresh User',
+      });
+
+      expect(result.id).toBe(99);
+      expect(userSettingsServiceMock.getOrCreateSettings).toHaveBeenCalledWith(
+        99,
+      );
+      expect(queryRunnerStub.commitTransaction).toHaveBeenCalledTimes(1);
+      expect(queryRunnerStub.release).toHaveBeenCalledTimes(1);
+      expect(queryRunnerStub.rollbackTransaction).not.toHaveBeenCalled();
+    });
+
+    // The single regression spec the production playbook explicitly
+    // asks for: when eagerCreateUserSettingsRow() throws (settings
+    // seed fails), validateOAuthUser() MUST STILL resolve with the user.
+    it('STILL resolves with the new user when getOrCreateSettings rejects', async () => {
+      queryRunnerStub.manager.findOne.mockResolvedValue(null);
+      const newUser = {
+        id: 99,
+        name: 'Fresh',
+        surname: 'User',
+        email: 'fresh@user.com',
+        role: 'user',
+        authProvider: 'google',
+        password: null,
+      } as unknown as User;
+      queryRunnerStub.manager.create.mockReturnValue(newUser);
+      queryRunnerStub.manager.save.mockResolvedValue(newUser);
+      wireSuccessfulCommit();
+      // The settings-seed round-trip fails. This is the exact failure
+      // mode the production regression manifested.
+      userSettingsServiceMock.getOrCreateSettings.mockRejectedValue(
+        new Error('Postgres dead at the worst possible moment'),
+      );
+
+      const result = await oauthService.validateOAuthUser({
+        providerId: 'g-789',
+        email: 'fresh@user.com',
+        name: 'Fresh User',
+      });
+
+      expect(result.id).toBe(99);
+      expect(result.email).toBe('fresh@user.com');
+      expect(queryRunnerStub.commitTransaction).toHaveBeenCalledTimes(1);
+      expect(queryRunnerStub.release).toHaveBeenCalledTimes(1);
+      // Rollback must NOT have been called — the transaction was
+      // already committed before the settings seed failed.
+      expect(queryRunnerStub.rollbackTransaction).not.toHaveBeenCalled();
+      // Auth logged a warning about the failed seed so operators can
+      // grep for it; but login succeeded.
+      expect(loggerMock.warn).toHaveBeenCalled();
+    });
+
+    it('throws UnauthorizedException when save() rejects mid-transaction and rolls back', async () => {
+      queryRunnerStub.manager.findOne.mockResolvedValue(null);
+      queryRunnerStub.manager.create.mockReturnValue({
+        id: 100,
+        email: 'broken@u.com',
+      });
+      queryRunnerStub.manager.save.mockRejectedValue(
+        new Error('unique_email_constraint_violation'),
+      );
+      // Transaction is still ACTIVE because commit didn't run.
+
+      await expect(
+        oauthService.validateOAuthUser({
+          providerId: 'g-000',
+          email: 'broken@u.com',
+          name: 'Broken User',
+        }),
+      ).rejects.toMatchObject({ status: 401 });
+
+      expect(queryRunnerStub.commitTransaction).not.toHaveBeenCalled();
+      expect(queryRunnerStub.rollbackTransaction).toHaveBeenCalledTimes(1);
+      expect(queryRunnerStub.release).toHaveBeenCalledTimes(1);
+      // Settings seed must NOT have run because save() failed before
+      // the transaction committed.
+      expect(userSettingsServiceMock.getOrCreateSettings).not.toHaveBeenCalled();
+    });
+  });
 });
