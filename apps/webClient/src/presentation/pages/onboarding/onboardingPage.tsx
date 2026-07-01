@@ -159,8 +159,21 @@ export default function OnboardingPage() {
     },
   });
 
+  // Android APK dev audit, 2026-07 (v1.7.0) — gate `canSubmit` on
+  // STRICT `=== false` so a finished user whose `/user-settings`
+  // line transiently faults (data stays `undefined`) can NOT
+  // click submit and overwrite their previously-saved
+  // timezone/currency/locale with detected defaults. Combined
+  // with the strict-positive `=== true` bounce-back above, the
+  // wizard cannot write to settings without a positive-confirmation
+  // signal from the server that this user is in fact still in the
+  // pre-onboarding state. See knowledge.md §6.8.3.
   const canSubmit =
-    Boolean(timezone) && Boolean(currency) && Boolean(locale) && !isSaving;
+    Boolean(timezone) &&
+    Boolean(currency) &&
+    Boolean(locale) &&
+    settings?.hasCompletedOnboarding === false &&
+    !isSaving;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,7 +190,20 @@ export default function OnboardingPage() {
   // bounce out to the dashboard. We render nothing while the
   // server response is in flight; React Query will re-trigger
   // `useGetSettings()` and this page will re-evaluate.
-  if (!isLoading && settings?.hasCompletedOnboarding) {
+  //
+  // Android APK dev audit, 2026-07 (v1.7.0 regression fix): tighten
+  // the truthy check to STRICT `=== true`. The previous truthy
+  // (`settings?.hasCompletedOnboarding`) check matched any non-falsy
+  // value (e.g. `true` ONLY) but ALSO swallowed `false` / `undefined`,
+  // letting a finished user with a transient /user-settings failure
+  // see the wizard for 1 frame — and on the next click of "Submit"
+  // their previously-selected timezone/currency/locale got overwritten
+  // by detected defaults. With strict `=== true`, EITHER signal
+  // (positive-confirmation `true`) triggers the safe redirect.
+  // Strict-positive here is the SYMMETRIC counterpart to
+  // OnboardingGuard's strict-`!== true` redirect (knowledge.md
+  // §6.8.2 codification entry).
+  if (!isLoading && settings?.hasCompletedOnboarding === true) {
     return <Navigate to={APP_PATHS.dashboard} replace />;
   }
 

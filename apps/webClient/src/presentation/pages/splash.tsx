@@ -109,17 +109,21 @@ export default function SplashPage() {
       navigated = true;
       let target: string;
       if (isAuthenticated) {
-        // `onboardingComplete === true`  -> dashboard
-        // `onboardingComplete === false` -> onboarding wizard
-        // `onboardingComplete === null`  -> couldn't reach /user-settings;
-        //                                  default to onboarding so the
-        //                                  wizard picks up the user rather
-        //                                  than dropping them on the
-        //                                  dashboard with hard-coded UTC.
+        // Android APK dev audit, 2026-07 (v1.7.0 regression fix):
+        // Invert the prior `=== false ? Onboarding : Dashboard`
+        // ternary. The previous logic routed `null` (transient
+        // /user-settings failure) — and any future non-boolean state
+        // we add — to the dashboard, where the user could be silently
+        // left if OnboardingGuard also failed-open. The new shape asks
+        // the positive question: do we have a DEFINITIVE signal that
+        // onboarding is complete? If yes (`true`), dashboard. If we
+        // can not prove completion (`false` or `null`), we err toward
+        // the wizard. The wizard's own inverse check sends
+        // already-onboarded users back to the dashboard in <1 frame.
         target =
-          onboardingComplete === false
-            ? `${RoutePaths.App}/${RoutePaths.Onboarding}`
-            : `${RoutePaths.App}/${RoutePaths.Dashboard}`;
+          onboardingComplete === true
+            ? `${RoutePaths.App}/${RoutePaths.Dashboard}`
+            : `${RoutePaths.App}/${RoutePaths.Onboarding}`;
       } else {
         target = `${RoutePaths.Auth}/${RoutePaths.Login}`;
       }

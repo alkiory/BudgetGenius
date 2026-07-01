@@ -41,10 +41,17 @@ import { Navigate } from "react-router";
  *   3. OnboardingPage's own `settings?.hasCompletedOnboarding ===
  *      true` redirect bounces them to `/app/dashboard`.
  *
- * Strict `=== false` check (not `!== true`) so transient settings
- * fetch errors / undefined / null responses never bounce a finished
- * user back to the wizard. Defense-in-depth rationale mirrors the
- * previous `AuthGuard`-and-redirect history.
+ * Android APK dev audit, 2026-07: v1.7.0 production regression — the
+ * strict `=== false` predicate silently allowed brand-new mobile
+ * users (eager-create succeeded server-side but the first
+ * `useGetSettings()` round-trip transiently failed or its cache was
+ * empty + `data` undefined) to slip past the wizard and land on
+ * `/app/dashboard` with hardcoded defaults. Fix: invert the gate to
+ * `!== true` so ANY non-confirmed-completed state routes to
+ * `/app/onboarding`. The wizard's own inverse check
+ * (`settings?.hasCompletedOnboarding` truthy → Navigate to dashboard)
+ * immediately bounces finished users back, so the latency cost is
+ * one extra render cycle, never a user-visible detour.
  */
 const OnboardingGuard = () => {
   const { data: settings, isLoading: isSettingsLoading } = useGetSettings();
@@ -53,12 +60,20 @@ const OnboardingGuard = () => {
     return <LoadingPage />;
   }
 
-  // Use STRICT `=== false` — undefined / null MUST pass through so a
-  // transient settings fetch failure doesn't bounce an existing user
-  // back into the wizard they already finished. Same strict-equality
-  // rule as the previous combined guard (knowledge.md §6.8 +
-  // rpi/mobile-cookies-persistence).
-  if (settings?.hasCompletedOnboarding === false) {
+  // Use `!== true` (positive-confirmation) rather than `=== false`
+  // (negative-confirmation). The previous strict-negative rule was
+  // correct for an "existing user, transient fetch failure" scenario
+  // but SILENTLY FAILED OPEN for a "fresh user, transient /user-settings
+  // 401 mid-cache-warmup" — exactly the Capacitor APK cold-start path
+  // where Android WebView's missing cookie + Authorization header
+  // round-trip produced an empty `data` payload. With `!== true`:
+  //   - fresh user + data=false          → redirect to onboarding ✓
+  //   - fresh user + data=undefined      → redirect to onboarding ✓
+  //   - finished user + data=true        → MainLayout (dashboard) ✓
+  //   - finished user + data=undefined   → redirect → wizard's own
+  //                                          `=== true` redirect sends
+  //                                          them back in <1 frame ✓
+  if (settings?.hasCompletedOnboarding !== true) {
     return <Navigate to={APP_PATHS.onboarding} replace />;
   }
 

@@ -539,9 +539,9 @@ If YES to any — split the guard. The rule generalizes beyond onboarding: any "
 **Defense-in-depth invariants preserved by both new guards** (do not regress on future refactors):
 
 - **§6.8.1 invariant.** Each guard uses three leaf `useSelector` calls (one per field) for the auth slice. Do NOT collapse them into a single object selector — that re-introduces the §6.8.1 trap.
-- **Strict `=== false` predicate.** `OnboardingGuard` checks `settings?.hasCompletedOnboarding === false` (not `!== true`) so transient settings fetch errors / undefined / null responses never bounce an existing user back to an already-finished wizard.
 - **Original `&&` predicate preserved.** `AuthGuard` keeps `if (!isAuthenticated && !user)` — the same condition the original combined `ProtectedRoute` used. Changing it to `||` would alter the half-warmed state semantics.
 - **No `<MainLayout>` children prop.** `OnboardingGuard` returns `<MainLayout />` directly because `MainLayout` owns its own internal `<Outlet />` and ignores the children prop. Wrapping `<MainLayout><Outlet /></MainLayout>` creates a dead React element with no rendered children.
+- **Gate predicate calibration.** OnboardingGuard's settings check uses `!== true` (positive-confirmation) paired with the wizard's own symmetric inverse `=== true` bounce-back to `/app/dashboard`. See §6.8.3 below for the strict-positive-vs-strict-negative tradeoff.
 
 **Files in this fix (delete-and-create pattern, not in-place edit):**
 
@@ -553,6 +553,121 @@ If YES to any — split the guard. The rule generalizes beyond onboarding: any "
 - NARRATIVE CLEANUP in `apps/webClient/src/adapters/slices/user-settings/settingsSlice.ts` — swapped the `protected-route.tsx` reference for `OnboardingGuard` in the comment explaining the `hasCompletedOnboarding: false` default.
 
 **Lint hook (TODO).** No static rule yet catches a `<Route element={Guard}>` whose guard redirects to a `<Route>` inside its own subtree. A custom ESLint rule walking React Router's JSX tree (resolve the `Route element` prop chain into a redirect-predicate AST map; flag any guard component whose return is `<Navigate to={x}>` where `x` is matched by a `<Route>` in the same parent) would catch this in CI. See the open follow-up.
+
+#### 6.8.3 Strict-negative vs strict-positive gate predicates — the v1.7.0 fresh-user regression (must read before editing any `<Navigate>` predicate on a freshness gate)
+
+**The bug class.** A predicate that checks a SINGLE negative state (`x === false`) silently fails-open when the data source returns `undefined` or `null` (transient fetch failure, cache miss, in-flight race). The user bypasses the gate. Conversely, a predicate that checks a SINGLE positive state (`x !== true`) silently fails-open only in the much rarer scenario where the source returns a wrong, truthy-but-not-actual value (e.g., a previous user's stale cache entry).
+
+The v1.7.0 production regression — fresh Capacitor APK users landing on `/app/dashboard` instead of `/app/onboarding` — came from the strict-negative side of this tradeoff. The fix is **strict-positive on the gate, strict-positive on the symmetric inverse check, paired together**. Neither half works alone.
+
+```tsx
+// ❌ WRONG — strict-negative gate. `undefined === false` is false,
+// so transient fetch failures / cache misses pass through and the
+// fresh user lands on /app/dashboard silently.
+const OnboardingGuard = () => {
+  const { data: settings, isLoading } = useGetSettings();
+  if (isLoading) return <LoadingPage />;
+  if (settings?.hasCompletedOnboarding === false) {
+    return <Navigate to={APP_PATHS.onboarding} replace />;
+  }
+  // undefined-or-null slips past the strict-negative gate → dashboard.
+  return <MainLayout />;
+};
+
+// ❌ ALSO WRONG — truthy (not strict) inverse check. The wizard
+// bounces `hasCompletedOnboarding === true` users back to dashboard,
+// but a finished user with a transient /user-settings failure
+// sees the wizard for 1 frame and on the next "Submit" their
+// timezone/currency/locale get overwritten by detected defaults.
+const OnboardingPage = () => {
+  const { data: settings, isLoading } = useGetSettings();
+  if (!isLoading && settings?.hasCompletedOnboarding) {
+    return <Navigate to={APP_PATHS.dashboard} replace />;
+  }
+  ...
+};
+
+// ✅ RIGHT — strict-positive on BOTH sides. Fresh user with no
+// data → onboarded check fails on BOTH gates → wizard shows.
+// Finished user with no data → gate sends them to wizard, wizard's
+// own strict-positive bounce-back sends them home in ≤1 render.
+// The latency cost is one extra render cycle, never a user-visible
+// detour, and the user's saved settings NEVER get overwritten by
+// detected defaults because the wizard's bounce-back fires before
+// any submit-PATCH.
+const OnboardingGuard = () => {
+  const { data: settings, isLoading } = useGetSettings();
+  if (isLoading) return <LoadingPage />;
+  if (settings?.hasCompletedOnboarding !== true) {
+    return <Navigate to={APP_PATHS.onboarding} replace />;
+  }
+  return <MainLayout />;
+};
+
+const OnboardingPage = () => {
+  const { data: settings, isLoading } = useGetSettings();
+  if (!isLoading && settings?.hasCompletedOnboarding === true) {
+    return <Navigate to={APP_PATHS.dashboard} replace />;
+  }
+  ...
+};
+```
+
+**The dual antipattern in `splash.tsx`.** The cold-start loader had the exact same shape on the splash side:
+
+```tsx
+// ❌ WRONG — ternary routed null (transient /user-settings failure)
+// to the wrong side. Same doc-comment-vs-code binary inversion
+// as the OnboardingGuard fix.
+const go = (onboardingComplete: boolean | null) => {
+  ...
+  target = onboardingComplete === false
+    ? `${RoutePaths.App}/${RoutePaths.Onboarding}`
+    : `${RoutePaths.App}/${RoutePaths.Dashboard}`;
+  navigate(target, { replace: true });
+};
+```
+
+The fix is to ask the **positive** question — "is onboarding DEFINITIVELY complete?" — and default to the wizard on any non-confirmed state. The wizard's symmetric inverse check (§6.8.3 above) sends finished users back to the dashboard in the same ≤1 render cycle.
+
+```tsx
+// ✅ RIGHT — positive-confirmation literal.
+target = onboardingComplete === true
+  ? `${RoutePaths.App}/${RoutePaths.Dashboard}`
+  : `${RoutePaths.App}/${RoutePaths.Onboarding}`;
+```
+
+**The general rule.** For ANY one-shot onboarding-or-completed gate (onboarding, profile-completion, KYC step, beta-cohort enrollment, premium-upgrade prompt, etc.):
+
+1. The **gate** uses `!== true` (positive-confirmation). A fresh user with transient failure lands on the wizard, never on the dashboard with hard-coded defaults.
+2. The **wizard** uses `=== true` (strict-positive) on its own bounce-back. A finished user with transient failure bounces back to the dashboard in ≤1 render, NEVER overwrites per-user settings.
+3. The gate's redirect target MUST NOT re-enter the same gate (see §6.8.2 for the structural rule). Both halves parse independently; together they prevent both directions of the strict-negative antipattern.
+
+**Three pre-merge questions** (additive to §6.8.2's three):
+
+1. Does the gate predicate use `=== false` instead of `!== true`? (Strict-negative antipattern.)
+2. Does the wizard's inverse check use truthy match instead of `=== true`? (Strict-positive antipattern's mirror.)
+3. Does the optional splash / cold-start ternary route `null` / undefined to the "skip gate" path? (Inverted ternary antipattern.)
+
+If YES to any — flip the predicate, codify the symmetric inverse, add the regression spec. Do NOT reach for `|| short-circuit defaults` tricks; the documented pattern above has been audited end-to-end.
+
+**Lint hook (TODO).** No static rule yet catches a strict-negative (`=== false`) `hasCompletedOnboarding` (or analogous freshness flag) gate paired with anything other than `!== true`. A custom ESLint rule flagging `if (settings?.<field> === false) { return <Navigate… />; }` outside the strictly documented exceptions (none currently exist) would catch this in CI.
+
+**Defense-in-depth invariants preserved by the v1.7.0 fix** (do not regress on future refactors):
+
+- **§6.8.1 invariant unchanged.** Each guard continues to use three leaf `useSelector` calls for the auth slice — not collapsible.
+- **§6.8.2 structural invariant unchanged.** `/app/onboarding` remains a direct sibling of `OnboardingGuard` (NEVER a child) so the freshness check never re-enters itself.
+- **Strict-positive on BOTH sides of the gate pair.** `OnboardingGuard` checks `!== true`; `OnboardingPage` checks `=== true` on its own bounce-back. Either side flipping back to strict-negative or truthy-match re-introduces the regression.
+- **Positive-confirmation splash ternary.** `onboardingComplete === true ? Dashboard : Onboarding` (NOT the previous `=== false ? Onboarding : Dashboard`). Splash's doc-comment matches the code, both saying "default to wizard on non-definitive state".
+
+**Regression spec.** `apps/webClient/tests/onboarding-fresh-user.spec.ts` pins the four-cell truth table (fresh×false → wizard; finished×true → dashboard NO DETOUR; fresh×transient-error → wizard; finished×transient-error → wizard bounces back to dashboard within 1 render). The spec mocks `/user-settings` to either `false`, `true`, or 3× 5xx (exhausting React Query's `retry: 3`); the fourth case additionally mocks the post-retry 200 with `true` so the wizard's symmetric bounce-back has the data it needs. Any future change that flips either predicate or inverts either ternary trips at least one cell of the spec.
+
+**Files in this v1.7.0 fix (delete-and-create / surgical-edit pattern):**
+
+- MODIFIED `apps/webClient/src/presentation/routes/onboarding-guard.tsx` — predicate `=== false` → `!== true`; verbose comment block rewritten.
+- MODIFIED `apps/webClient/src/presentation/pages/splash.tsx` — ternary inverted to `=== true ? Dashboard : Onboarding`; comment block rewritten.
+- MODIFIED `apps/webClient/src/presentation/pages/onboarding/onboardingPage.tsx` — inverse bounce-back tightened from truthy to strict `=== true` (the symmetric half of the calibration).
+- NEW `apps/webClient/tests/onboarding-fresh-user.spec.ts` — four-cell Playwright truth-table regression spec; mocks `/auth/verify`, `/user/profile`, and `/user-settings` (3× 5xx or 200 with `false` / `true`).
 
 ---
 
