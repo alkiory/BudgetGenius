@@ -7,13 +7,15 @@ import { UserDto } from './dto/user.dto';
 import { CreateUserDto } from '@application/user/dto/create.dto';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { LoggingService } from '@infrastructure/log/logger.service';
+import { UserSettingsService } from '@application/user/user-settings.service';
 
 @Injectable()
 export class UserService {
   constructor(
     private readonly userRepository: UserRepositoryImpl,
     private readonly logger: LoggingService,
-  ) {}
+    private readonly userSettingsService: UserSettingsService,
+  ) { }
 
   async getById(id: number) {
     return this.userRepository.findById(id);
@@ -84,6 +86,19 @@ export class UserService {
     };
 
     this.logger.log(`User ${userDto.email} created successfully`);
+
+    try {
+      await this.userSettingsService.getOrCreateSettings(userDtoResult.id);
+      this.logger.log(
+        `⚙️ Initialized pre-onboarding user_settings row for admin-created user ${userDto.email}`,
+      );
+    } catch (settingsErr) {
+      this.logger.warn(
+        `⚠️ Could not eagerly create user_settings for admin-created user ${userDto.email}: ${(settingsErr as Error).message
+        }. Lazy fallback will still work on first GET /user-settings.`,
+      );
+    }
+
     return this.userRepository.save(userDtoResult);
   }
 
@@ -92,22 +107,12 @@ export class UserService {
   }
 
   async updateUser(id: string, updateUserDto: Partial<UserDto>) {
-    // Reject empty-string passwords BEFORE delegation. The User entity's
-    // @BeforeUpdate hashPassword hook treats `''` as falsy and skips the
-    // hash, so a literal empty string reaching the repo would silently
-    // overwrite a real hash with `''`. Login then fails because
-    // `bcrypt.compare(plaintext, '')` is always false.
     if (updateUserDto.password === '') {
       throw new BadRequestException(
         '🛑 Password cannot be empty. Use the "forgot password" flow to remove password login.',
       );
     }
 
-    // Forward the payload unchanged. `userRepository.updateUser` runs
-    // `repo.preload + repo.save` which fires the User entity's
-    // `@BeforeUpdate hashPassword` hook — bcrypt is the hook's job, not
-    // ours, so a future caller can't forget to hash. `updatedAt` is
-    // handled by TypeORM's @UpdateDateColumn automatically.
     const updated = await this.userRepository.updateUser(
       Number(id),
       updateUserDto,

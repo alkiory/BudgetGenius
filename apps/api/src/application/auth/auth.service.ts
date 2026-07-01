@@ -21,6 +21,7 @@ import { randomBytes } from 'crypto';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { DataSource } from 'typeorm';
 import { ResendMailerService } from '@infrastructure/mail/resend-mailer.service';
+import { UserSettingsService } from '@application/user/user-settings.service';
 
 /** Per-email brute-force protection. Anything tighter would block legitimate users
  *  who mistype; anything looser would not stop a credential-stuffing script. */
@@ -58,26 +59,13 @@ export class AuthService {
     private readonly dataSource: DataSource,
     private readonly configService: ConfigService,
     private readonly mailer: ResendMailerService,
-  ) {}
+    private readonly userSettingsService: UserSettingsService,
+  ) { }
 
   findOne(email: string) {
     return this.userRepository.findByEmail(email);
   }
 
-  /**
-   * Idempotent signup. Three possible outcomes:
-   *
-   * 1. The email is brand-new → create the account and return fresh tokens.
-   * 2. The email already exists AND has the same bcrypt-hashed password →
-   *    treat the call as a retry and re-issue tokens (handles double-clicks
-   *    and flaky networks that re-trigger /signup on the same client).
-   *    The caller already proved knowledge of the password, so this is
-   *    equivalent to a normal login.
-   * 3. The email already exists without a matching password (different
-   *    password, or the account was created via Google/social and never
-   *    had a password set) → 409 Conflict. We deliberately do NOT leak
-   *    which case it is, to avoid user-enumeration side channels.
-   */
   async signup(dto: {
     name: string;
     surname?: string;
@@ -159,6 +147,8 @@ export class AuthService {
       604800,
     );
 
+    await this.eagerCreateUserSettingsRow(newUser.id, newUser.email, 'email');
+
     this.logger.log(`🪪 New user registered: ${newUser.email}`);
     return {
       accessToken,
@@ -186,10 +176,6 @@ export class AuthService {
   }
 
   async updateRefreshToken(id: number, refreshToken: string) {
-    // Note: refresh tokens live in Redis (not in a User column), so the
-    // entity-hook wiring we built for `users.password` does not apply
-    // here — hashing is done directly. `BCRYPT_COST` keeps this in lock
-    // step with password hashing in case the cost factor ever changes.
     const hashedToken = await bcrypt.hash(refreshToken, BCRYPT_COST);
     await this.userRepository.updateToken(id, hashedToken);
   }
@@ -201,9 +187,6 @@ export class AuthService {
 
   async login(email: string, password: string) {
     try {
-      // 1. Per-email rate-limit check (brute-force mitigation).
-      // Done before any DB lookup / bcrypt work so attackers can't burn CPU.
-      // The counter auto-expires after LOGIN_WINDOW_SECONDS thanks to incr().
       const attemptsKey = this.loginAttemptsKey(email);
       const attemptsRaw = await this.redisService.get(attemptsKey);
       const attempts = attemptsRaw ? Number(attemptsRaw) : 0;
@@ -233,12 +216,6 @@ export class AuthService {
         );
       }
 
-      // 3. Social-only users (no password) can't be brute-forced — surface a clear
-      // error so they take the OAuth path. IMPORTANT: do NOT touch the counter
-      // here. Clearing it before throwing would let an attacker distinguish
-      // OAuth-only emails (counter reset) from non-existent emails (counter
-      // increments), creating an enumeration side channel. Let the counter
-      // expire naturally via the 15-min TTL.
       if (!user.password) {
         throw new UnauthorizedException(
           '⚠️ Este usuario no tiene contraseña configurada (probablemente login social)',
@@ -269,8 +246,6 @@ export class AuthService {
 
       return { accessToken, refreshToken, user };
     } catch (error) {
-      // Rate-limit HttpException (429) MUST propagate without being swallowed
-      // by the generic UnauthorizedException catcher below.
       if (error instanceof UnauthorizedException) throw error;
       if (error instanceof HttpException) throw error;
 
@@ -340,6 +315,12 @@ export class AuthService {
       // Confirmar la transacción
       await queryRunner.commitTransaction();
 
+      await this.eagerCreateUserSettingsRow(
+        newUser.id,
+        newUser.email,
+        'google',
+      );
+
       return newUser;
     } catch (error) {
       // Deshacer cambios en caso de error
@@ -381,6 +362,45 @@ export class AuthService {
   }
 
   /**
+   * Eager-create the user_settings row with `hasCompletedOnboarding=false`
+   * during signup (email or Google OAuth). The old design relied on a
+   * lazy path — the row was created on the first GET /user-settings
+   * call — but that left a window where `protected-route.tsx` evaluated
+   * `settings?.hasCompletedOnboarding === false` against `settings ===
+   * undefined`, slipping a fresh user past the gate onto
+   * `/app/dashboard` with hardcoded defaults instead of the wizard.
+   *
+   * Best-effort: a transient failure here only delays the row creation
+   * by one /user-settings round-trip (the lazy path retries). It must
+   * NEVER break the auth response — login is the contract, onboarding
+   * is a follow-up that can be deferred. The `'pre-onboarding'` log
+   * wording is intentional: we just created the row in the
+   * wizard-pending state, we did not finish onboarding the user.
+   *
+   * @param userId newly-created user id (NOT the JWT subject)
+   * @param email logging-only; helps grep for "Initialized" per source
+   * @param source 'email' | 'google' — tag distinguishing the two paths
+   * so a grep can correlate to the calling signup flow.
+   */
+  private async eagerCreateUserSettingsRow(
+    userId: number,
+    email: string,
+    source: 'email' | 'google',
+  ): Promise<void> {
+    try {
+      await this.userSettingsService.getOrCreateSettings(userId);
+      this.logger.log(
+        `⚙️ Initialized pre-onboarding user_settings row for ${source} user ${email}`,
+      );
+    } catch (settingsErr) {
+      this.logger.warn(
+        `⚠️ Could not eagerly create user_settings for ${source} user ${email}: ${(settingsErr as Error).message
+        }. Lazy fallback will still work on first GET /user-settings.`,
+      );
+    }
+  }
+
+  /**
    * Deletes the refresh token from Redis so it cannot be reused.
    * Called on logout to ensure a stale cookie cannot silently re-auth
    * the user (particularly important in Capacitor WebViews where cookie
@@ -405,11 +425,6 @@ export class AuthService {
   }
 
   async requestPasswordReset(dto: ForgotPasswordDto) {
-    // Flatten timing oracle: pick a random sleep BEFORE branching on
-    // user existence so the response-time envelope is the same whether
-    // the row exists or not. Without this, the hit branch's
-    // Postgres lookup + bcrypt-free token generation were measurably
-    // slower than the miss branch's plain return.
     const jitter =
       RESET_TIMING_JITTER_MS_LO +
       Math.floor(
@@ -419,21 +434,12 @@ export class AuthService {
 
     const user = await this.userRepository.findByEmail(dto.email);
 
-    // Self-documenting gate inline so the rejection intent reads at a
-    // glance AND TypeScript narrows `user` to non-null across the rest
-    // of the function (the `Boolean(user)` predicate is what flips
-    // narrowing). Only true email-auth users (with a password set) are
-    // eligible for password reset. Un-resettable accounts (unknown
-    // email, social-only, missing password) are silently absorbed to
-    // prevent user-enumeration and to avoid expanding the auth surface
-    // of OAuth-only accounts (Google-only users must not silently gain
-    // a password they didn't opt into).
     if (!user || user.authProvider !== 'email' || !user.password) {
       const reason = !user
         ? 'unknown'
         : user.authProvider !== 'email'
-        ? 'social-only'
-        : 'no-password';
+          ? 'social-only'
+          : 'no-password';
       this.logger.warn(
         `🔍 Password reset requested for un-resettable account: ${dto.email} (reason: ${reason})`,
       );
@@ -442,15 +448,6 @@ export class AuthService {
       };
     }
 
-    // Strict FRONTEND_URL contract: a missing or malformed env var is a
-    // deployment misconfiguration and any reset email we ship would
-    // link users to the wrong (or broken) origin. Surface a 500 so an
-    // operator notices during deploy instead of silently emailing
-    // unclickable links or relying on a hardcoded fallback we can't
-    // trust across environments (mobile, web, Capacitor WebViews…).
-    // This runs BEFORE `saveToken` so a misconfigured deployment does
-    // NOT leave dangling reset tokens in the DB that cannot be redeemed
-    // (no email was ever sent).
     const rawFrontendUrl = this.configService.get<string>('FRONTEND_URL');
 
     if (!rawFrontendUrl) {
@@ -469,10 +466,6 @@ export class AuthService {
       .trim()
       .replace(/\/+$/, '');
 
-    // Validate that the URL starts with http:// or https:// to avoid
-    // shipping an email with a broken relative link. This catches
-    // misconfigured values like `not-a-url` that would otherwise pass
-    // the empty-string guard.
     if (!/^https?:\/\//.test(primaryFrontendUrl)) {
       this.logger.error(
         `🚨 FRONTEND_URL is malformed ("${primaryFrontendUrl}") while handling reset for ${dto.email}`,
@@ -487,11 +480,6 @@ export class AuthService {
 
     const resetUrl = `${primaryFrontendUrl}/auth/reset-password?token=${token}`;
 
-    // The previous implementation only wrote the URL to a log line and
-    // lied to the client (`message: 'Recovery link sent to your email'`)
-    // while no email was ever sent. resendMailer throws on transport
-    // failure, so the controller surfaces a 5xx if delivery fails —
-    // clients can retry instead of believing a phantom success.
     await this.mailer.sendPasswordReset(user.email, resetUrl);
 
     // Still log the URL in dev so it's grep-able when debugging locally
@@ -521,8 +509,7 @@ export class AuthService {
         await this.passwordResetRepository.deleteToken(resetToken.id);
       } catch (cleanupErr) {
         this.logger.warn(
-          `Could not delete expired reset token ${resetToken.id}: ${
-            (cleanupErr as Error).message
+          `Could not delete expired reset token ${resetToken.id}: ${(cleanupErr as Error).message
           }`,
         );
       }

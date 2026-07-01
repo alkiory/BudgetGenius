@@ -11,6 +11,14 @@ const initialState: UserSettingsState = {
     timezone: "",
     currency: "USD",
     locale: "",
+    // Android APK audit, 2026-06: explicit `false` here so the
+    // first paint after signup/refresh has a known state for the
+    // onboarding gate. Both `OnboardingGuard` and `splash.tsx`
+    // consume this field; treating it as `false` until the slice
+    // receives a server response keeps the user from being
+    // bounced to the wizard after a server crash (we err toward
+    // "needs onboarding" rather than "wrong default").
+    hasCompletedOnboarding: false,
   },
 };
 

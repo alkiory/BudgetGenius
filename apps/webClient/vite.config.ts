@@ -88,6 +88,14 @@ export default defineConfig({
         : [
             "@capacitor/app",
             "@capacitor/browser",
+            // Filesystem + Share — used by
+            // apps/webClient/src/infrastructure/downloadService.ts to
+            // route report downloads on the Capacitor (Android/iOS)
+            // WebView through the native share sheet. Bare specifier
+            // is preserved on web builds via dynamic `await import()`
+            // and the call site is guarded by `isNativePlatform()`.
+            "@capacitor/filesystem",
+            "@capacitor/share",
             // @capgo/capacitor-social-login (v1.2.0) replaces
             // @capacitor-firebase/authentication. The WebView's runtime
             // resolves the bare specifier against the bundled APK; on

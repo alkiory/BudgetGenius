@@ -402,7 +402,11 @@ All routes use the `RoutePaths` enum from `presentation/utils/routes.ts`. New ro
 2. Add route definition to `route-config.tsx`
 3. Place under `ProtectedRoute` for authenticated, `PremiumRoute` for premium
 
-### 6.8 react-redux Pitfalls (read before touching any `useSelector`)
+### 6.8 Redux Selector + Router Guard Pitfalls (read before touching any `useSelector` or guarded `<Route>`)
+
+Two production-blocking pitfalls surfaced during the Android APK dev audit, 2026-06. Both are subtle enough that lint cannot catch them; codification here is the only line of defense.
+
+#### 6.8.1 react-redux combined-slice `useSelector` trap
 
 **The bug class.** React-Redux v9 (`useSelector`) is backed by React 19's
 `useSyncExternalStore`, which compares the selector's current result to the
@@ -467,6 +471,88 @@ something inside that slice genuinely changes.
 object literals inside `useSelector`. Adding `react-redux/no-new-object-selectors`
 (or a hand-rolled `no-restricted-syntax` AST rule) would catch this in CI
 before it ships — see the open follow-up.
+
+#### 6.8.2 React Router self-redirect in guarded `<Route>` subtrees (Android APK audit, 2026-06)
+
+**The bug class.** When a `<Route element={Guard}>` component contains BOTH a `<Navigate>` redirect predicate AND the `<Route>` that matches the redirect target, React Router aborts the self-redirect after a small threshold and leaves the DOM empty. No console error, no Suspense fallback, no ErrorBoundary trigger — just an empty `#root`. Production symptom: `/app/onboarding` rendered a completely blank page in the Capacitor Android dev environment, with the React tree refusing to mount at all.
+
+The trap, in the original combined-guard shape (deleted in this fix):
+
+```tsx
+// ❌ WRONG — `/app/onboarding` lives INSIDE the same guard that
+// redirects to it. A fresh user hitting any /app/* route triggers
+// an infinite <Navigate> to self → DOM emptied silently.
+<Route path={RoutePaths.App} element={<ProtectedRoute />}>
+  <Route
+    path={RoutePaths.Onboarding}
+    element={<OnboardingPage />}
+  />
+  <Route path={RoutePaths.Dashboard} element={<DashboardPage />} />
+  ...
+</Route>
+
+// ProtectedRoute (deleted) internally:
+//   if (settings?.hasCompletedOnboarding === false)
+//     return <Navigate to={RoutePaths.Onboarding} replace />;
+```
+
+Trace of the loop, for `settings.hasCompletedOnboarding === false`:
+
+1. User navigates to `/app/dashboard`.
+2. `<Route element={<ProtectedRoute />}>` mounts. Predicate fires `=== false` → `<Navigate to="/app/onboarding" replace />`.
+3. Router matches `/app/onboarding` which is INSIDE the same `<Route element={<ProtectedRoute />}>`. The guard re-mounts.
+4. Same `=== false` predicate fires again → `<Navigate to="/app/onboarding" replace />`.
+5. After ~3 loops, React Router aborts the cycle. `#root` stays empty.
+
+**The rule.** Any guard that can `<Navigate>` to a target path MUST NOT also be the layout element for that target's `<Route>`. Split into two guards: an outer `AuthGuard` that owns the parent layout, and an inner **sibling** `OnboardingGuard` that EXCLUDES the target path so the wizard itself never re-enters the freshness check.
+
+```tsx
+// ✅ RIGHT — `/app/onboarding` is a direct SIBLING of the
+// OnboardingGuard layout route, NOT a child. Same `=== false`
+// predicate never re-evaluates against itself → no loop.
+// AuthGuard owns auth; OnboardingGuard owns freshness; both
+// render an <Outlet /> (or a layout component that owns its own
+// internal <Outlet />) so matched child routes still mount.
+<Route path={RoutePaths.App} element={<AuthGuard />}>
+  {/* Direct sibling — NO OnboardingGuard around this one. */}
+  <Route
+    path={RoutePaths.Onboarding}
+    loader={LoadingPage}
+    element={<OnboardingPage />}
+  />
+  {/* Layout-level guard for every other /app/* route. */}
+  <Route element={<OnboardingGuard />}>
+    <Route path={RoutePaths.Dashboard} element={<DashboardPage />} />
+    ...
+  </Route>
+</Route>
+```
+
+**Three pre-merge questions.** If you can answer YES to any of these before shipping a route refactor, you're at risk of re-introducing the loop:
+
+1. Does the top-level `<Route element={...}>` of a guarded path ALSO wrap the `<Route>` for the redirect target?
+2. Does the redirect predicate (e.g. `!== true` / `=== false`) re-fire on the same dataset the second time the guard evaluates?
+3. Does the target page's URL equal the redirect source (e.g. both are `/app/onboarding`)?
+
+If YES to any — split the guard. The rule generalizes beyond onboarding: any "freshness" or "first-run" gate with a redirect-to-wizard path is at risk. Other guards in this codebase (e.g. `premium-pages.tsx`) should be re-audited against this rule on next touch.
+
+**Defense-in-depth invariants preserved by both new guards** (do not regress on future refactors):
+
+- **§6.8.1 invariant.** Each guard uses three leaf `useSelector` calls (one per field) for the auth slice. Do NOT collapse them into a single object selector — that re-introduces the §6.8.1 trap.
+- **Strict `=== false` predicate.** `OnboardingGuard` checks `settings?.hasCompletedOnboarding === false` (not `!== true`) so transient settings fetch errors / undefined / null responses never bounce an existing user back to an already-finished wizard.
+- **Original `&&` predicate preserved.** `AuthGuard` keeps `if (!isAuthenticated && !user)` — the same condition the original combined `ProtectedRoute` used. Changing it to `||` would alter the half-warmed state semantics.
+- **No `<MainLayout>` children prop.** `OnboardingGuard` returns `<MainLayout />` directly because `MainLayout` owns its own internal `<Outlet />` and ignores the children prop. Wrapping `<MainLayout><Outlet /></MainLayout>` creates a dead React element with no rendered children.
+
+**Files in this fix (delete-and-create pattern, not in-place edit):**
+
+- DELETED `apps/webClient/src/presentation/routes/protected-route.tsx` — combined auth + onboarding gate; the source of the loop.
+- DELETED `apps/webClient/src/presentation/routes/OnboardingRoute.tsx` — lazy wrapper, made obsolete once `OnboardingPage` became lazy directly.
+- NEW `apps/webClient/src/presentation/routes/auth-guard.tsx` — auth-only, three leaf `useSelector`s, renders `<Outlet />`.
+- NEW `apps/webClient/src/presentation/routes/onboarding-guard.tsx` — settings + `=== false` redirect, renders `<MainLayout />`.
+- MODIFIED `apps/webClient/src/presentation/routes/route-config.tsx` — `<Route path={RoutePaths.App} element={<AuthGuard />}>` parent; `/app/onboarding` direct sibling; rest under `<Route element={<OnboardingGuard />}>`.
+- NARRATIVE CLEANUP in `apps/webClient/src/adapters/slices/user-settings/settingsSlice.ts` — swapped the `protected-route.tsx` reference for `OnboardingGuard` in the comment explaining the `hasCompletedOnboarding: false` default.
+
+**Lint hook (TODO).** No static rule yet catches a `<Route element={Guard}>` whose guard redirects to a `<Route>` inside its own subtree. A custom ESLint rule walking React Router's JSX tree (resolve the `Route element` prop chain into a redirect-predicate AST map; flag any guard component whose return is `<Navigate to={x}>` where `x` is matched by a `<Route>` in the same parent) would catch this in CI. See the open follow-up.
 
 ---
 

@@ -10,19 +10,15 @@ import { Showcase } from "@presentation/components/landing/showcase";
 import { Testimonials } from "@presentation/components/landing/testimonials";
 import { Logo } from "@presentation/components/logo";
 import HeaderComponent from "@presentation/components/ui/header";
+import { detectTimezone } from "@presentation/utils/deviceCapabilities";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
-/**
- * Landing page orchestrator.
- *
- * After the v1.4+ redesign, the marketing funnel is composed from the seven
- * section components living under `presentation/components/landing/`.
- * This file is intentionally a thin wrapper — none of the actual copy, layout
- * primitives, or i18n keys are duplicated here.
- */
 export default function HomePage() {
   const { t } = useTranslation();
+
+  const detectedTimezone = useMemo(() => detectTimezone(), []);
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -31,6 +27,16 @@ export default function HomePage() {
 
       <main>
         <Hero />
+        {/* Android APK audit, 2026-06: visible "Detected timezone"
+            badge so visitors can confirm the detection worked and
+            so we exercise the same util the onboarding wizard uses. */}
+        <div
+          aria-live="polite"
+          aria-atomic="true"
+          className="bg-slate-50 py-2 text-center text-xs text-slate-500 dark:bg-slate-900/40 dark:text-slate-400"
+        >
+          {t("landing.detectedTimezoneLabel", { tz: detectedTimezone })}
+        </div>
         <Features />
         <MobileAppSection />
         <HowItWorks />
@@ -120,7 +126,7 @@ export default function HomePage() {
           </div>
           <div className="mt-8 border-t pt-8 text-center">
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              © {new Date().getFullYear()} {t("app.name")}.{" "}
+              &copy; {new Date().getFullYear()} {t("app.name")}.{" "}
               {t("landing.allRightsReserved")}
             </p>
           </div>

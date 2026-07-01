@@ -2,6 +2,69 @@
 
 ---
 
+## [v1.7.0] — 2026-07-01
+
+> Session: Signup onboarding preferences + onboarding-guard split (Android APK dev `/app/onboarding` DOM-empty fix) + eager `user_settings` row at signup + delete-account confirmation reliability. Data-driven `/changelog` page (rendered from `apps/webClient/src/presentation/data/changelog.ts`) auto-picks up the two new v1.7 entries — no JSX changes.
+
+### Added
+
+- **Onboarding preferences wizard — `apps/webClient/src/presentation/pages/onboarding/onboardingPage.tsx`** (NEW). First-paint experience after signup / OAuth login for users whose `user_settings.hasCompletedOnboarding === false`. Three-field wizard: timezone (pre-selected from device locale), preferred currency (detected from device with confirm/swap intent + manual fallback if nothing detectable), language (EN/ES). Reads form-state on submit, PATCHes `/user-settings` with the delta, marks `hasCompletedOnboarding: true`, dispatches `updateSettingsAction` to sync Redux, invalidates the React Query `user-settings` cache, and navigates to `/app/dashboard`. New i18n keys (both `en.json` + `es.json`): `onboarding.{title, subtitle, timezone, timezoneHelp, currency, currencyHelpDetected, currencyHelpUndetected, currencyPlaceholder, language, languageHelp, submit, savedSuccess, saveError}`.
+- **New `auth-guard.tsx` + `onboarding-guard.tsx` route gates** — split the previous combined `ProtectedRoute` (which tried to do auth AND onboarding-gating AND output `<MainLayout />` in a single component, and was the root cause of the Android APK dev `/app/onboarding` DOM-empty bug). Each guard uses three leaf `useSelector` calls (one per auth slice field) per `knowledge.md §6.8.1`. `OnboardingGuard` returns `<MainLayout />` directly — `MainLayout` owns its own internal `<Outlet />` so the matched child renders correctly. Strict `=== false` predicate so a transient settings-fetch failure (undefined/null) never bounces an existing user back into the wizard.
+- **Backend `UserService.createUser` (admin POST /user path) eagerly creates the `user_settings` row** — mirrors the email-signup + Google-OAuth path so admin-created users don't slip past `OnboardingGuard` on first paint.
+- **`apps/webClient/tests/delete-account-confirmation.spec.ts`** (NEW) — Playwright spec that pins all 8 input variants (5 positive + 3 negative) the user requested for the danger-zone delete confirmation, parameterized for both EN and ES locales, plus a locale-awareness assertion that confirms the gate and the visible prompt read from the same i18n phrase.
+
+### Fixed
+
+- **PRODUCTION-DETECTED: `/app/onboarding` renders an empty DOM in Capacitor Android dev**. The previous `ProtectedRoute` redirected `settings?.hasCompletedOnboarding === false` users to `/app/onboarding`, but the matched route sat INSIDE the same `<Route element={<ProtectedRoute />}>` tree — the same gate re-evaluated the same `=== false` and `<Navigate>`-d back to self. React Router aborts the loop and silently leaves the DOM empty. Fixed by the two-guard split above; `/app/onboarding` is now a DIRECT SIBLING route of `OnboardingGuard` (not a child), so the same predicate never re-evaluates against itself. Codified as `knowledge.md §6.8.2`.
+- **PRODUCTION-DETECTED: new users skip the onboarding wizard on hard refresh**. `bg_public.user_settings` row was not yet created when `protected-route.tsx` evaluated `settings?.hasCompletedOnboarding === false` against `settings === undefined` — the strict comparison slipped a fresh user past the gate onto `/app/dashboard` with hardcoded defaults. Fixed by eagerly creating the row in `AuthService.signup()` (email) and `AuthService.validateOAuthUser()` (Google OAuth, immediately after `commitTransaction`). All three call sites (email signup + Google OAuth + admin `UserService.createUser`) wrapped in best-effort `try/catch` + structured `logger.log` — a transient failure here only delays row creation by one `/user-settings` round-trip (the lazy fallback is preserved).
+- **PRODUCTION-DETECTED: "Eliminar Cuenta"/"Delete Account" button stays disabled when the user types the right confirmation phrase**. The button predicate was hardcoded to the English literal `"delete my account"` while the i18n prompt shows `"eliminar mi cuenta"` for Spanish users — making the gate impossible to satisfy in Spanish. Plus no `trim()` and no `toLowerCase()` — even English users tripped on trailing/leading spaces or capitalization variants. Fixed by adding `settings.deleteConfirmPhrase` i18n key in both EN and ES, refactoring `settings.typeToConfirm` to interpolate `{{phrase}}`, and deriving `isDeleteConfirmed = confirmText.trim().toLowerCase() === deleteConfirmPhrase.trim().toLowerCase()` so the gate + the visible prompt read from the same source of truth (a translator edit updates BOTH simultaneously). Plays all 5 positive + 3 negative test cases — pinned by the new Playwright spec above.
+
+### Changed
+
+- **`apps/webClient/src/presentation/routes/route-config.tsx`** — restructured to use the two-guard split. `<Route path={RoutePaths.App} element={<AuthGuard />}>` is the new parent; `/app/onboarding` is a direct sibling (lazy-imported `OnboardingPage`); the rest of `/app/*` (Dashboard, Transactions, Income, Budgets, Reports, Profile, UserList, UserDetail) sits inside `<Route element={<OnboardingGuard />}>`.
+- **`apps/webClient/src/presentation/components/profile/account-settings.tsx`** — three edits: (1) added `deleteConfirmPhrase` const + `isDeleteConfirmed` derived value after `const queryClient = useQueryClient()`; (2) prompt Label now `t("settings.typeToConfirm", { phrase: deleteConfirmPhrase })` instead of `t("settings.typeToConfirm")`; (3) destructive button `disabled={!isDeleteConfirmed || isDeleting}` + handler guard `if (!isDeleteConfirmed) return;`.
+- **`apps/webClient/src/presentation/data/changelog.ts`** — two v1.7 entries prepended at the top per the file's own "newest first" codification; only one `highlight: true` at a time (the onboarding entry carries it; the delete-account-reliability entry doesn't). The Huawei-grey `delete-account` entry reads in plain user-language (no `trim`, no `toLowerCase`, no `i18n` / no `react-i18next` / no `strict-equality` jargon).
+- **`apps/api/src/infrastructure/auth/module/auth.module.ts` + `apps/api/src/infrastructure/user/user.module.ts`** now `import { UserSettingsModule }` so the `UserSettingsService` injected into `AuthService` + `UserService` is wired by Nest's DI graph.
+- **`apps/api/test/auth-service.spec.ts` + `apps/api/test/user-service.spec.ts`** — `UserSettingsService` added to the `TestingModule` providers so the suite compiles against the new constructor signatures (previously failed with `Nest can't resolve dependencies ... at index [8]`).
+- **`apps/api/src/application/auth/auth.service.ts` + `apps/api/src/application/user/user.service.ts`** — eager-create best-effort helper (try/catch + `logger.log` on success + `logger.warn` on retry-before-fail). The shared pattern is the same JavaScript object shape (`{ userId, email, source: 'email' | 'google' | 'admin' }`) so a future refactor can lift this into `UserSettingsService.ensurePreOnboardingRow(...)` without rippling the call sites.
+
+### Files modified (this entry)
+
+| Front | Files |
+|-------|-------|
+| Backend (MODIFIED) | `apps/api/src/application/auth/auth.service.ts` (eager-create + injected `UserSettingsService`) · `apps/api/src/application/user/user.service.ts` (same for admin path) · `apps/api/src/infrastructure/auth/module/auth.module.ts` (`UserSettingsModule` import) · `apps/api/src/infrastructure/user/user.module.ts` (same) |
+| Backend tests | `apps/api/test/auth-service.spec.ts` + `apps/api/test/user-service.spec.ts` (`UserSettingsService` mock providers) |
+| Frontend (NEW) | `apps/webClient/src/presentation/pages/onboarding/onboardingPage.tsx` · `apps/webClient/src/presentation/routes/auth-guard.tsx` · `apps/webClient/src/presentation/routes/onboarding-guard.tsx` · `apps/webClient/tests/delete-account-confirmation.spec.ts` |
+| Frontend (MODIFIED) | `apps/webClient/src/presentation/routes/route-config.tsx` (two-guard restructure + lazy `OnboardingPage` import) · `apps/webClient/src/presentation/components/profile/account-settings.tsx` (i18n-keyed confirmation gate) · `apps/webClient/src/infrastructure/i18n/locales/en.json` + `es.json` (onboarding wizard keys + `settings.deleteConfirmPhrase` + `settings.typeToConfirm` interpolation) |
+| Frontend (DELETED) | `apps/webClient/src/presentation/routes/protected-route.tsx` (combined gate — root cause of the redirect loop) · `apps/webClient/src/presentation/routes/OnboardingRoute.tsx` (lazy wrapper, obsolete once `OnboardingPage` went lazy directly) |
+| Docs / Release | `docs/changelog.md` (this entry) · `apps/webClient/src/presentation/data/changelog.ts` (2 v1.7 user-facing entries) · `knowledge.md` §6.8 (renamed + added §6.8.2 redirect-loop codification) · `package.json` (root, version `1.6.0` → `1.7.0`) |
+
+### Why a minor-bump, not a patch
+
+Per `knowledge.md §16.1`: this is a **feature-bearing release** that ships (a) a new onboarding wizard visible to every new signup, (b) a structural route-guard split, (c) a backend construction-signature change (`AuthService` and `UserService` now take `UserSettingsService` in their constructors). The two bug fixes (Android dev redirect loop + Spanish-language delete-account gate) are bug-fix-class but ride alongside the feature surface. Combined: minor bump `1.6.0 → 1.7.0`.
+
+### Quality gates
+
+- ✅ Backend `pnpm exec tsc --noEmit -p tsconfig.json` clean for all touched files after the constructor-signature change.
+- ✅ Backend `node test/auth-service.spec.ts` + `user-service.spec.ts` — green before + after the `UserSettingsService` mock addition (33/33 combined passing across both suites).
+- ✅ Frontend `pnpm run check-types` clean for all 4 refactored files (`route-config.tsx` · `auth-guard.tsx` · `onboarding-guard.tsx` · `account-settings.tsx`).
+- ✅ Frontend `pnpm run lint` zero violations on the 4 refactored files (after `prettier --write`).
+- ✅ Frontend `pnpm run build` (with `VITE_CAPACITOR=true`) exit 0 — `OnboardingPage` correctly lazy-imported, `OnboardingRoute.tsx` deletion validated.
+- ✅ Grep scan `apps/webClient/src + tests` for `protected-route` / `OnboardingRoute` — zero leftover refs (both deleted files are truly dead).
+- ✅ Code-reviewer-minimax-m3 approved across the multiple iterations (4+ cycles) for each of (a) eager-create path, (b) two-guard split + lazy `OnboardingPage`, (c) `deleteConfirmPhrase` i18n refactor + `isDeleteConfirmed` derivation + reuse-the-const cleanup. Final verdicts ship-as-is.
+- 🟡 Full Playwright `pnpm --filter frontend-web test` follow-up — the new `delete-account-confirmation.spec.ts` should be run end-to-end. The mock pattern mirrors `auth.spec.ts`; the 8 input variants are pinned but the live-run verifies them under real React Query + Redux lifecycle.
+- 🟡 Manual device smoke — onboarding wizard + delete-account flow + Arabic/Spanish/English gate flip tested in the Android APK. Sandbox does not run a device; deferred to on-device QA.
+
+### Out of scope (tracked separately)
+
+- **`rpi/` artifact for the two-guard split** — codification lives in `knowledge.md §6.8.2`; a fuller RPI artifact (research.md + plan.md with FAR/FACTS scores) is queued for retroactive capture so the next refactor has a linked-ticket-and-research-thread alongside the rule.
+- **`rpi/` artifact for the delete-account reliability fix** — same shape, queued.
+- **Playwright e2e for the onboarding wizard** — should mount `/app/onboarding`, set `hasCompletedOnboarding: false`, fill the three fields, submit, assert `/app/dashboard` mounted and the wizard no longer reachable via direct URL. Skipped this cycle because the wizard is short and the validation logic was already unit-shaped by the wizard component itself.
+- **Premium-route audit against `knowledge.md §6.8.2`** — the nudge at the bottom of `§6.8.2` flags `apps/webClient/src/presentation/routes/premium-pages.tsx` as the next guard to audit. Out of scope for v1.7.0 (does not currently gate a redirect-to-self route) but raised here so the next touch knows to check.
+- **`ABOUT_API_VERSION` change for `apps/api`** — the backend `package.json` is NOT bumped in lockstep (per project convention: only the root `package.json` `version` is the release-version-of-record; per-workspace versions are not consumed by the build pipeline per `knowledge.md §16.1`). Backend internal version drift between API and web is documentation-only here.
+
+---
+
 ## [v1.5.0] — 2026-06-30
 
 > Session: Landing polish + responsive navbar overflow fix. New persistent parallax `MobileAppSection` + breakpoint-driven hamburger drawer with proper a11y. Web-only — no backend changes, no DB migrations.
