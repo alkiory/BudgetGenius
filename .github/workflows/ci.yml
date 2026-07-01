@@ -22,7 +22,7 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run Tests
+      - name: Run Tests (api)
         run: pnpm --filter api test
 
       - name: Login to DockerHub

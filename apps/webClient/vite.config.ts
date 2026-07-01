@@ -55,6 +55,13 @@ export default defineConfig({
       "@presentation": resolve(__dirname, "src/presentation"),
     },
   },
+  // ──────────────────────────────────────────────────────────────────
+  // Note: Vitest config lives in a separate `vitest.config.ts` file.
+  // This Vite config deliberately does NOT carry a `test:` block so
+  // that `vite build` (production) does not see Vitest-only options
+  // (no css:false, no environment:"node"). The unit-test specs run
+  // via `pnpm --filter frontend-web test:unit` against vitest.config.ts.
+  // ──────────────────────────────────────────────────────────────────
   build: {
     chunkSizeWarningLimit: 500,
     rollupOptions: {
