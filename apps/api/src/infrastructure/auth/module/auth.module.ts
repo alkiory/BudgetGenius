@@ -15,12 +15,14 @@ import { PasswordResetToken } from '@domain/auth/password-reset.entity';
 import { PasswordResetRepository } from '@adapters/auth/persistence/password-reset.repository';
 import { CookieService } from '@infrastructure/config/cookie.service';
 import { ResendMailerService } from '@infrastructure/mail/resend-mailer.service';
+import { UserSettingsModule } from '@infrastructure/user/user-settings.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
     PassportModule.register({ defaultStrategy: 'google' }),
     UserModule,
+    UserSettingsModule,
     TypeOrmModule.forFeature([User, PasswordResetToken]),
     JwtModule.registerAsync({
       imports: [ConfigModule],

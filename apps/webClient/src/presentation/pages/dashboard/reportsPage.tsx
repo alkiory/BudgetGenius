@@ -22,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@presentation/components/ui/dropdown-menu";
 import { PageHeader } from "@presentation/components/ui/page-header";
-import { downloadBlob } from "@presentation/utils/downloadBlob";
+import { downloadBlob } from "@infrastructure/downloadService";
 import {
   Calendar,
   ChevronDown,
@@ -144,8 +144,16 @@ export default function ReportsPage() {
         "{year}",
         String(currentYear),
       );
-      downloadBlob(blob, filename);
-      toast.success(t("reports.exportSuccess"));
+
+      const result = await downloadBlob(blob, filename, {
+        dialogTitle: t("reports.exportNativeDialogTitle"),
+        dialogSubtitle: t("reports.exportNativeDialogSubtitle"),
+      });
+      toast.success(
+        result.uri
+          ? t("reports.exportSavedNative")
+          : t("reports.exportSuccess"),
+      );
     } catch (err) {
       console.error("Report export failed:", err);
       toast.error(t("reports.exportError"));

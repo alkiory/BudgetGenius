@@ -40,6 +40,11 @@ export function AccountSettings() {
 
   const queryClient = useQueryClient();
 
+  const deleteConfirmPhrase = t("settings.deleteConfirmPhrase");
+  const isDeleteConfirmed =
+    confirmText.trim().toLowerCase() ===
+    deleteConfirmPhrase.trim().toLowerCase();
+
   const { mutate: updateSettings, isSuccess } = useMutation({
     mutationFn: updateUserSettings,
     onSuccess: (data) => {
@@ -63,19 +68,6 @@ export function AccountSettings() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Bug fix (#only-currency-updates): build a per-field delta so the
-    // PATCH only carries the fields the user actually changed. The
-    // previous "send all three" approach sent the *current* form
-    // value for every field, but the form value for the two fields
-    // the user did NOT touch is read from `settings` (Redux) and
-    // can lag behind the canonical slice when another component
-    // (e.g. `LanguageSwitcher`) dispatches `updateSettingsAction`
-    // between the form's mount and the user's submit. When that
-    // happens, the stale form value overwrites the fresh slice
-    // value on the backend, and the user perceives that "only
-    // currency updated" (the field they were actually editing).
-    // Sending only the changed fields restores the pre-regression
-    // per-field condition behaviour the user reported missing.
     const delta: {
       timezone?: string;
       currency?: string;
@@ -100,7 +92,7 @@ export function AccountSettings() {
   };
 
   const handleDeleteAccount = async () => {
-    if (confirmText !== "delete my account") return;
+    if (!isDeleteConfirmed) return;
 
     setIsDeleting(true);
 
@@ -221,7 +213,9 @@ export function AccountSettings() {
                   className="text-red-600 dark:text-red-500"
                 >
                   {" "}
-                  {t("settings.typeToConfirm")}
+                  {t("settings.typeToConfirm", {
+                    phrase: deleteConfirmPhrase,
+                  })}
                 </Label>
                 <Input
                   id="confirm-delete"
@@ -255,7 +249,7 @@ export function AccountSettings() {
               <Button
                 variant="destructive"
                 onClick={handleDeleteAccount}
-                disabled={confirmText !== "delete my account" || isDeleting}
+                disabled={!isDeleteConfirmed || isDeleting}
               >
                 {isDeleting
                   ? t("settings.deleting")

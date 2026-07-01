@@ -62,8 +62,23 @@ const mockUserRepository = () => ({
 describe('UserService', () => {
   let userService: UserService;
   let userRepository;
+  // Android APK audit, 2026-06: see comment below in the providers
+  // block about why UserSettingsService is now required at the test
+  // module level. Surface as a module-scoped binding so per-test
+  // spies (`mockResolvedValueOnce`, etc.) can target the same
+  // instance that UserService sees.
+  let userSettingsServiceMock: { getOrCreateSettings: jest.Mock };
 
   beforeEach(async () => {
+    userSettingsServiceMock = {
+      getOrCreateSettings: jest.fn().mockResolvedValue({
+        id: 1,
+        timezone: 'UTC',
+        currency: 'USD',
+        locale: 'en-US',
+        hasCompletedOnboarding: false,
+      }),
+    };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UserService,
@@ -72,11 +87,32 @@ describe('UserService', () => {
           provide: LoggingService,
           useValue: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
         },
+        {
+          // Android APK audit, 2026-06: UserService.createUser now
+          // eagerly calls getOrCreateSettings to seed a pre-onboarding
+          // user_settings row for admin-created users. The mock below
+          // mirrors the auth-service.spec.ts fixture (matching shape,
+          // matching module-scoped laziness) so per-test spies can
+          // targeted-stub out the response without touching the DB.
+          provide: UserSettingsService,
+          useValue: {
+            getOrCreateSettings: jest.fn().mockResolvedValue({
+              id: 1,
+              timezone: 'UTC',
+              currency: 'USD',
+              locale: 'en-US',
+              hasCompletedOnboarding: false,
+            }),
+          },
+        },
       ],
     }).compile();
 
     userService = module.get<UserService>(UserService);
     userRepository = module.get<UserRepositoryImpl>(UserRepositoryImpl);
+    userSettingsServiceMock = module.get<UserSettingsService>(
+      UserSettingsService,
+    ) as any;
   });
 
   // `jest.spyOn(bcrypt, 'hash')` leaks across tests by default (Jest does

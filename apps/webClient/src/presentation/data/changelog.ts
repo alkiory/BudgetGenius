@@ -56,9 +56,33 @@ export interface ChangelogEntry {
  */
 export const changelog: ChangelogEntry[] = [
   {
+    version: "1.7",
+    date: "2026-07-01",
+    highlight: true,
+    title: {
+      en: "Set up your experience from day one",
+      es: "Configura tu experiencia desde el primer momento",
+    },
+    description: {
+      en: "When you create your account, BudgetGenius now asks for your timezone, your preferred currency, and your language — so everything is ready for you from your first session, without having to dig through settings later.",
+      es: "Al crear tu cuenta, BudgetGenius ahora te pregunta tu zona horaria, tu moneda preferida y el idioma — así todo está listo para ti desde tu primera sesión, sin tener que buscar ajustes después.",
+    },
+  },
+  {
+    version: "1.7",
+    date: "2026-07-01",
+    title: {
+      en: "More reliable account deletion",
+      es: "Eliminación de cuenta más confiable",
+    },
+    description: {
+      en: "The delete-account confirmation button now responds the moment you type the confirmation phrase — capitalization or stray spaces no longer block it.",
+      es: "El botón de confirmación para eliminar tu cuenta ahora responde en cuanto escribes la frase de confirmación — mayúsculas iniciales o espacios extra ya no lo bloquean.",
+    },
+  },
+  {
     version: "1.6",
     date: "2026-06-30",
-    highlight: true,
     title: {
       en: "Android app is now available",
       es: "La app para Android ya está disponible",

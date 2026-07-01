@@ -19,6 +19,8 @@
     "@capacitor/app": "^7.1.2",
     "@capacitor/browser": "^7.0.5",
     "@capacitor/core": "^7.6.7",
+    "@capacitor/filesystem": "^7.1.8",
+    "@capacitor/share": "^7.0.4",
     "@capgo/capacitor-social-login": "^7.20.0",
     "@reduxjs/toolkit": "2.6.1",
     "@tanstack/react-query": "5.67.3",

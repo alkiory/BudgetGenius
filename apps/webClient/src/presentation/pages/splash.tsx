@@ -1,4 +1,8 @@
-import { loginAction, setAuthReady, setUser } from "@adapters/slices/auth/authSlice";
+import {
+  loginAction,
+  setAuthReady,
+  setUser,
+} from "@adapters/slices/auth/authSlice";
 import api from "@infrastructure/api.config";
 import { isNativePlatform } from "@infrastructure/platform";
 import CTAPage from "@presentation/pages/cta";
@@ -13,6 +17,42 @@ import { useNavigate } from "react-router";
 const SPLASH_DURATION_MS = 1800;
 
 const AUTH_READY_FALLBACK_MS = 3000;
+
+/**
+ * Android APK audit, 2026-06: after a successful `/auth/verify`
+ * the splash needs to decide whether to send the user to the
+ * dashboard or the onboarding wizard. We chain a `/user-settings`
+ * fetch onto the existing verify+profile round-trip. The cost is
+ * one extra signed request on cold start; the win is zero
+ * navigation flicker (no "/app/dashboard" → "/app/onboarding"
+ * bounce on the first paint).
+ */
+async function fetchHasCompletedOnboarding(userId: number): Promise<boolean> {
+  try {
+    // We don't have access to the React Query cache from inside the
+    // splash — its `queryFn` parameter is an axios call against the
+    // shared `api` instance, which already attaches the auth token
+    // and X-Device-Id header. Treat a 200 as truth; treat a 4xx/5xx
+    // as "let OnboardingGuard decide later" (it has the
+    // same React Query with onSuccess wiring for a second chance).
+    const response = await api.get("/user-settings", { _retry: true });
+    const flag = response?.data?.hasCompletedOnboarding;
+    if (typeof flag === "boolean") {
+      return flag;
+    }
+    // Server responded but the field is missing / malformed —
+    // err toward "needs onboarding" so the wizard picks up the
+    // user rather than dropping them on an uncustomised dashboard.
+    console.warn(
+      "🔶 Splash: /user-settings returned without hasCompletedOnboarding; defaulting to needs-onboarding.",
+      response?.data,
+    );
+    return false;
+  } catch (error) {
+    console.error("🔴 Splash: failed to fetch /user-settings:", error);
+    return false;
+  }
+}
 
 export default function SplashPage() {
   const { t } = useTranslation();
@@ -64,47 +104,77 @@ export default function SplashPage() {
     }
 
     let navigated = false;
-    const go = () => {
+    const go = (onboardingComplete: boolean | null) => {
       if (navigated) return;
       navigated = true;
-      const target = isAuthenticated
-        ? `${RoutePaths.App}/${RoutePaths.Dashboard}`
-        : `${RoutePaths.Auth}/${RoutePaths.Login}`;
+      let target: string;
+      if (isAuthenticated) {
+        // Android APK dev audit, 2026-07 (v1.7.0 regression fix):
+        // Invert the prior `=== false ? Onboarding : Dashboard`
+        // ternary. The previous logic routed `null` (transient
+        // /user-settings failure) — and any future non-boolean state
+        // we add — to the dashboard, where the user could be silently
+        // left if OnboardingGuard also failed-open. The new shape asks
+        // the positive question: do we have a DEFINITIVE signal that
+        // onboarding is complete? If yes (`true`), dashboard. If we
+        // can not prove completion (`false` or `null`), we err toward
+        // the wizard. The wizard's own inverse check sends
+        // already-onboarded users back to the dashboard in <1 frame.
+        target =
+          onboardingComplete === true
+            ? `${RoutePaths.App}/${RoutePaths.Dashboard}`
+            : `${RoutePaths.App}/${RoutePaths.Onboarding}`;
+      } else {
+        target = `${RoutePaths.Auth}/${RoutePaths.Login}`;
+      }
       navigate(target, { replace: true });
     };
 
     if (authReady || isAuthenticated) {
-      go();
+      go(null);
       return;
     }
 
     let cancelled = false;
-    let fallbackTimer: number | undefined = window.setTimeout(() => {
-      if (!cancelled) go();
+    const fallbackTimer: number | undefined = window.setTimeout(() => {
+      if (!cancelled) go(null);
     }, AUTH_READY_FALLBACK_MS);
 
     (async () => {
       try {
         const response = await api.get("/auth/verify", { _retry: true });
         if (cancelled) return;
+        let profile: { id: number } | null = null;
         if (response.status === 200) {
           const userProfile = await api.get("/user/profile", {
             _retry: true,
           });
           if (cancelled) return;
-          const profile = userProfile?.data;
+          profile = userProfile?.data ?? null;
           if (profile) {
             dispatch(setUser(profile));
             dispatch(loginAction());
           }
         }
+        // Android APK audit, 2026-06: chain a /user-settings fetch
+        // so the splash knows whether to land the user on the
+        // dashboard or the onboarding wizard, without the second
+        // flicker that would happen if we routed to /app/dashboard
+        // and let `OnboardingGuard` catch the redirect to
+        // /app/onboarding on its first paint.
+        let onboardingComplete: boolean | null = null;
+        if (profile?.id && response.status === 200) {
+          onboardingComplete = await fetchHasCompletedOnboarding(profile.id);
+        }
+        if (cancelled) return;
+        go(onboardingComplete);
       } catch (error) {
         console.error("🔴 Error validating session from splash:", error);
+        if (!cancelled) go(null);
       } finally {
         if (cancelled) return;
         window.clearTimeout(fallbackTimer);
         dispatch(setAuthReady());
-        go();
       }
     })();
 
@@ -122,7 +192,10 @@ export default function SplashPage() {
       aria-live="polite"
       aria-label={t("splash.loading")}
       className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-purple-700 via-purple-800 to-fuchsia-900 text-white"
-      style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+      }}
     >
       {/* Soft animated blobs behind the logo to mimic a gradient sweep. */}
       <div
@@ -151,9 +224,7 @@ export default function SplashPage() {
           strongly even before the existing dark-mode-aware Logo finishes its
           entrance animation. */}
       <div
-        className={`relative z-10 flex flex-col items-center gap-3 transition-all duration-700 ease-out ${stage >= 1
-          ? "translate-y-0 opacity-100"
-          : "translate-y-4 opacity-0"
+        className={`relative z-10 flex flex-col items-center gap-3 transition-all duration-700 ease-out ${stage >= 1 ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
           }`}
       >
         <div className="relative">

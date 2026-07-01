@@ -13,6 +13,7 @@ import { ResetPasswordDto } from '@application/auth/dto/reset-password.dto';
 import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { ResendMailerService } from '@infrastructure/mail/resend-mailer.service';
+import { UserSettingsService } from '@application/user/user-settings.service';
 
 const user: User = {
   id: 1,
@@ -106,6 +107,22 @@ describe('AuthService', () => {
     const mailerMock = {
       sendPasswordReset: jest.fn().mockResolvedValue('mock-message-id'),
     };
+    // Android APK audit, 2026-06: AuthService now eagerly calls
+    // getOrCreateSettings on every signup / OAuth validation. The
+    // happy-path spec keys on `result.isNewUser`, which is set BEFORE
+    // the settings call \u2014 so the invocation must NOT throw even
+    // when the spec runs without a real Postgres connection. The mock
+    // returns the same DTO shape `getOrCreateSettings` produces, so
+    // any future assertions on the returned value stay realistic.
+    const userSettingsServiceMock = {
+      getOrCreateSettings: jest.fn().mockResolvedValue({
+        id: 1,
+        timezone: 'UTC',
+        currency: 'USD',
+        locale: 'en-US',
+        hasCompletedOnboarding: false,
+      }),
+    };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -128,6 +145,10 @@ describe('AuthService', () => {
         {
           provide: ResendMailerService,
           useValue: mailerMock,
+        },
+        {
+          provide: UserSettingsService,
+          useValue: userSettingsServiceMock,
         },
       ],
     }).compile();
