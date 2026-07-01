@@ -11,9 +11,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # Cambiamos a Node 20 (LTS). Es la versión más estable y recomendada
-          # para evitar el error "Premature close" en la librería de Google Auth.
-          node-version: "20"
+          node-version: "22"
 
       - name: Generate build version
         id: version
@@ -39,15 +37,6 @@ jobs:
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           VITE_GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          # v1.6.0 — Landing DownloadApp CTA. The GitHub Secret is
-          # empty-string-resilient: if a deploy runs before the secret
-          # is set, Vite resolves `import.meta.env.VITE_APK_DOWNLOAD_URL`
-          # to "" and the download-app.tsx component's REPLACE_ME / TODO /
-          # PLACEHOLDER / YOUR_ORG / YOUR_REPO token check falls back to
-          # the disabled "Coming soon" state — i.e. the build still
-          # succeeds, the CTA gracefully degrades. Set the secret to
-          # `https://github.com/<owner>/<repo>/releases/download/<tag>/BudgetGenius-<tag>.apk`
-          # once the matching GitHub Release exists.
           VITE_APK_DOWNLOAD_URL: ${{ secrets.VITE_APK_DOWNLOAD_URL }}
 
       - uses: FirebaseExtended/action-hosting-deploy@v0.11.0
