@@ -282,9 +282,20 @@ export class AuthService {
     name: string;
     photo?: string;
   }): Promise<User> {
+    // Production-hot-fix (2026-07-02): decoupled the OAuth contract
+    // from the pre-onboarding settings seed. The seed used to sit
+    // inside the TypeORM transaction's try/catch, after commit;
+    // that placement risked masking the original commit with a
+    // TypeORM "transaction is not active" error if rollback ever
+    // fired on a committed runner. The seed now runs AFTER release,
+    // and rollbackTransaction() and release() are both guarded so
+    // a TypeORM internals throw cannot clobber the auth response.
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
+
+    let isNewUser = false;
+    let finalUser: User | undefined;
 
     try {
       // Buscar usuario existente dentro de la transacción
@@ -293,44 +304,71 @@ export class AuthService {
       });
 
       if (existingUser) {
-        await queryRunner.commitTransaction();
-        return existingUser;
+        finalUser = existingUser;
+      } else {
+        // Crear nuevo usuario
+        const [name, ...surnameParts] = profile.name.split(' ');
+        const surname = surnameParts.join(' ') || 'Unknown';
+
+        const newUser = queryRunner.manager.create(User, {
+          name,
+          surname,
+          email: profile.email,
+          authProvider: 'google',
+          role: UserRole.USER,
+          password: null,
+        });
+
+        await queryRunner.manager.save(newUser);
+        isNewUser = true;
+        finalUser = newUser;
       }
-
-      // Crear nuevo usuario
-      const [name, ...surnameParts] = profile.name.split(' ');
-      const surname = surnameParts.join(' ') || 'Unknown';
-
-      const newUser = queryRunner.manager.create(User, {
-        name,
-        surname,
-        email: profile.email,
-        authProvider: 'google',
-        role: UserRole.USER,
-        password: null,
-      });
-
-      await queryRunner.manager.save(newUser);
 
       // Confirmar la transacción
       await queryRunner.commitTransaction();
-
-      await this.eagerCreateUserSettingsRow(
-        newUser.id,
-        newUser.email,
-        'google',
-      );
-
-      return newUser;
     } catch (error) {
-      // Deshacer cambios en caso de error
-      await queryRunner.rollbackTransaction();
+      // Solo rollback si la transacción sigue activa; un rollback
+      // sobre transacción ya comprometida lanza un QueryFailedError
+      // de TypeORM que enmascararía el error real.
+      if (queryRunner.isTransactionActive) {
+        try {
+          await queryRunner.rollbackTransaction();
+        } catch (rollbackErr) {
+          this.logger.warn(
+            `🔁 rollbackTransaction failed during Google OAuth: ${
+              (rollbackErr as Error).message
+            }. Original error will still propagate.`,
+          );
+        }
+      }
       this.logger.error('Google OAuth failed', error.stack);
       throw new UnauthorizedException('Google authentication failed');
     } finally {
-      // Liberar el QueryRunner
-      await queryRunner.release();
+      // Liberar el QueryRunner. Same defense-in-depth pattern: never
+      // let TypeORM release() clobber the auth response.
+      try {
+        await queryRunner.release();
+      } catch (releaseErr) {
+        this.logger.warn(
+          `🔁 QueryRunner release failed during Google OAuth: ${
+            (releaseErr as Error).message
+          }. Continuing.`,
+        );
+      }
     }
+
+    // Eager-create pre-onboarding settings row OUTSIDE the transaction
+    // lifecycle. eagerCreateUserSettingsRow has its own internal
+    // try/catch so a DI hiccup on the APK side can never break sign-in.
+    if (isNewUser && finalUser) {
+      await this.eagerCreateUserSettingsRow(
+        finalUser.id,
+        finalUser.email,
+        'google',
+      );
+    }
+
+    return finalUser!;
   }
 
   async oauthLogin(profile: any) {
