@@ -72,11 +72,6 @@ export class UserRepositoryImpl implements UserRepositoryPort {
     }
   }
 
-  async getAll(): Promise<User[]> {
-    const users = await this.repo.find();
-    return users;
-  }
-
   async updateToken(id: number, refreshToken: string): Promise<void> {
     await this.repo.update(id, { refreshToken });
   }

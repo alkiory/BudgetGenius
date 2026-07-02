@@ -13,8 +13,6 @@ export interface UserRepositoryPort {
 
   findByEmail(email: string): Promise<User | null>;
 
-  getAll(): Promise<User[]>;
-
   findById(id: number): Promise<User | null>;
 
   updateUser(id: number, updateUserDto: UserDto): Promise<User>;

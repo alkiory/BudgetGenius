@@ -102,10 +102,6 @@ export class UserService {
     return this.userRepository.save(userDtoResult);
   }
 
-  async getAllUsers() {
-    return this.userRepository.getAll();
-  }
-
   async updateUser(id: string, updateUserDto: Partial<UserDto>) {
     if (updateUserDto.password === '') {
       throw new BadRequestException(

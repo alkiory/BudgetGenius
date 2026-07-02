@@ -1,15 +1,6 @@
 import { userRepository } from "@adapters/http/user.repository";
 import { useQuery } from "@tanstack/react-query";
 
-export const useUserList = () => {
-  return useQuery({
-    queryKey: ["users"],
-    queryFn: userRepository.getAll,
-    staleTime: 1000 * 60,
-    gcTime: 1000 * 60 * 5,
-  });
-};
-
 export const useCurrentUser = () => {
   return useQuery({
     queryKey: ["user"],

@@ -39,7 +39,6 @@ export enum RoutePaths {
   Income = "dashboard/income",
   // User section
   Profile = "profile",
-  UserList = "user",
   UserDetail = "user/:id",
   Settings = "settings",
 }

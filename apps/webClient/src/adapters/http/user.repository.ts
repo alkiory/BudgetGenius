@@ -13,11 +13,6 @@ export const userRepository: UserRepository = {
     return response.data;
   },
 
-  async getAll() {
-    const response = await api.get("/user/userList");
-    return response.data;
-  },
-
   async getCurrentUser() {
     const response = await api.get("/user/profile");
     return response.data;

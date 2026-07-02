@@ -76,7 +76,6 @@ const IncomePage = lazy(
 
 // User protected routes
 const ProfilePage = lazy(() => import("@presentation/pages/user/profile"));
-const UserList = lazy(() => import("@presentation/pages/user/userList"));
 
 // Auth routes
 const LoginPage = lazy(() => import("@presentation/pages/auth/login"));
@@ -188,7 +187,6 @@ const RouteConfig = () => {
             <Route path={RoutePaths.Reports} element={<ReportsPage />} />
             {/* user section */}
             <Route path={RoutePaths.Profile} element={<ProfilePage />} />
-            <Route path={RoutePaths.UserList} element={<UserList />} />
             <Route path={RoutePaths.UserDetail} element={<ProfilePage />} />
           </Route>
         </Route>

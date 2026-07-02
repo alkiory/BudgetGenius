@@ -168,11 +168,6 @@ describe('UserService', () => {
     expect(userRepository.findByEmail).toHaveBeenCalledWith(user.email);
   });
 
-  it('should get all users', async () => {
-    const users = await userService.getAllUsers();
-    expect(users).toEqual([user]);
-  });
-
   it('should update a user', async () => {
     const updatedUserDto = {
       id: user.id,
