@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseIntPipe,
   Post,
   UseGuards,
   Request,
@@ -28,7 +29,7 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly logger: LoggingService,
-  ) {}
+  ) { }
 
   @Get('admin')
   @Roles(UserRole.ADMIN)
@@ -72,9 +73,24 @@ export class UserController {
   }
 
   @Delete(':id')
-  async deleteUser(@Param('id') id: number, @Req() req) {
+  // v1.7.3 — ROOT CAUSE FIX for the APK delete-account regression.
+  // The previous `@Param('id') id: number` annotation was a TYPE LIE:
+  // NestJS extracts URL path segments as STRINGS regardless of the
+  // TypeScript annotation. The Bearer JWT carries `id: 8` (NUMBER
+  // claim), and the OWNERSHIP GUARD previously compared `id !== user.id`
+  // — `"8" !== 8` is `true` in JavaScript, so the guard rejected every
+  // legitimate self-delete. v1.7.3 appends `ParseIntPipe` to the
+  // `@Param` decorator (NestJS-idiomatic; rejects malformed IDs with a
+  // 400 BEFORE the auth check, no info leak) AND defensively
+  // optional-chains `user?.id` / `user?.role` so a misconfigured JWT
+  // strategy cannot blow up with a TypeError. `updateUser` in the
+  // same controller at line 53 is already correct because it uses
+  // `id: string` + `Number(id)` — the v1.7.3 omission on `deleteUser`
+  // is the symptom, not the rule; the rule is codified as
+  // `knowledge.md §6.8.6`.
+  async deleteUser(@Param('id', ParseIntPipe) id: number, @Req() req) {
     const user = req.user;
-    if (id !== user.id && user.role !== 'admin') {
+    if (id !== user?.id && user?.role !== 'admin') {
       throw new UnauthorizedException(
         '⛔ You do not have permission to delete this user',
       );

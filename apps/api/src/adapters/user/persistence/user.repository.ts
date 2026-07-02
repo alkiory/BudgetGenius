@@ -196,7 +196,19 @@ export class UserRepositoryImpl implements UserRepositoryPort {
            )`,
           [tableName],
         );
-        if (exists) {
+        // v1.7.3+ — STRICT-EQUALITY existence check, NOT loose `if (exists)`.
+        // Postgres `EXISTS` aggregates return JS booleans via the default
+        // `pg` driver (`true` / `false`) but `'t'` / `'f'` strings via some
+        // `pg-native` / `pg-query-stream` configurations. The previous
+        // loose `if (exists) { … }` shape silently mis-handled the
+        // `'f'` case on the latter (non-empty strings are truthy in
+        // JavaScript) — `if ('f')` evaluates truthy, so we'd query a
+        // non-existent table and throw `relation does not exist`. The
+        // strict `=== true || === 't'` shape aligns production AND
+        // test (`apps/api/test/user-delete-permission.spec.ts`
+        // `assertChildCountIsZero` helper) on the exact same
+        // Postgres return-shape contract.
+        if (exists === true || exists === 't') {
           // v1.7.2 — schema-qualified table name; raw SQL bypasses
           // TypeORM entity metadata. `"userId"` is double-quoted
           // because the column was created with camelCase by the

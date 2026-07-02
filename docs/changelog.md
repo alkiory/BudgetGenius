@@ -2,6 +2,64 @@
 
 ---
 
+## [v1.7.3] — 2026-07-02
+
+> Session: v1.7.2 production follow-up — the danger-zone delete button's real DELETE call reached the backend (v1.7.2 cascade fix worked), but the controller rejected every legit self-delete with a 401 because `@Param('id') id: number` is a TS lie (NestJS extracts URL segments as STRINGS at runtime; the JWT claim carries a NUMBER). v1.7.3 ships `ParseIntPipe` on the param + optional-chaining on the comparison alongside a Jest e2e regression spec. Codified as `knowledge.md §6.8.6`. Postmortem at `rpi/delete-account-cleanup/postmortem.md`.
+
+### Fixed
+
+- **PRODUCTION-DETECTED: Android APK real device — `/app/profile` "Eliminar Cuenta" button fires the real `DELETE /api/user/8` (v1.7.2 cascade fix lands successfully) but the backend rejects with `401 ⛔ You do not have permission to delete this user` for every legitimate self-delete**. Operator trace: `curl 'https://api-budgetgenius.alkiory.com/api/user/8' -X 'DELETE' -H 'Authorization: Bearer eyJ…'` returns the 401 with the user-row intact. The Bearer token carries `{id: 8, email: '…', role: 'user'}` so `req.user.id === 8` (NUMBER). The `:id` URL param is sent as `"8"` (STRING in NestJS routing — params are NEVER auto-coerced). The previous controller ownership check `if (id !== user.id && user.role !== 'admin')` compared `"8" !== 8` which is `true` in JavaScript, so the guard threw on EVERY legitimate self-delete — including the user's own `id=8 against :id=8`. The bug surfaced as soon as the v1.7.2 frontend stub was replaced with a real `useMutation({mutationFn: () => deleteUser(currentUser.id)})` call. The prior `setTimeout` placeholder had never reached the controller at all, so the unit + e2e suite had no coverage on this code path.
+
+  **Root cause**: `apps/api/src/adapters/user/http/user.controller.ts:75` declared `@Param('id') id: number` — a TS lie. NestJS extracts URL path segments as STRINGS, regardless of TypeScript annotations. Compare to the SAME controller at `:53` `@Put(':id') updateUser` which correctly types `id: string` and converts `Number(id) !== user.id` at the use site — the v1.7.3 omission on `deleteUser` is the symptom, not the rule.
+
+  **Fix — two changes at the framework boundary (`knowledge.md §6.8.6`)**:
+  1. **`@Param('id', ParseIntPipe) id: number`** — NestJS-idiomatic; `ParseIntPipe` rejects malformed `:id` values with `400 BadRequestException` BEFORE the auth check fires (no info leak on a bad parameter shape). After the pipe, `id` is guaranteed to be a `number` at runtime; comparisons against `user.id` (also a `number` from the JWT claim) compare apples to apples.
+  2. **Defensive optional-chaining: `user?.id` / `user?.role`** — a misconfigured JWT strategy that drops the `id` claim cannot blow up with a `TypeError` before the explicit guard fires. The optional-chain reads cleaner than the pre-flight `if (!user) throw UnauthorizedException(...)` pattern, and survives future strategy bugs that today's test suite wouldn't catch.
+
+### Added
+
+- **`apps/api/test/user-delete-permission.spec.ts`** (NEW) — Jest e2e regression spec that pins both ends of the contract: (a) **Negative** — User B's Bearer token CANNOT delete User A's row (`401`), AND User A's row persists (`userRepo.findById(userAId)` returns the original row, not null). The negative case is critical because the prior (broken) implementation HAPPENED to reject cross-user attempts too (`"<A.id>" !== "<B.id>"` was true, `'user' !== 'admin'` was true) — losing the negative-pin would mean a future regression that REMOVES the ownership check could ship undetected. (b) **Positive** — User A's Bearer token deletes User A, the response is `200 { message: ... }`, AND `userRepo.findById(userAId) === null` post-delete. The positive case exercises BOTH the controller fix AND the v1.7.2 cascade-completeness fix (delete must remove the row, with the children cascade-deleted by FK).
+- **`rpi/delete-account-cleanup/postmortem.md`** (NEW) — captures how the v1.7.2 RPI missed this controller-level bug. Manual device smoke at v1.7.2 confirmed the frontend `setTimeout` placeholder had the right shape but never reached the controller — a passing pre-deploy smoke that didn't cover the post-fix flow. The v1.7.3 fix is a direct consequence of running the new APK against the real backend.
+
+### Changed
+
+- **`apps/api/src/adapters/user/http/user.controller.ts`** — single-method change. Added `ParseIntPipe` to the `@nestjs/common` import block. Changed `@Param('id') id: number` to `@Param('id', ParseIntPipe) id: number`. Changed `user.id` / `user.role` to `user?.id` / `user?.role` (defensive optional-chaining). Inline comment block reproduces the root-cause rationale citing `knowledge.md §6.8.6`. `@Put(':id') updateUser` in the SAME controller at `:53` is left untouched because it's ALREADY correct (`id: string` + `Number(id)`).
+- **Test-infrastructure hygiene: `apps/api/src/infrastructure/config/cookie.service.ts`** — replaced the bare-path import `import { AppModule } from 'src/app.module';` with the relative `import { AppModule } from '../../app.module';`. The bare path compiled under TypeScript `baseUrl: "./"` but `jest.config.ts`'s `moduleNameMapper` only translates the project aliases (`@application/*`, etc.) — bare `src/...` imports are NOT mapped, so the v1.7.3 e2e spec failed to load with `Cannot find module 'src/app.module' from 'src/infrastructure/config/cookie.service.ts'`. The relative form resolves under BOTH `tsc` AND `jest`, and the runtime AppModule ↔ CookieService circularity (via the static `AppModule.cookieOptions(configService)` call) is preserved unchanged. Detected incidentally by running the v1.7.3 regression spec end-to-end — not by the production story, but a real production-side file touched in v1.7.3 so it deserves a changelog line.
+
+### Files modified (this entry)
+
+| Front | Files |
+|-------|-------|
+| Backend (MODIFIED) | `apps/api/src/adapters/user/http/user.controller.ts` (1 method, 2-line config + 8-line inline comment block) |
+| Backend tests (NEW) | `apps/api/test/user-delete-permission.spec.ts` (1 setup `it` + 1 negative `it` + 1 positive `it`) |
+| Docs / Release | `docs/changelog.md` (this entry) · `rpi/delete-account-cleanup/postmortem.md` (NEW — captures how v1.7.2 smoke missed the bug) · `knowledge.md` `§6.8.6` (NEW invariant codifying the `@Param() id: number` TS-lie rule) · `package.json` (root, version `1.7.2` → `1.7.3`) |
+
+### Why a patch
+
+Per `knowledge.md §16.1`: single production-blocking bug fix. No new feature surface (the controller's delete endpoint continues to behave the same on the happy path). No API surface change (the existing 401-on-cross-user and the new 200-on-self-delete match user expectations). No DB migration. Patch bump `1.7.2 → 1.7.3` is correct.
+
+### Quality gates
+
+- ✅ Backend `pnpm exec tsc --noEmit -p tsconfig.json` clean on `user.controller.ts`. The pre-existing diagnostics elsewhere (`auth-cookie-bridge.spec.ts` / `budget-service.spec.ts` etc.) are unchanged from v1.7.2 baseline.
+- ✅ Backend `pnpm exec jest test/user-delete-permission.spec.ts` — 3 specs passing (1 setup + 1 negative + 1 positive). The bashers verified end-to-end: /auth/signup returns 201 + captures `accessToken` + `user.id`; cross-user DELETE returns 401 + `findById` still returns the row; self DELETE returns 200 + `findById` returns null.
+- ✅ Code-reviewer-minimax-m3 approved across 2 review cycles: (1) initial fix + spec → ship-ready with 1 polish nit (the spec's pre-cleanup hooks assume a `deleteUserByEmail` method that DOES NOT exist in the repo port — switched to a try/catch no-op fallback so the missing method doesn't fail the test); (2) post-polish → ship-ready.
+- 🟡 Manual device smoke — recommended on a real APK once the patch is rolled out. The user's specific trace (`/app/profile` → "Eliminar Cuenta" → confirm phrase → "Permanently Delete") should now visibly:
+  1. The header spinner turns briefly during DELETE round-trip
+  2. The screen paints `/auth/login` (the helper resets storage + session + cache + dispatch)
+  3. The splash re-runs on next mount (because `sessionStorage.mobile.splash.shown` was cleared)
+  4. Re-login as the same email routes to `/app/onboarding` (fresh user; oracle-free thanks to §6.8.3 strict-positive)
+  5. `bg_public.users` table no longer contains the deleted row
+
+### Out of scope (tracked separately)
+
+- **AST-based ESLint rule for `@Param('id') id: number` without `ParseIntPipe`** — the lint hook is documented as a TODO at the bottom of §6.8.6. A custom rule walking `@Param` decorators in `apps/api/src/adapters/**/http/*.controller.ts` and flagging `: number` type annotations missing the second `ParseIntPipe` argument would catch this in CI before merging. Implementable as a future RPI.
+- **`updateUser` at `:53` migration to `ParseIntPipe`** — currently uses `id: string` + `Number(id)` (also correct). For codebase-wide consistency, a future refactor could switch `updateUser` to `ParseIntPipe` too, but the change is purely cosmetic — the cross-check (`"8" !== 8`) was never broken there because the comparison went through `Number(id)`. Out of scope for v1.7.3.
+- **Other `@Param` decorators audited for the same class** — `code-searcher` confirmed `apps/api/src/adapters/dashboard/http/expense-category.controller.ts`, `budget.controller.ts`, `overview.controller.ts`, `auth.controller.ts` are all already using `id: string` or `ParseIntPipe`. The bug class scope is exactly ONE method.
+- **Playwright e2e on the real APK** — the Jest e2e boots the full AppModule and exercises the same controller in-process. A Playwright spec would add UI coverage but doesn't change the underlying fix; tracked as a follow-up alongside the user's manual device smoke.
+- **Defence-in-depth: numeric-string coercion at the JWT strategy level** — a stricter JWT validate callback could normalise `id` to `Number(payload.id)` so the controller never sees a string. Belt-and-suspenders; the v1.7.3 fix is sufficient without it.
+
+---
+
 ## [v1.7.2] — 2026-07-02
 
 > Session: Delete-account regression on Android APK — the danger-zone button was a 2-second `setTimeout` placeholder that never called the backend DELETE, and the surrounding Redux + React Query + localStorage state lingered. A re-login as the same email authenticated as an existing user (no onboarding wizard, stale per-user data). v1.7.2 replaces the placeholder with a real `useMutation({mutationFn: () => deleteUser(id)})` + a centralised cleanup helper (`clearAuthAndStateForLogout`) that the sidebar logout + session-expired modal also call, plus a transactional manual cascade-delete in `UserRepositoryImpl.deleteUser` so the FK constraints don't reject the row removal. Strict-positive onboarding-gate invariant from §6.8.3 preserved — the cleanup helper clears the React Query cache so `OnboardingGuard`'s next mount sees `settings === undefined` and routes the fresh user to `/app/onboarding` correctly. Codified as `knowledge.md §6.8.5`. RPI artifacts at `rpi/delete-account-cleanup/`.
