@@ -231,6 +231,29 @@ describe('UserController Delete Permission (e2e) — v1.7.3', () => {
       );
       expect(countResult[0]?.count ?? 0).toBe(0);
     };
+    // v1.7.4.1 — pre-cascade precondition. Without this assertion a
+    // future regression that makes the cascade silently no-op (e.g.,
+    // someone reverts to raw SQL inside `deleteUserTransactional`) would
+    // still trip `assertChildCountIsZero` green at the post-cascade
+    // assertion because the rows were never there to delete in the
+    // first place — masking the bug. Verify at least one UserSettings
+    // row EXISTS for `userAId` so the cascade has work to do.
+    //
+    // Why UserSettings specifically: it is the FIRST entity attempted
+    // in the cascade (see `apps/api/src/adapters/user/persistence/user.repository.ts#deleteUserTransactional`),
+    // and the bug we just fixed (EntityPropertyNotFoundError on the
+    // `userId` criteria column) tripped there first. Verifying the
+    // precondition on the FIRST entity means the assertion captures the
+    // failure mode if any of the 5 cascade lines regress to the broken
+    // `{ userId: id }` criteria shape.
+    const preCascadeSettingsCount = await dataSource.query(
+      `SELECT count(*)::int AS count
+       FROM "bg_public"."user_settings"
+       WHERE "userId" = $1`,
+      [userAId],
+    );
+    expect(preCascadeSettingsCount[0]?.count ?? 0).toBeGreaterThanOrEqual(1);
+
     const response = await request(app.getHttpServer())
       .delete(`/user/${userAId}`)
       .set('Authorization', `Bearer ${tokenA}`)

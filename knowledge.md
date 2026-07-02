@@ -950,6 +950,111 @@ If YES to any — fix it before merge. If NO to all — merge.
 - **`userId` is a NUMBER, never a coerced string.** `JwtStrategy.validate()` returns `payload.id || payload.sub` — both of which are numbers when this code signs them (`auth.service.ts` signs with `{ id: user.id, email, email, role }`). The runtime type of `req.user.userId` is `number`. Don't introduce a `Number(req.user.userId)` belt-and-braces unless you also introduce `Number(req.user.userId)` symmetrically on both sides of a comparison (mirror of §6.8.6's cross-check rule).
 - **Object-destructuring gap is a known limitation, NOT a hidden risk.** A follow-up rule should walk `VariableDeclarator` → `ObjectPattern` → `Property` and verify the `init` chain hits `req.user`. Today's audit finds zero live examples; pin before merge via `grep -rnE '\{\s*id\s*\}\s*=\s*req\.user|\{\s*user:\s*\{\s*id\s*\}\s*\}\s*=\s*req\b' apps/{api,webClient}/src` returning zero matches. Future contributors who introduce this shape must add the follow-up rule BEFORE shipping.
 
+#### 6.8.8 The `tx.delete(Entity, criteria)` relation-traversal invariant (v1.7.4.1 — must read before writing ANY `tx.delete(EntityClass, criteria)` call site)
+
+**The bug class.** TypeORM's `manager.transaction`'s `tx.delete(EntityClass, criteria)` validates the criteria KEYS against the entity's property names — NOT its column names. The runtime shape `{ userId: <id> }` looks intuitive because the emitted SQL is `WHERE "userId" = $1`, but if the entity does not declare a literal `userId: number` PROPERTY (only an `@ManyToOne(() => User) user: User` relation), TypeORM throws:
+
+```
+EntityPropertyNotFoundError: Property "userId" was not found in "UserSettings".
+Make sure your query is correct.
+```
+
+The v1.7.4.1 production regression exposed this on the Android APK debug build: tapping "Eliminar Cuenta" surfaced the error on the first iteration of the cascade (`tx.delete(UserSettings, { userId: id })`). The bug was *triple-masked* before surfacing:
+
+1. **v1.7.3** fixed the string-vs-number ownership guard (`@Param('id', ParseIntPipe) id: number`), but the cascade was still unreachable because `id` (URL) and `user?.id` (JWT) compared `8 !== undefined` → `true` → controller 401'd BEFORE the cascade ran.
+2. **v1.7.4** fixed `req.user.id` → `req.user.userId` per §6.8.7, finally unblocking the cascade.
+3. **v1.7.4.1 then surfaced the EntityPropertyNotFoundError** that had been living in the code since v1.7.2 — three nested regressions stacked on top of each other.
+
+The canonical fix is to USE THE CODEBASE'S RELATION-TRAVERSAL CONVENTION, verified in 10+ places (`transaction.repository.ts:42`, `budget.repository.ts:34`, `expense-category.repository.ts:20`, `overview.repository.ts`, etc.):
+
+**Git bisect pointer.** The first commit to introduce `{ userId: id }` in a `tx.delete(Entity, …)` block is the v1.7.2 children-first cascade shipped under `rpi/delete-account-cleanup/`. Run `git log --reverse --oneline --diff-filter=A -- apps/api/src/adapters/user/persistence/user.repository.ts` and grep the diffs for the first occurrence of `tx.delete(<EntityName>, { userId:` to pinpoint the exact historical commit. If anyone reading §6.8.8 needs to audit WHEN this bug class was born, the bisect lands in the v1.7.2 RPI PR — useful evidence if you ever need to write a postmortem or defend the cascade design.
+
+```ts
+// ❌ WRONG — `{ userId: id }` is the literal-column shape. TypeORM
+// compares keys against PROPERTY NAMES, and the child entities have
+// no `userId` property — only `@ManyToOne(() => User) user: User`.
+await tx.delete(UserSettings,    { userId: id });   // throws EntityPropertyNotFoundError
+await tx.delete(Transaction,     { userId: id });   // throws on the FIRST iteration
+await tx.delete(Budget,          { userId: id });   // ⇒ transaction roll-back; 500 controller response
+await tx.delete(ExpenseCategory, { userId: id });
+await tx.delete(Overview,        { userId: id });
+
+// ✅ RIGHT — `{ user: { id } }` is the relation-traversal shape.
+// TypeORM walks the relation chain at SQL generation time and emits
+// `WHERE "userId" = $1` correctly, even though the entity has no
+// literal `userId` PROPERTY. This is the codebase's universal pattern
+// (verified in transaction.repository.ts:42, budget.repository.ts:34,
+// expense-category.repository.ts:20, etc.) — use it consistently.
+await tx.delete(UserSettings,    { user: { id } });
+await tx.delete(Transaction,     { user: { id } });
+await tx.delete(Budget,          { user: { id } });
+await tx.delete(ExpenseCategory, { user: { id } });
+await tx.delete(Overview,        { user: { id } });
+
+// ✅ ALSO RIGHT — when the entity DOES declare a literal `userId` column
+// alongside the relation (the rare case: entities with `@Column userId: number`
+// in addition to `@ManyToOne(() => User) user: User`), the literal-column
+// form is acceptable. NO entity in this codebase has that shape today.
+// Verify via `grep -n 'userId:\\s*number' apps/api/src/domain/**/*.entity.ts`
+// returning zero matches before assuming this branch is valid.
+await tx.delete(SomeWeirdEntity, { userId: id });
+```
+
+**Where the SQL is emitted.** For the relation-traversal form, TypeORM's `FindOptionsWhere` builder resolves `{ user: { id } }` against the `@JoinColumn({ name: 'userId' })` (Transaction / Budget / ExpenseCategory / Overview) OR against the `@ManyToOne` default `'user' + Id` convention (UserSettings pre-v1.7.4.1). The v1.7.4.1 entity edit added `@JoinColumn({ name: 'userId' })` to `UserSettings` for codebase consistency, but the validation SUCCESS / FAILURE of the criteria shape does NOT depend on the @JoinColumn being explicit — the explicit `@JoinColumn` is for **documentary clarity**, not functional correctness.
+
+**The general rule.** EVERY `tx.delete(EntityClass, criteria)` call site in the codebase uses the relation-traversal form. NEVER mix shapes between sibling entity deletes in the same transaction block — doing so leaves one of them silently broken at runtime.
+
+**The pre-existing convention.** This codebase has been using `{ user: { id: userId } }` in plain `where:` clauses for years (verified in `transaction.repository.ts:80`, `budget.repository.ts:34`, etc.). The v1.7.2 cascade path was a *mistake* in not following this convention — likely because the FK column name (`userId`) was confused with the relation-traversal's resolved alias. Codify the rule so a future contributor writing a new `tx.delete` block uses the right shape from the start.
+
+**Lint hook (TODO).** Custom ESLint `no-restricted-syntax` AST rule flagging:
+
+```ts
+// ❌ literal-column shape
+`CallExpression[callee.object.property.name='delete'][callee.property.name='delete']
+   > CallExpression[callee.property.name='delete']
+   > ObjectExpression
+   > Property[key.name=/^(userId|user_id)$/]`
+```
+
+The walks:
+1. `CallExpression` whose callee is `Identifier.<delete>` (matches `tx.delete(…)` or `manager.delete(…)`).
+2. Inside that, an `ObjectExpression` where the first or any key is one of `userId` / `user_id` (the camelCase column shape is the symptom).
+3. Skip coverage for `tx.query(...)` (raw SQL is unaffected because `tx.query('DELETE … WHERE "userId" = $1', [id])` bypasses TypeORM's `FindOptionsWhere` criteria validator — Postgres receives the SQL directly, so the literal-column naming is BUG-FREE in this path). The existing cascade code at `apps/api/src/adapters/user/persistence/user.repository.ts:248-280` uses `tx.query(...)` for the legacy-tables pre-check (`incomes`, `goals`, `saving_goals`); those literal-column references are CORRECT and MUST NOT be flagged by the lint rule.
+4. Skip coverage for `repo.update(...)` / `repo.save(...)` / etc. — only targeted at the entity-based delete path.
+
+A pin from a CI-injected `pnpm --filter api lint` will catch every future contributor who tries to copy the v1.7.2-vintage cascade shape into a new `tx.delete` block. Implementable as a follow-up RPI.
+
+**Future expansion (audit-relevant when extending the rule, NOT a blocker today):**
+- **Computed keys**: `{ ['userId']: id }` is currently missed by the static `Property[key.name=/^(userId|user_id)$/]` selector. Extend to `Property.key.type === 'Literal' && Property.key.value === 'userId'` (and ditto for `Property.key.type === 'TemplateLiteral'` for `${...}` shapes).
+- **Spread literals**: `{ ...other, userId: id }` — the static walk over `ObjectExpression.properties` skips keys introduced via `SpreadElement`. Rare in this codebase, but possible. AST walk would need to flag any `ObjectExpression` containing a `SpreadElement` AS WELL AS a tenant that resolves to a `tx.delete` call — multi-step walk, more expensive.
+- **Nested second-level**: `{ owner: { userId: id } }` — different bug class (filtering an `owner` relation by literal `userId` rather than `{ owner: { id } }`). Same root cause as §6.8.8's literal-column shape; worth a second rule instance under a separate name (e.g. `no-nested-literal-userId`) to keep error messages crisp.
+
+**Three pre-merge questions** (additive to §6.8.2 / §6.8.3 / §6.8.4 / §6.8.6 / §6.8.7):
+
+1. Does the new `tx.delete(Entity, criteria)` block use the relation-traversal shape `{ user: { id } }` (NOT the literal-column `{ userId: id }` shape)? If NO, run `pnpm --filter api lint` and confirm zero `no-tx-delete-literal-column` warnings before merge.
+2. Was the `@JoinColumn({ name: 'userId' })` decorator set on the child entity? If NO, add it for documentary clarity (it does NOT affect runtime correctness, but it prevents a future contributor from being confused by the bare `@ManyToOne(() => User)` shape). Verify via `grep -n '@JoinColumn\|@ManyToOne.*User' apps/api/src/domain/<entity>.entity.ts`.
+3. Was the spec's pre-cascade precondition assertion added to the regression test? If NO, the cascade regressing to silent no-op would still trip the post-cascade `count(*) ... === 0` assertion green (because the rows were never there to delete in the first place). The precondition ensures the cascade has work to do, so a no-op cascade trips the new assertion.
+
+If YES to all three — the call site is safe. If NO to any — fix and re-verify before merge.
+
+**Files in this fix (surgical-edits pattern)**:
+
+- MODIFIED `apps/api/src/adapters/user/persistence/user.repository.ts:288-292` — `tx.delete(Entity, { userId: id })` → `tx.delete(Entity, { user: { id } })` for all 5 child tables (UserSettings, Transaction, Budget, ExpenseCategory, Overview). 50-line comment block replaced with a focused ~10-line canonical-form pin citing the codebase convention sites.
+- MODIFIED `apps/api/src/domain/user/user-settings.entity.ts` — `@JoinColumn({ name: 'userId' })` added to the existing `@ManyToOne(() => User) user: User` for codebase consistency with Transaction / Budget / ExpenseCategory / Overview (which all already declare it explicit). Metadata-only — the DB column already exists from the initial migration `1776510954066-InitialMigration.ts`. Inline comment block documents the FK-derivation invariant.
+- MODIFIED `apps/api/test/user-delete-permission.spec.ts` — added a pre-cascade precondition assertion (`SELECT count(*) FROM user_settings WHERE userId = userAId` must be `>= 1` before the cascade) so a no-op cascade regression cannot silently pass. Existing post-cascade assertions extended to cover all 8 child tables (was only 2 of 8 before — incomplete cascade-coverage was itself a separate spec gap).
+
+**Defense-in-depth invariants preserved by the v1.7.4.1 fix (do NOT regress on future refactors)**:
+
+- **§6.8.7 invariant unchanged.** The `req.user.userId` shape is independent of this §6.8.8 fix. v1.7.4.1 changed only the criteria SHAPE inside `tx.delete(...)`; it did NOT touch JWT projection or any guard's userId read. The two fixes are orthogonal — together they form the complete contract for account deletion: (1) URL params are numbers (§6.8.6), (2) JWT claims project as `userId` (§6.8.7), (3) cascade criteria use relation-traversal (§6.8.8).
+- **§6.8.5 invariant unchanged.** The full-state-reset on logout (`clearAuthAndStateForLogout`) and the `pre-cleanup` raw-SQL helper inside the spec are independent — both add their own existence-check guards. Do NOT collapse them into a single helper.
+- **Children-first cascade order is locked** (carried over from §6.8.5). The 5 entity-based deletes MAY be reordered among themselves (no FK between them), but they MUST all precede the parent `tx.delete(User, { id })`. A future contributor who moves the parent delete first trips the FK constraint's `QueryFailedError`.
+- **Relation-traversal is the project-wide convention.** Every existing `where:` clause in `apps/api/src/adapters/dashboard/persistence/*.repository.ts` uses `{ user: { id: userId } }`. The v1.7.2 cascade signup was the ONLY outlier. After v1.7.4.1, there are zero outliers — preserving this invariant is a code-review gate (NOT yet lint-enforced).
+- **`@JoinColumn({ name: 'userId' })` is documentary, NOT functional.** It does NOT change criteria validation behavior in TypeORM. It's included for codebase consistency and to prevent future contributors from being confused by the bare `@ManyToOne(() => User) user: User` (which looks like "no FK column set"). Three corollary rules to disambiguate cleanup-vs-add:
+  - **Removing `@JoinColumn` from EXISTING entities is fine** — criteria validation still passes via TypeORM's default `'user' + Id` join-column derivation (a bare `@ManyToOne(() => User) user: User` resolves to `userId` automatically at SQL generation time). Already runtime-correct.
+  - **NOT adding `@JoinColumn` to NEW entities is acceptable** for runtime correctness — only the documented clarity benefit is lost. Adding it to NEW entities is RECOMMENDED for the consistency reason above, but not required.
+  - **Adding `@JoinColumn({ name: '<other>' })` to an entity that already has a SEPARATE relation to `<other>` is BAD** — TypeORM would shadow the `'user' + Id` join derivation with whatever `<other>` was supplied at definition time. Pick exactly one explicit `@JoinColumn` per side of a relation; never sandwich two `@JoinColumn` decorators on the same property.
+- **Pre-cascade precondition is load-bearing.** The new `expect(... >= 1)` assertion in the spec ensures the cascade has work to do. Without it, a future regression that makes the cascade silently no-op (e.g., someone reverts to raw SQL inside `deleteUserTransactional`) would still trip `assertChildCountIsZero` green at the post-cascade assertion because the rows were never there to delete in the first place — masking the bug.
+
 ---
 
 ## 7. Development Workflow

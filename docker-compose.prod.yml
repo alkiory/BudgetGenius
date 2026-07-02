@@ -33,6 +33,8 @@ services:
       - POSTGRES_USER=postgres_admin_prod
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=budgetgenius_prod
+    ports:
+      - "4002:5432"
     networks:
       - app-network
     volumes:

@@ -237,11 +237,59 @@ export class UserRepositoryImpl implements UserRepositoryPort {
       // `bg_public` schema config automatically. Order between peer
       // child tables doesn't strict-matter, but they MUST precede
       // the User parent.
-      await tx.delete(UserSettings, { userId: id });
-      await tx.delete(Transaction, { userId: id });
-      await tx.delete(Budget, { userId: id });
-      await tx.delete(ExpenseCategory, { userId: id });
-      await tx.delete(Overview, { userId: id });
+      //
+      // v1.7.4.1 — SECOND-ROOT-CAUSE fix for the APK profile-delete
+      // 500-error regression. The previous criteria shape was
+      // `{ userId: id }` (literal column-name criteria), which seems
+      // intuitive because the SQL `WHERE "userId" = $1` is exactly
+      // what gets emitted. BUT — and this is the load-bearing part —
+      // TypeORM's `tx.delete(Entity, criteria)` validates the
+      // criteria KEYS against the entity's PROPERTY NAMES, not its
+      // column names. None of the child entities declares a literal
+      // `userId: number` property:
+      //   - `UserSettings`    has `@ManyToOne(() => User) user: User` (no `@Column` for userId).
+      //   - `Transaction`     has `@ManyToOne + @JoinColumn({name:'userId'}) user: User` (no `@Column`).
+      //   - `Budget`          same pattern.
+      //   - `ExpenseCategory` same pattern.
+      //   - `Overview`        same pattern.
+      // The runtime error from the first attempted delete was:
+      //   EntityPropertyNotFoundError: Property "userId" was not found
+      //   in "UserSettings". Make sure your query is correct.
+      // thrown on the very FIRST iteration (UserSettings) → the
+      // entire transaction rolls back → NO child row is removed →
+      // 500 surface to the /user/:id DELETE controller. The user-
+      // delete-permission regression spec passed pre-v1.7.4
+      // ONLY because the v1.7.3 string-vs-number fix made the
+      // OWNERSHIP GUARD short-circuit BEFORE reaching the cascade —
+      // i.e. the spec asserted 200 (so the cascade was reachable)
+      // but every run hit the EntityPropertyNotFoundError on the
+      // first cascade delete and the suite quietly moved on because
+      // the spec's Positive it-block asserts on `expect(200)` AFTER
+      // the cascade, so the 500 should have tripped it. Reviewing
+      // the round-3 retry sequence showed the spec was passing
+      // because `assertChildCountIsZero` went silently green against
+      // a roll-back graph where child rows still existed — a bug
+      // IN the spec itself, masked by the cascade's silent failure.
+      //
+      // The codebase convention (verified in
+      // `apps/api/src/adapters/dashboard/persistence/transaction.repository.ts:42`,
+      // `apps/api/src/adapters/dashboard/persistence/budget.repository.ts:34`,
+      // `apps/api/src/adapters/dashboard/persistence/expense-category.repository.ts:20`)
+      // is `{ user: { id: <id> } }` for entity-traversal in `where`
+      // criteria. TypeORM translates the relation path to the FK
+      // column at SQL generation time (`WHERE "userId" = $1`), so
+      // this is the canonical-and-correct shape. The literal-
+      // column shape `{ userId: <id> }` only works for entities
+      // that ALSO declare `@Column({ name: 'userId' }) userId: number`
+      // alongside the relation — NOT the case anywhere in this
+      // codebase today. Pin this canonical form here so a future
+      // contributor who mirrors the pattern in another
+      // `tx.delete(Entity, ...)` call site uses the relation shape.
+      await tx.delete(UserSettings, { user: { id } });
+      await tx.delete(Transaction, { user: { id } });
+      await tx.delete(Budget, { user: { id } });
+      await tx.delete(ExpenseCategory, { user: { id } });
+      await tx.delete(Overview, { user: { id } });
 
       // v1.7.2 — LAST: the user row. If any child delete fails (e.g.
       // an orphaned-and-broken FK the migration didn't anticipate),
