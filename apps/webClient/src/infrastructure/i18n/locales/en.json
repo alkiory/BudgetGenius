@@ -107,7 +107,18 @@
         "checkEmail": "Check your email",
         "resetLinkSent": "We've sent a password reset link to your email address",
         "checkSpamFolder": "If you don't see the email in your inbox, please check your spam folder. The link will expire in 24 hours.",
-        "returnToLogin": "Return to login"
+        "returnToLogin": "Return to login",
+        "accountReauth": {
+            "title": "Google sign-in needs the SHA-1 to be registered",
+            "body": "Your APK can't complete Google sign-in because the keystore SHA-1 isn't registered in Firebase / Google Cloud. Follow these steps to register it:",
+            "step1": "Play Console → Setup → App integrity → copy the App signing key SHA-1 (NOT the upload key).",
+            "step2": "Firebase Console → Project settings → Android app → add the SHA-1 under 'SHA certificate fingerprints'.",
+            "step3": "Re-download google-services.json and place it at apps/mobile/android/app/google-services.json.",
+            "step4": "Run pnpm --filter mobile sync and rebuild the APK.",
+            "step5": "Settings → Apps → BudgetGenius → Storage → Clear data, then try sign-in again.",
+            "ctaClose": "Close",
+            "ctaRetry": "Try again"
+        }
     },
     "dashboard": {
         "title": "Dashboard",

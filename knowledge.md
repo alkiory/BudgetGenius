@@ -669,6 +669,54 @@ If YES to any — flip the predicate, codify the symmetric inverse, add the regr
 - MODIFIED `apps/webClient/src/presentation/pages/onboarding/onboardingPage.tsx` — inverse bounce-back tightened from truthy to strict `=== true` (the symmetric half of the calibration).
 - NEW `apps/webClient/tests/onboarding-fresh-user.spec.ts` — four-cell Playwright truth-table regression spec; mocks `/auth/verify`, `/user/profile`, and `/user-settings` (3× 5xx or 200 with `false` / `true`).
 
+#### 6.8.4 The marker contract for `nativegoogle:` producers (must read before adding ANY new `nativegoogle:`-prefixed throw)
+
+**The bug class.** In `v1.7.x`, commit `f3b7b8d` added `isAccountReauthError` + `buildAccountReauthRethrow` to `apps/webClient/src/adapters/auth/native-google-login.strategy.ts:28-30,88-100`. The rethrow uses the substring `nativegoogle:` as a message prefix. The Hybrid dispatcher at the time (an earlier version of `apps/webClient/src/adapters/auth/index.ts`) maintained a **substring-grep fallback ladder** — `if (msg.includes("not implemented") || msg.includes("no credentials available") || msg.includes("nativegoogle"))` → fall back to `WebGoogleLoginStrategy`. **On native, that calls `signInWithRedirect(auth, provider)` and opens Chrome Custom Tab**, stranding the user in a hanging browser tab (no OAuth deep-link intent-filter on `apps/mobile/android/app/src/main/AndroidManifest.xml`). Every producer of an error with the substring `nativegoogle:` was therefore implicitly re-routed to the browser. The matcher was the **third** `nativegoogle:` producer after `web-google-login.strategy.ts:71` and `native-google-login.strategy.ts:128`, and adding it broke the APK login silently.
+
+**The rule.** Two ingredients must be present for a non-recoverable native error (i.e., one that should NOT fall back to the Web SDK on native):
+
+1. **A typed sentinel on the rethrown error**: `(err as Error & { isAccountReauth?: boolean }).isAccountReauth = true` (or a future-named sentinel property — codify under §6.8.5 before introducing one). The Boolean survives `JSON.stringify`-style round-trips that axios + React Query sometimes do for cache key derivation, where an `instanceof` class identity would be dropped.
+2. **A pre-check in `HybridGoogleLoginStrategy.login()` BEFORE the substring ladder**: `if (isAccountReauthError(error)) { console.warn(...); throw error; }`. The substring ladder runs ONLY for errors where the sentinel is `undefined` — preserving legitimate fallback semantics for init failures, missing env vars, and `signInWithRedirect` failures.
+
+The native strategy's `buildAccountReauthRethrow` sets the sentinel AFTER preserving the `nativegoogle:` text prefix (the prefix is kept for back-compat with the log greppers and Sentry breadcrumbs documented in `apps/mobile/README.md`).
+
+**Why a substring-grep ladder existed in the first place.** Before the typed sentinel, the only signal a returned Error carried was its `.message`. Substring matching against `"not implemented"` / `"no credentials available"` allowed the dispatcher to recognize the "this plugin is not available here" case and degrade gracefully to the Web SDK sign-in flow. This pattern is fine for soft-availability failures; it is **NOT fine** for hard-non-recoverable failures like a SHA-1 fingerprint misregistration, which the Web SDK cannot fix in any way.
+
+**Three pre-merge questions** (additive to §6.8.2 and §6.8.3):
+
+1. Does the new producer / rethrow set `(err as Error & { isAccountReauth?: boolean }).isAccountReauth = true` (or a future-named sentinel property under §6.8.5)?
+2. Does `HybridGoogleLoginStrategy.login()` check the sentinel BEFORE the substring ladder (NOT inside an `else` branch)?
+3. If the sentinel is `undefined`, is the substring ladder still active for OTHER `nativegoogle:` producers (init failures at `native-google-login.strategy.ts:128`, signInWithRedirect failures at `web-google-login.strategy.ts:71`)?
+
+If YES to all three — the new producer is safe. If NO to any — split the producer OR add the sentinel pre-check.
+
+**Files in this fix (delete-and-create pattern, NOT in-place edit for the dispatcher):**
+
+- EDITED `apps/webClient/src/adapters/auth/native-google-login.strategy.ts:88-100` — `buildAccountReauthRethrow` now sets `isAccountReauth = true` on the rethrown error after preserving the `nativegoogle:` prefix. Inline comment references §6.8.4.
+- NEW `apps/webClient/src/adapters/auth/hybrid-google-login.strategy.ts` — `HybridGoogleLoginStrategy` extracted from module-local in `index.ts:66` into its own file. Class reads `error.isAccountReauth === true` FIRST; only if undefined does the substring ladder run.
+- EDITED `apps/webClient/src/adapters/auth/index.ts` — removed the module-local class; re-exports `HybridGoogleLoginStrategy` from the new file. `createGoogleLoginStrategy()` factory's signature is unchanged.
+- NEW `apps/webClient/src/presentation/components/auth/GoogleAccountReauthModal.tsx` — `createPortal`-based sticky Modal; i18n keys under `auth.accountReauth.{title, body, step1…step5, ctaClose, ctaRetry}`; renders the 5-step SHA-1 playbook inline.
+- EDITED `apps/webClient/src/presentation/components/social-buttons-login.tsx` — `onError((error) => { if (isAccountReauth(error)) setReauthError(error); else errorToast(error.message); })`. Modal rendered conditionally on `reauthError` state.
+- EDITED `apps/webClient/src/adapters/auth/__tests__/native-google-login.strategy.spec.ts` — 4 branches extended with `toMatchObject({ isAccountReauth: true/false })` assertions.
+- NEW `apps/webClient/src/adapters/auth/__tests__/hybrid-google-login.strategy.spec.ts` — 5-branch vitest spec pinning the dispatcher behavior.
+- EDITED `apps/webClient/src/infrastructure/i18n/locales/en.json` and `es.json` — `auth.accountReauth` block (9 keys per locale).
+
+**Where else the sentinel could be extended.** The pattern in §6.8.4 is specifically about Google's native plugin. Future plugins added under `apps/webClient/src/adapters/auth/` (Apple, Facebook, Microsoft) can adopt the same contract by picking a new sentinel name (e.g. `isAppleSignInUnavailable`) and codifying under §6.8.5. Do not piggyback on `isAccountReauth` for non-Google paths.
+
+**Lint hook (TODO).** No static rule yet catches:
+- A `throw new Error(...)` construction where the message contains the literal `nativegoogle:` but does NOT set the typed sentinel in the next line.
+- A `HybridGoogleLoginStrategy` catch block where the sentinel pre-check is missing OR placed AFTER the substring ladder.
+
+A custom ESLint `no-restricted-syntax` AST rule walking `ThrowStatement` nodes whose argument is a `NewExpression` with callee `Error` (or any subclass) AND whose first argument contains the string `nativegoogle:` would catch the producer-end regression in CI. The rule would emit: "Throw statement contains `nativegoogle:` but does not set `isAccountReauth` on the same site" with a §6.8.4 link in the message. Implementable in a follow-up RPI.
+
+**Defense-in-depth invariants preserved by the v1.7.1 fix** (do not regress on future refactors):
+
+- **Sentinel set BEFORE substring ladder.** The check in `HybridGoogleLoginStrategy.login()` is the FIRST statement inside the catch block, before any message-string work. Moving it AFTER the substring ladder re-introduces the regression.
+- **Substring ladder remains active for OTHER producers.** Branch 4 of `hybrid-google-login.strategy.spec.ts` is the load-bearing test: an Error from `native-google-login.strategy.ts:128` (init failure) without the sentinel STILL falls back to Web SDK. If a future refactor drops this branch behavior, init-failure UX breaks.
+- **Sentinel value is `true`, not `1` or a string.** The check is `=== true`. A future typed-string sentinel would require renaming and codifying under §6.8.5 first; switching `isAccountReauth` to `isAccountReauth === 'true'` would silently false-negative every existing producer.
+- **`nativegoogle:` text prefix preserved verbatim.** Back-compat with the existing log-greppers documented in `apps/mobile/README.md` and Sentry ingest. Removing the prefix while keeping the typed sentinel would orphan operator-side searches.
+- **The sentinel must NOT survive `JSON.stringify`-style round-trips.** If a future axios-internal change strips own properties of the `Error` instance (e.g., a custom serialiseConfig), `isAccountReauth` becomes `undefined` and the substring ladder fires again. Pin against this by keeping the matcher contract intact at `native-google-login.strategy.ts:91` (typed property assignment is the production site) AND by adding a comment in `api.config.ts` if a global serializer is ever introduced.
+
 ---
 
 ## 7. Development Workflow

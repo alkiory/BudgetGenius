@@ -117,6 +117,36 @@ function buildAccountReauthRethrow(originalError: unknown): Error {
   // signature. Sentry and log aggregators reading `.cause` preserve
   // the original stack in the breadcrumb.
   (err as Error & { cause?: unknown }).cause = originalError;
+
+  // ───────────────────────────────────────────────────────────────────────
+  // v1.7.1 NEW CONTRACT — see knowledge.md §6.8.4
+  //
+  // The `nativegoogle:` text prefix is KEPT for back-compat with
+  // log-greppers and Sentry breadcrumbs. On top of it, the error
+  // carries a typed sentinel (`isAccountReauth === true`) that the
+  // Hybrid dispatcher reads BEFORE the substring ladder
+  // (apps/webClient/src/adapters/auth/hybrid-google-login.strategy.ts).
+  //
+  // This decouples the "Account reauth" producer from the Web SDK
+  // fallback ladder, which would otherwise re-route to
+  // signInWithRedirect and open the phone browser. The SHA-1
+  // misregistration is NOT recoverable by Web SDK in any way — falling
+  // back to it just opens a browser that the WebView can never
+  // return from (no OAuth deep-link intent-filter on AndroidManifest).
+  // The right surface is an actionable Modal explaining the 5-step
+  // playbook, NOT the Web SDK.
+  //
+  // Boolean property (vs `instanceof AccountReauthError`): chosen
+  // because the error crosses an axios/React-Query serialization
+  // boundary in social-buttons-login.tsx → the boolean survives
+  // `JSON.stringify`-style round-trips that would lose `instanceof`.
+  //
+  // DO NOT collapse this into a generic boolean — the typed sentinel
+  // MUST stay as a stable contract for `knowledge.md §6.8.4` (lint
+  // hook) to flag any future producer that forgets to set it. See
+  // rpi/mobile-google-login-regression/plan.md T1.1.
+  // ───────────────────────────────────────────────────────────────────────
+  (err as Error & { isAccountReauth?: boolean }).isAccountReauth = true;
   return err;
 }
 

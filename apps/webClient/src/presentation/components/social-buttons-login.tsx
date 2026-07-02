@@ -1,3 +1,7 @@
+import {
+  isAccountReauthError,
+  type AccountReauthError,
+} from "@adapters/auth/hybrid-google-login.strategy";
 import { loginAction, setUser } from "@adapters/slices/auth/authSlice";
 import { googleLogin } from "@application/auth/auth.service";
 import { RoutePaths } from "@presentation/utils/routes";
@@ -6,6 +10,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router";
+import { GoogleAccountReauthModal } from "./auth/GoogleAccountReauthModal";
 import { Button } from "./ui/button";
 
 export function SocialLoginButtons() {
@@ -13,6 +18,14 @@ export function SocialLoginButtons() {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
+  // v1.7.3 — held in component state rather than a toast because
+  // the Account reauth error is auth-blocking and must survive the
+  // 5-second toast-dismiss timer. Modal renders conditionally on
+  // this state; clearing it via Close or Retry handlers hides the
+  // overlay.
+  const [reauthError, setReauthError] = useState<AccountReauthError | null>(
+    null,
+  );
 
   const { mutate: signInWithGoogle } = useMutation({
     mutationKey: ["google-auth"],
@@ -30,7 +43,18 @@ export function SocialLoginButtons() {
       }, 1000);
     },
     onError: (error) => {
-      errorToast(error.message);
+      // §6.8.4 — typed sentinel path: surface Modal, NOT a toast
+      // (and definitely NOT a signInWithRedirect, which is what the
+      // pre-fix Hybrid did). Predicate is imported from the strategy
+      // so this surface shares ONE source of truth with the
+      // dispatcher (no drift).
+      if (isAccountReauthError(error)) {
+        setReauthError(error);
+        return;
+      }
+      // Pre-existing path: raw error message in a toast. Kept
+      // verbatim for user-cancelled / network / Firebase errors.
+      errorToast(error?.message ?? String(error));
     },
   });
 
@@ -75,6 +99,7 @@ export function SocialLoginButtons() {
         onClick={handleLoginWithGoogle}
         variant="outline"
         className="bg-white w-full"
+        data-testid="google-button"
       >
         <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
           <path
@@ -97,6 +122,19 @@ export function SocialLoginButtons() {
         </svg>
         Google
       </Button>
+      {/* v1.7.3 — Modal renders via createPortal inside the
+          component, so the overlay is anchored on document.body above
+          any parent stacking context. Cleared via Close or Retry. */}
+      {reauthError && (
+        <GoogleAccountReauthModal
+          error={reauthError}
+          onClose={() => setReauthError(null)}
+          onRetry={() => {
+            setReauthError(null);
+            handleLoginWithGoogle();
+          }}
+        />
+      )}
     </div>
   );
 }

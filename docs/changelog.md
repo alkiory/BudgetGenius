@@ -2,6 +2,55 @@
 
 ---
 
+## [v1.7.1] — 2026-07-02
+
+> Session: Capacitor Android APK Google login regression — the pre-fix Hybrid dispatcher routed the `[code=16]` matcher rethrow into a substring-grep fallback ladder that called `signInWithRedirect` on native and stranded the user in a hanging Chrome Custom Tab. v1.7.1 replaces the substring with a typed-sentinel pre-check (`error.isAccountReauth === true`) and surfaces a sticky Modal explaining the 5-step SHA-1 registration playbook instead of opening the browser. Codified as `knowledge.md §6.8.4`. RPI artifacts at `rpi/mobile-google-login-regression/` (FAR Mean = 4.67, FACTS Mean = 4.80, both PASS).
+
+### Fixed
+
+- **PRODUCTION-DETECTED: Google login on the Android APK opens the phone's system browser after the user selects an account in the Credential Manager bottom sheet**, instead of completing the flow inside the WebView. Root cause: commit `f3b7b8d` (v1.7.x) added `isAccountReauthError` + `buildAccountReauthRethrow` to `apps/webClient/src/adapters/auth/native-google-login.strategy.ts`. The rethrow uses the substring `nativegoogle:` as a prefix. The Hybrid dispatcher (`apps/webClient/src/adapters/auth/index.ts`, original module-local class) maintains a substring-grep fallback ladder — `if (msg.includes("not implemented") || msg.includes("no credentials available") || msg.includes("nativegoogle"))` — that falls back to `WebGoogleLoginStrategy`. **On native, `WebGoogleLoginStrategy` calls `signInWithRedirect(auth, provider)`**, which opens Chrome Custom Tab and navigates the browser. The AndroidManifest.xml has no OAuth deep-link intent-filter (intentional, pre-existing), so the redirect never returns to the app — the user is stuck in a hanging Chrome Custom Tab. Operators registered the SHA-1 fingerprint per `apps/mobile/README.md` but the matcher kept routing through the same substring, opening the browser regardless.
+
+  **Fix — typed sentinel pre-check (`knowledge.md §6.8.4`)**:
+  1. `native-google-login.strategy.ts:88-100` `buildAccountReauthRethrow` now sets `(err as Error & { isAccountReauth?: boolean }).isAccountReauth = true` AFTER preserving the `nativegoogle:` text prefix (the prefix is kept for back-compat with log-greppers and Sentry breadcrumbs — see `apps/mobile/README.md` operators searching `nativegoogle:`).
+  2. `class HybridGoogleLoginStrategy` extracted from module-local in `index.ts:66` into the new `apps/webClient/src/adapters/auth/hybrid-google-login.strategy.ts` (so vitest can import + `vi.spyOn` it). The class now reads `error.isAccountReauth === true` **FIRST** (typed-sentinel pre-check). If true → `console.warn(...)` + `throw error` → no fallback. Only when the sentinel is `undefined` does the substring ladder run (preserving the legitimate fallback for init failures + missing env var + signInWithRedirect failures).
+  3. `apps/webClient/src/presentation/components/auth/GoogleAccountReauthModal.tsx` (NEW) — `createPortal`-based sticky in-app overlay that shows the 5-step SHA-1 registration playbook. Wired from `social-buttons-login.tsx` via a `useState<Error | null>(null)` set on `onError((error) => { if (isAccountReauthError(error)) setReauthError(error); else errorToast(error.message); })`. Modal renders via `data-testid="google-account-reauth-modal"` on `document.body`, with "Try again" (re-runs the flow) and "Close" CTAs. Survives the 5-second toast-dismiss timer in `apps/webClient/src/infrastructure/toast.config.tsx:16` so the operator can actually read the playbook.
+  4. i18n keys added to both `en.json` and `es.json`: `auth.accountReauth.{title, body, step1, step2, step3, step4, step5, ctaClose, ctaRetry}`. Bilingual — the modal surfaces the same 5-step playbook in EN and ES.
+
+  **Why a typed boolean property (and not `instanceof AccountReauthError`)**:
+  The error crosses an axios + React-Query serializer boundary in `social-buttons-login.tsx → @tanstack/react-query useMutation.onError`. A class identity (`instanceof AccountReauthError`) is dropped by `JSON.stringify`-style round-trips that React Query sometimes does for cache key derivation. A boolean own-property survives both. Tests assert `expect(strategy.login()).rejects.toMatchObject({ isAccountReauth: true })` to lock the contract end-to-end.
+
+### Why a patch
+
+Per `knowledge.md §16.1`: a single production-blocking bug fix. No new feature surface (the modal IS new code, but its only purpose is the fix — it does not expose anything new to consumers beyond the 5-step playbook copy). No API surface change. The matcher itself is unchanged (still detects `code === 16` + `(account AND reauth)` text-fingerprint); only the downstream contract surface + dispatcher guard change. Patch bump `1.7.0 → 1.7.1` is correct.
+
+### Quality gates
+
+- ✅ Frontend `pnpm exec tsc --noEmit -p tsconfig.app.json` clean for all 4 refactored files (`native-google-login.strategy.ts` · `hybrid-google-login.strategy.ts` [NEW] · `social-buttons-login.tsx` · `GoogleAccountReauthModal.tsx` [NEW]). The 14 pre-existing diagnostics elsewhere (`useLoadUser.tsx` / `splash.tsx` / `notification-settings.tsx` / `personal-info-form.tsx` / etc.) are unchanged from v1.7.0 baseline per `knowledge.md §13.3`.
+- ✅ Frontend vitest `apps/webClient/src/adapters/auth/__tests__/native-google-login.strategy.spec.ts` — extended 4 branches: Branches 1+2 (positive) now assert `error.isAccountReauth === true`; Branches 3+4 (negative) now assert `error.isAccountReauth !== true`. Same 4 spec bodies, +4 assertion lines.
+- ✅ Frontend vitest `apps/webClient/src/adapters/auth/__tests__/hybrid-google-login.strategy.spec.ts` (NEW) — 5 branches covering §6.8.4 invariant: (1) positive — Native throws isAccountReauth error → Hybrid rethrows WITHOUT Web SDK instantiation; (2) substring matches `not implemented` → fallback; (3) substring matches `no credentials available` → fallback; (4) substring matches `nativegoogle:` without isAccountReauth (init failure producer at line 128) → fallback; (5) generic TypeError with no substring → rethrow without fallback.
+- ✅ Frontend i18n files `JSON.parse`-valid; `auth.accountReauth` block present in BOTH `en.json` and `es.json` with the exact same set of 9 keys (title, body, step1…step5, ctaClose, ctaRetry).
+- ✅ Code-reviewer-minimax-m3 approved across 4 review cycles (initial T1+T2 → ship-ready with 3 polish nits; post-polish → ship-ready; React-Redux 19 double-mount safety on the new `useState` → ship-ready with 1 nit; createPortal SSR guard defensiveness → ship-ready).
+- ✅ Grep scan `apps/webClient/src` for `nativegoogle` after the diff: producers are ONLY in `native-google-login.strategy.ts` and `web-google-login.strategy.ts`; the new consumer is `hybrid-google-login.strategy.ts`. No orphan producers, no orphan consumers (per §6.8.4 invariant).
+- 🟡 Native `./gradlew assembleRelease` not executed in this sandboxed environment — recommended on-device smoke on real APK: install, tap Google Login, select account from Credential Manager bottom sheet, verify the Modal opens (not the phone browser), verify "Try again" wires back to the social-button click handler, verify all 5 steps render in the user's locale.
+
+### Files modified (this entry)
+
+| Front | Files |
+|-------|-------|
+| Frontend (NEW) | `apps/webClient/src/adapters/auth/hybrid-google-login.strategy.ts` · `apps/webClient/src/presentation/components/auth/GoogleAccountReauthModal.tsx` · `apps/webClient/src/adapters/auth/__tests__/hybrid-google-login.strategy.spec.ts` |
+| Frontend (MODIFIED) | `apps/webClient/src/adapters/auth/native-google-login.strategy.ts` (adds `isAccountReauth` typed property on the rethrow, with §6.8.4 inline comment block) · `apps/webClient/src/adapters/auth/index.ts` (Hybrid class extracted into its own module; the factory `createGoogleLoginStrategy` keeps the same export shape, so existing callsites like `authRepository.googleLogin` and `useRestoreSession` are unaffected) · `apps/webClient/src/adapters/auth/__tests__/native-google-login.strategy.spec.ts` (extended 4 branches with `toMatchObject({ isAccountReauth: true/false })` assertions) · `apps/webClient/src/presentation/components/social-buttons-login.tsx` (state-driven `onError` + Modal wiring + `data-testid="google-button"`) · `apps/webClient/src/infrastructure/i18n/locales/en.json` (9 keys under `auth.accountReauth`) · `apps/webClient/src/infrastructure/i18n/locales/es.json` (9 keys under `auth.accountReauth`) |
+| Docs / Release | `docs/changelog.md` (this entry) · `rpi/mobile-google-login-regression/{research.md, plan.md}` (NEW artifacts: FAR Mean 4.67, FACTS Mean 4.80, both PASS) · `knowledge.md` (NEW §6.8.4 invariant codifying the typed-sentinel contract) · `package.json` (root, version `1.7.0` → `1.7.1`) |
+
+### Out of scope (tracked separately)
+
+- **Playwright regression spec for the Modal at browser-level**. The unit spec pins the dispatcher contract, but a real-browser Playwright spec would mount `SocialLoginButtons` with a mocked `HybridGoogleLoginStrategy` and assert the Modal renders AND `page.url()` stays on WebView origin. The native-bridge mocking separates Web SDK + native plugin flows in such a way that a Playwright spec cannot easily intercept the Google plugin from outside Capacitor. Tracked as a future vitest + @testing-library/react component spec instead — the unit invocations are sufficient for CI gating.
+- **`AccountReauthError` class vs boolean property**. Boolean property was chosen for serializer survival (see "Why a typed boolean property" above). If a future caller wants `instanceof`-style discrimination (e.g., for an exhaustive switch in a different surface), codify it as a follow-up §6.8.5 invariant, not a regression of §6.8.4.
+- **Matcher narrowing**. The matcher `isAccountReauthError` keeps the loose `(account AND reauth)` text-fingerprint because some plugin versions wrap only the message (no typed StatusCode exposed). If a future plugin version exposes a reliable `code: 16` AND the typed-sentinel flow holds, narrow the matcher to numeric-only to drop the false-positive surface — tracked as a future §6.8.5 invariant, NOT here.
+- **Manual device smoke matrix (Samsung Internet, MIUI Browser, WebView Chrome 119+)**. Operators should run the new APK on each WebView vendor build to confirm the CapacitorSocialLogin plugin boots without throwing the [Code 16] pattern. Sandbox does not run a device fleet.
+- **Lint hook ESLint rule for `nativegoogle:` producers**. The lint hook is documented as a TODO at the bottom of §6.8.4. A custom `no-restricted-syntax` AST rule walking `throw new Error(…)` constructions that contain the literal `nativegoogle:` would catch future producers that forget to set the typed sentinel. Implementable in a follow-up RPI.
+
+---
+
 ## [v1.7.0] — 2026-07-01
 
 > Session: Signup onboarding preferences + onboarding-guard split (Android APK dev `/app/onboarding` DOM-empty fix) + eager `user_settings` row at signup + delete-account confirmation reliability. Data-driven `/changelog` page (rendered from `apps/webClient/src/presentation/data/changelog.ts`) auto-picks up the two new v1.7 entries — no JSX changes.

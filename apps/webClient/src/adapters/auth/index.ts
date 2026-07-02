@@ -1,12 +1,20 @@
 import { isNativePlatform } from "@infrastructure/platform";
-import type { GoogleLoginStrategy } from "./google-login-strategy";
-import { NativeGoogleLoginStrategy } from "./native-google-login.strategy";
-import { WebGoogleLoginStrategy } from "./web-google-login.strategy";
+import { HybridGoogleLoginStrategy } from "./hybrid-google-login.strategy";
+// Local binding for the type alias — `export { type X } from "..."` does
+// NOT create a local binding usable inside the same module (it creates
+// an export binding only). Without this explicit import, the
+// `createGoogleLoginStrategy()` factory below would TS2552 on
+// `GoogleLoginStrategy` (load-bearing: the factory's return-type
+// annotation must reference the canonical interface, not
+// `HybridGoogleLoginStrategy`, so callers stay dispatched through the
+// factory rather than instantiating a concrete class).
+import { type GoogleLoginStrategy } from "./google-login-strategy";
 
 export { isNativePlatform } from "@infrastructure/platform";
 export { type GoogleLoginStrategy } from "./google-login-strategy";
 export { WebGoogleLoginStrategy } from "./web-google-login.strategy";
 export { NativeGoogleLoginStrategy } from "./native-google-login.strategy";
+export { HybridGoogleLoginStrategy } from "./hybrid-google-login.strategy";
 
 /**
  * Idempotent Google-plugin initializer. Call once at app startup (we
@@ -33,71 +41,16 @@ export async function initializeGoogleAuth(): Promise<void> {
 }
 
 /**
- * Hybrid strategy: the single source of truth for picking a
- * Google-login implementation by platform.
+ * Factory used by `apps/webClient/src/adapters/http/auth.repository.ts`
+ * → `authRepository.googleLogin()`. Returns a fresh dispatcher per
+ * login so each call carries its own error state (no module-scope
+ * leaks between concurrent calls).
  *
- *   ┌────────────────────────────┬──────────────────────────────────────┐
- *   │ isNativePlatform() === true│ NativeGoogleLoginStrategy →          │
- *   │                            │ @capgo/capacitor-social-login        │
- *   │                            │ (Android Credential Manager,         │
- *   │                            │ bottom sheet inside the app).        │
- *   │                            │ Falls back to WebGoogleLoginStrategy │
- *   │                            │ (signInWithRedirect) when the plugin │
- *   │                            │ is unknown / throws a recognised     │
- *   │                            │ marker (see "Fallback ladder" below).│
- *   ├────────────────────────────┼──────────────────────────────────────┤
- *   │ Standard browser tab       │ WebGoogleLoginStrategy →              │
- *   │                            │ signInWithPopup (snappy UX)          │
- *   └────────────────────────────┴──────────────────────────────────────┘
- *
- * Responsibilities are split so each strategy owns ONE concern:
- *   - `NativeGoogleLoginStrategy`  → only @capgo/capacitor-social-login.
- *   - `WebGoogleLoginStrategy`     → only Firebase JS SDK (popup or redirect).
- *   - `HybridGoogleLoginStrategy`  → platform gatekeeper + fallback ladder.
- *
- * Fallback ladder (red errors retagged as `nativegoogle: ...` so the
- * Hybrid can recognise them and swap to the Web SDK redirect):
- *
- *   1. Native plugin throws "not implemented"    → fallback to Web SDK.
- *   2. Native plugin throws "no credentials"     → fallback to Web SDK.
- *   3. Web SDK redirect throws (any message)     → wrapped in
- *      `nativegoogle: signInWithRedirect failed: …` so this ladder
- *      treats it as a non-fatal fallback signal, NOT a hard error.
+ * The class itself lives in `hybrid-google-login.strategy.ts` so
+ * vitest can import and `vi.spyOn` the producer/consumer chain. The
+ * §6.8.4 invariant (typed-sentinel pre-check) is annotated there.
  */
-class HybridGoogleLoginStrategy implements GoogleLoginStrategy {
-  async login(): Promise<{ idToken: string }> {
-    // Native APK: prefer the Credential Manager; fall back to Web SDK
-    // (which will use signInWithRedirect internally).
-    if (isNativePlatform()) {
-      try {
-        const native = new NativeGoogleLoginStrategy();
-        return await native.login();
-      } catch (error) {
-        const msg =
-          error instanceof Error ? error.message.toLowerCase() : "";
-        if (
-          msg.includes("not implemented") ||
-          msg.includes("no credentials available") ||
-          msg.includes("nativegoogle")
-        ) {
-          console.warn(
-            "Native Google plugin unavailable — falling back to Web SDK redirect.",
-            error,
-          );
-          const web = new WebGoogleLoginStrategy();
-          return await web.login();
-        }
-        // Anything else (user cancelled, network) — surface to the UI.
-        throw error;
-      }
-    }
-
-    // Standard browser tab: signInWithPopup for snappy UX.
-    const web = new WebGoogleLoginStrategy();
-    return await web.login();
-  }
-}
-
 export function createGoogleLoginStrategy(): GoogleLoginStrategy {
   return new HybridGoogleLoginStrategy();
 }
+

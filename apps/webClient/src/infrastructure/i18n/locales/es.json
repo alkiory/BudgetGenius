@@ -107,7 +107,18 @@
     "checkEmail": "Revisa tu correo electrónico",
     "resetLinkSent": "Hemos enviado un enlace para restablecer tu contraseña a tu correo electrónico",
     "checkSpamFolder": "Si no ves el correo en tu bandeja de entrada, revisa la carpeta de spam. El enlace expirará en 24 horas.",
-    "returnToLogin": "Volver al inicio de sesión"
+    "returnToLogin": "Volver al inicio de sesión",
+    "accountReauth": {
+      "title": "El inicio de sesión con Google necesita la SHA-1 registrada",
+      "body": "Tu APK no puede completar el inicio de sesión con Google porque la SHA-1 del keystore no está registrada en Firebase / Google Cloud. Sigue estos pasos para registrarla:",
+      "step1": "Play Console → Setup → App integrity → copia la SHA-1 de la App signing key (NO la del upload key).",
+      "step2": "Firebase Console → Project settings → Android app → añade la SHA-1 en 'SHA certificate fingerprints'.",
+      "step3": "Vuelve a descargar google-services.json y colócalo en apps/mobile/android/app/google-services.json.",
+      "step4": "Ejecuta pnpm --filter mobile sync y reconstruye el APK.",
+      "step5": "Ajustes → Aplicaciones → BudgetGenius → Almacenamiento → Borrar datos, luego intenta iniciar sesión de nuevo.",
+      "ctaClose": "Cerrar",
+      "ctaRetry": "Reintentar"
+    }
   },
   "dashboard": {
     "title": "Panel de Control",

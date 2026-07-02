@@ -121,6 +121,13 @@ describe("NativeGoogleLoginStrategy.login() — Account reauth [code=16] matcher
     // MUST also reference the README so the operator is directed to
     // the SHA-1 registration playbook.
     await expect(strategy.login()).rejects.toThrow(/apps\/mobile\/README\.md/);
+    // v1.7.1 §6.8.4 — typed sentinel MUST be set on the rethrown
+    // error. This is the load-bearing assertion: without this
+    // property, HybridGoogleLoginStrategy's pre-check fires the
+    // substring ladder and bounces to signInWithRedirect (browser).
+    await expect(strategy.login()).rejects.toMatchObject({
+      isAccountReauth: true,
+    });
   });
 
   // Branch 2: text fingerprint (account + reauth in same message,
@@ -137,6 +144,9 @@ describe("NativeGoogleLoginStrategy.login() — Account reauth [code=16] matcher
       /Account reauth failed \[code=16\]/,
     );
     await expect(strategy.login()).rejects.toThrow(/apps\/mobile\/README\.md/);
+    await expect(strategy.login()).rejects.toMatchObject({
+      isAccountReauth: true,
+    });
   });
 
   // Branch 3 (NEGATIVE): a FirebaseError carrying the STRING code
@@ -162,6 +172,15 @@ describe("NativeGoogleLoginStrategy.login() — Account reauth [code=16] matcher
     await expect(strategy.login()).rejects.not.toThrow(
       /Account reauth failed \[code=16\]/,
     );
+    // v1.7.1 §6.8.4 — typed sentinel MUST NOT be set on errors
+    // that are not SHA-1 misregistration. The matcher's text
+    // fingerprint is "account AND reauth" — both substrings; the
+    // Firebase 'A network error has occurred.' message contains
+    // neither, so the matcher should NOT fire and consequently the
+    // sentinel MUST be undefined on the propagated error.
+    await expect(strategy.login()).rejects.not.toMatchObject({
+      isAccountReauth: true,
+    });
   });
 
   // Branch 4 (NEGATIVE): a generic TypeError with completely
@@ -181,5 +200,8 @@ describe("NativeGoogleLoginStrategy.login() — Account reauth [code=16] matcher
     await expect(strategy.login()).rejects.not.toThrow(
       /Account reauth failed \[code=16\]/,
     );
+    await expect(strategy.login()).rejects.not.toMatchObject({
+      isAccountReauth: true,
+    });
   });
 });
