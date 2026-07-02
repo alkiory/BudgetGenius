@@ -5,6 +5,16 @@ import * as eslintPluginImport from "eslint-plugin-import";
 import reactPlugin from "eslint-plugin-react";
 import reactHooksPlugin from "eslint-plugin-react-hooks";
 import { FlatCompat } from "@eslint/eslintrc";
+// v1.7.4 — load the shared custom rule plugin from the project's
+// `tools/eslint-rules/` dir. Same file the api app loads via
+// `eslint-plugin-local-rules` (the official ESLint v8+ loader).
+// Node's CJS-ESM interop yields the `module.exports` object as the
+// default ESM export, so `noReqUserIdPlugin.rules['no-req-user-id']`
+// is the rule definition. Codified at knowledge.md §6.8.7. The `.cjs`
+// extension is the explicit CJS marker added per reviewer nit #2 so
+// the file is CJS regardless of any future `tools/package.json`
+// declaring `"type": "module"`.
+import noReqUserIdPlugin from "../../tools/eslint-rules/no-req-user-id.cjs";
 
 const compat = new FlatCompat({
   recommendedConfig: js.configs.recommended,
@@ -31,7 +41,7 @@ export default tseslint.config(
       "vite.config.ts",
       "playwright.config.ts",
       "postcss.config.ts",
-      "tailwind.config.ts"
+      "tailwind.config.ts",
     ],
   },
   {
@@ -63,6 +73,9 @@ export default tseslint.config(
       import: eslintPluginImport,
       react: reactPlugin,
       "react-hooks": reactHooksPlugin,
+      // v1.7.4 — see `noReqUserIdPlugin` import above. Rule id is
+      // `no-req-user-id/no-req-user-id` (plugin-name/rule-name).
+      "no-req-user-id": noReqUserIdPlugin,
     },
     rules: {
       ...reactPlugin.configs["recommended"].rules,
@@ -82,6 +95,12 @@ export default tseslint.config(
         },
       ],
       "react/jsx-uses-vars": "error",
+      // v1.7.4 — see knowledge.md §6.8.7. The web client is currently
+      // unaffected (it talks to the api via axios; the bug is server-side),
+      // but routing the same rule in flat config catches accidental
+      // `useUser().id`-shaped reads if a future refactor pushes server-side
+      // request shapes back into the client.
+      "no-req-user-id/no-req-user-id": "error",
     },
   },
   ...compat.config({
@@ -103,6 +122,9 @@ export default tseslint.config(
       "react/jsx-uses-react": "off",
       // PropTypes are redundant with TypeScript types.
       "react/prop-types": "off",
+      // v1.7.4 — re-assert so the final-override block doesn't lose the rule
+      // to an earlier merge.
+      "no-req-user-id/no-req-user-id": "error",
     },
   },
 );

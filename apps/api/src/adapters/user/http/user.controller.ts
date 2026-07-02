@@ -56,9 +56,24 @@ export class UserController {
   }
 
   @Delete(':id')
+  // v1.7.3 introduced ParseIntPipe on the `:id` URL param (string vs number
+  // guard). v1.7.4 — second root-cause fix for the SAME production symptom
+  // (self-delete still returned 401): the previous `req.user.id` reads
+  // returned `undefined` because `JwtStrategy.validate` exposes the
+  // decoded JWT payload as `{ userId, email, role }`, NOT `{ id, email,
+  // role }`. So `id !== user?.id` was effectively `8 !== undefined` → true,
+  // throwing on every self-delete. The WHOLE rest of the codebase reads
+  // `req.user.userId` (overview, transaction, expense-category, budget,
+  // reports, user-settings, ai) — see `ai.controller.ts:11-17`'s own
+  // previous-affected-line comment which already documented this gotcha
+  // for the AI service. `user.controller.ts#deleteUser` was the single
+  // outlier that the previous-fix PR overlooked; v1.7.3 silently kept
+  // the same symptom with a different runtime shape. The admin short-
+  // circuit (`user?.role !== 'admin'`) is restored here so future admin
+  // backoffice can still clean up arbitrary rows.
   async deleteUser(@Param('id', ParseIntPipe) id: number, @Req() req) {
     const user = req.user;
-    if (id !== user?.id) {
+    if (id !== user?.userId && user?.role !== 'admin') {
       throw new UnauthorizedException(
         '⛔ This user does not have permission to delete this account',
       );

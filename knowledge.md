@@ -815,6 +815,141 @@ A custom ESLint `no-restricted-syntax` AST rule walking JSX `onClick` callbacks 
 - **`tx.delete(User, {id})` is LAST.** If the user-row delete is moved before any child delete, the FK constraint trips a `QueryFailedError` and the transaction rolls back. The user-row being last also means a wedged child FK cannot cascade-delete the user silently.
 - **Defence-in-depth: `eagerCreateUserSettingsRow` on the existing-user branch.** A future refactor that removes this call in the interest of "skip the work if we know the user exists" would silently regress §6.8.3's strict-positive invariant. `getOrCreateSettings`'s SELECT-or-CREATE idempotency makes the call safe even when there is nothing to do.
 
+#### 6.8.7 The `req.user.id` vs `req.user.userId` invariant (v1.7.4 — must read before touching any guard/middleware that reads `req.user.*`)
+
+**The bug class.** `JwtStrategy.validate()` at `apps/api/src/infrastructure/config/strategy/jwt.strategy.ts:30-34` returns `{ userId, email, role }` — it does NOT return `{ id, email, role }`. The `id` claim DOES exist in some signing paths (`apps/api/src/application/auth/auth.service.ts` signs the JWT with `{ id, email, role }` so `passport-jwt` can read `payload.sub` semantics later), but the `validate()` callback drops it and projects ONLY `userId` into `req.user`. As a result, **`req.user.id` is ALWAYS `undefined` at runtime** in any controller, middleware, or guard.
+
+This was the silent bug behind the v1.7.4 production regression: `apps/api/src/adapters/user/http/user.controller.ts#deleteUser` had its OWNERSHIP GUARD written as `if (id !== user?.id)` after v1.7.3 forced `id` (the URL segment via `ParseIntPipe`) to a `number`. The comparison `8 !== undefined` evaluates to `true` → every legitimate self-delete was rejected with `401 ⛔ You do not have permission to delete this account`. The v1.7.3 fix only patched the string-vs-number half of the problem; the deeper half (`req.user.id` is `undefined`) was missed because nobody read the JwtStrategy contract end-to-end during the PR review.
+
+**The rule.** Every guard, controller, or middleware that wants the authenticated user's id reads `req.user.userId` — NEVER `req.user.id`. The downstream `req.user.email` and `req.user.role` are valid (they ARE projected by `validate()`); only `id` is dropped.
+
+```ts
+// ❌ WRONG — req.user.id is ALWAYS undefined at runtime. Silent 401.
+async deleteUser(@Param('id', ParseIntPipe) id: number, @Req() req) {
+  const user = req.user;
+  if (id !== user?.id && user?.role !== 'admin') {
+    throw new UnauthorizedException(
+      '⛔ You do not have permission to delete this account',
+    );
+  }
+  return this.userService.deleteUser(id);
+}
+
+// ❌ ALSO WRONG — same bug in middleware shape. `userId` check on the
+// outer conditional is correct, but the inner call passes `req.user.id`
+// (undefined) to getOrCreateSettings — silently inserting a settings row
+// keyed to `undefined` for every authenticated request.
+async use(req, res, next) {
+  if (req.user?.userId) {           // ← CORRECT projected field
+    req.user.settings = await this.settingsSvc.getOrCreateSettings(
+      req.user.id,                  // ← WRONG projected field (undefined)
+    );
+  }
+  next();
+}
+
+// ❌ ALSO WRONG — TS non-null assertions, type casts, and computed access
+// do not save you. The runtime `id` is `undefined` regardless of TS syntax.
+if (req.user!.id !== currentUserId) { /* always enters here */ }
+if (req.user['id'] === undefined) { /* always true */ }
+if ((req.user as AuthenticatedRequest).id === id) { /* always false */ }
+
+// ✅ RIGHT — read req.user.userId. Field exists, NOT zero / empty-string.
+async deleteUser(@Param('id', ParseIntPipe) id: number, @Req() req) {
+  const user = req.user;
+  if (id !== user?.userId && user?.role !== 'admin') {
+    throw new UnauthorizedException(
+      '⛔ You do not have permission to delete this account',
+    );
+  }
+  return this.userService.deleteUser(id);
+}
+
+// ✅ RIGHT — same in middleware. Note the symmetric use of user.userId
+// on BOTH sides of the gate.
+async use(req, res, next) {
+  if (req.user?.userId) {
+    req.user.settings = await this.settingsSvc.getOrCreateSettings(
+      req.user.userId,
+    );
+  }
+  next();
+}
+```
+
+**The pre-existing precedent.** `apps/api/src/adapters/ai/http/ai.controller.ts:11-17` had this exact bug shape pre-fix — its inline comment block documented the gotcha (`req.user.id was undefined because JwtStrategy.validate exposes the payload as { userId, email, role }`) and the fix swapped to `req.user.userId`. The AI controller was therefore ALREADY aligned with `userId`, leaving `user.controller.ts#deleteUser` and `user-settings.middleware.ts` as the two remaining outliers. The v1.7.4 commit catches both.
+
+Why `userId` (and not `id`) survives round-trips: `JwtStrategy.validate()` reads `payload.id || payload.sub` and assigns it to a NEW variable name `userId` before projection. The literal string `id` never appears on the projected object — so no `(req.user as any).id` cast or `JSON.parse(JSON.stringify(req.user))` round-trip can resurrect it.
+
+**Lint hook (now present — NOT a TODO).** Custom AST rule at `tools/eslint-rules/no-req-user-id.js`, wired into:
+
+- `apps/api/.eslintrc.js` — `rulePaths: [path.resolve(__dirname, '../../tools/eslint-rules')]` plus `rules: { 'no-req-user-id': 'error' }`. ESLint scans the dir for `*.js` rule files; basename without extension becomes the rule id.
+- `apps/webClient/eslint.config.js` — flat-config import via `import noReqUserIdPlugin from '../../tools/eslint-rules/no-req-user-id.js'` (Node CJS-ESM interop yields `module.exports` as the default export), registered under `plugins: { 'no-req-user-id': noReqUserIdPlugin }` and `rules: { 'no-req-user-id/no-req-user-id': 'error' }` in BOTH the main block AND the final-override block (so the merge-winner keeps the rule active even after `compat.config` re-merges flat-config defaults).
+
+The rule catches, via a plain `MemberExpression` visitor traversal that automatically descends through `ChainExpression`, `TSNonNullExpression`, `TSAsExpression`, `TSTypeAssertion`, and `TSSatisfiesExpression` wrappers:
+
+- `req.user.id`             → reported at the `.id` MemberExpression node.
+- `req.user?.id`            → reported (inner `MemberExpression` visited through ChainExpression wrapper).
+- `req.user!.id`            → reported (TSNonNullExpression wrapper).
+- `(req.user as User).id`   → reported (TSAsExpression wrapper).
+- `req.user['id']`          → reported (computed-property variant).
+- `req['user']['id']`       → reported (computed-property on BOTH sides).
+- `req?.user?.id`           → reported.
+
+It does NOT report:
+
+- `req.user.userId`                  → property is `userId`, not `id`.
+- `req.user.email` / `req.user.role` → same (these ARE projected by validate()).
+- `obj.user.id` or `someOther.user.id` → chain bottoms out at `obj` / `someOther` (not the literal identifier `req`).
+- TS type-position uses like `: { id: number }` — `MemberExpression` is a runtime construct; type positions use `TSQualifiedName` / `TSTypeReference` which the rule does not visit.
+- Local `req` variables in non-controller files (low false-positive risk; the param-name `req` is NestJS / Express conventional).
+
+**Scope limitations (intentional, follow-up work).**
+
+- Object destructuring patterns like `const { id } = req.user` or `const { user: { id } } = req` are NOT yet caught. Their AST shape is `VariableDeclarator` with an `ObjectPattern` → `Property` with `key.name === 'id'`, NOT a `MemberExpression`. **This is the load-bearing reason for a follow-up rule**, not a "nice to have" — the user explicitly asked the rule to "flag any new `req.user.id` write", and an unaware contributor could write `const { id } = req.user;` that the rule silently passes. Today the audit (`grep -rnE '\{\s*id\s*\}\s*=\s*req\.user|\{\s*user:\s*\{\s*id\s*\}\s*\}\s*=\s*req\b' apps/{api,webClient}/src`) returns zero matches, but the gap is real for FUTURE code. Codify before merge: extend `VariableDeclarator → ObjectPattern → Property` walk with a parent-chain check that walks `ObjectPattern.parents`/`init` and reuses `chainHitsReqUser` for the init shape. Pin any future contributor who introduces this shape to the follow-up rule via the reviewer's "Three pre-merge questions" gate below.
+- We assume the canonical parameter name is `req`. If a future Express-style decorator renames it (e.g. `@Req() request: Request`), extend the bottom-identifier check to also accept `request`.
+
+**Where else the rule generalises.** The codebase convention `req.user.userId` is already used 10+ places today:
+
+- `apps/api/src/adapters/dashboard/http/transaction.controller.ts` — multiple `req.user.userId` reads.
+- `apps/api/src/adapters/dashboard/http/expense-category.controller.ts` — `req.user.userId` for ownership guards + service calls.
+- `apps/api/src/adapters/dashboard/http/budget.controller.ts` — same pattern.
+- `apps/api/src/adapters/dashboard/http/reports.controller.ts` (formerly `overview`, `savings`, etc.) — same.
+- `apps/api/src/adapters/ai/http/ai.controller.ts` — the precedent, post-fix.
+- `apps/api/src/adapters/user/http/user.service.ts#deleteUser` — `currentUserUserId` style.
+- `apps/api/src/infrastructure/middleware/user-settings.middleware.ts` — post-v1.7.4 fix.
+- `apps/api/src/application/user/user-settings.service.ts#getOrCreateSettings` — accepts `userId: number`.
+
+Any new auth-guarded route added AFTER v1.7.4 gets the rule's regression net for free. Future auth-related plugins (Apple, Firebase Admin, custom SAML) should adopt the SAME contract: `{ userId, email, role }` shape (NEVER `{ id, email, role }`).
+
+**Three pre-merge questions** (additive to §6.8.2 / §6.8.3 / §6.8.4 / §6.8.6):
+
+1. Does the new code read `req.user.id` (or `req.user['id']`, `req.user?.id`, `(req.user as X).id`) anywhere? If YES, the rule MUST fail the lint. Re-run `pnpm --filter api lint && pnpm --filter frontend-web lint` after the last edit — zero `no-req-user-id` warnings is the precondition for merge.
+2. Does the code conditionally destructure `req.user` (`const { id } = req.user` or `const { user: { id } } = req`)? If YES, see the scope-limitation follow-up — audit manually because the rule does NOT cover this AST shape today.
+3. Does the JwtStrategy contract need widening? If you find yourself adding an `id` field to validate()'s return shape (e.g. for backward compatibility with a legacy consumer), document that under a NEW §6.8.X entry BEFORE introducing it. Silently adding `id` while keeping `userId` would re-introduce silent-`undefined`-read risk on every existing legacy site.
+
+If YES to any — fix it before merge. If NO to all — merge.
+
+**Files in this fix (delete-and-create pattern, surgical additions):**
+
+- NEW `tools/eslint-rules/no-req-user-id.js` — single source-of-truth rule (CJS-default `.js`). Exports `{ rules: { 'no-req-user-id': { meta, create } } }`. Single file referenced by both apps' eslint configs (CJS-via-rulePaths for the api, ESM-via-flat-config-import for the webClient).
+- MODIFIED `apps/api/.eslintrc.js` — added `const path = require('path');` + `rulePaths: [path.resolve(__dirname, '../../tools/eslint-rules')]`; added `'no-req-user-id': 'error'` to `rules`. Reordered `ignorePatterns` after `rulePaths` (otherwise ESLint v8 schema parsing warns about unknown keys).
+- MODIFIED `apps/webClient/eslint.config.js` — added `import noReqUserIdPlugin from '../../tools/eslint-rules/no-req-user-id.js';`; added `'no-req-user-id': noReqUserIdPlugin` to `plugins`; added `'no-req-user-id/no-req-user-id': 'error'` to `rules` in BOTH the main block AND the final-override block (so the merge-winner keeps the rule active after `compat.config` re-merges).
+- MODIFIED `apps/api/src/adapters/user/http/user.controller.ts#deleteUser` — `user?.id` → `user?.userId`; preserved the `&& user?.role !== 'admin'` short-circuit (admin override). Comment block above the guard cites this §6.8.7 entry by anchor.
+- MODIFIED `apps/api/src/infrastructure/middleware/user-settings.middleware.ts` — `req.user.id` → `req.user.userId` in the inner call. The conditional `req.user?.userId` was already correct, but the inner call was passing `req.user.id` (undefined) to `getOrCreateSettings`. Comment block cites this §6.8.7 entry.
+- NEW `apps/api/test/eslint-rules/no-req-user-id.spec.cjs` — `RuleTester` self-check. 23 cases (20 valid + 9 invalid) across the 5 AST shapes documented above. Lives INSIDE the api workspace because pnpm isolates `eslint` + `@typescript-eslint/parser` under `apps/api/node_modules/` — from `tools/eslint-rules/`, a `require('eslint')` would walk the parent tree (no resolution found) and fail with `MODULE_NOT_FOUND` (verified in round-2 validation). The spec's `require('../../../tools/eslint-rules/no-req-user-id.cjs')` keeps the SINGLE source of truth in `tools/eslint-rules/` even though the spec itself lives under `apps/api/test/`. Run via `cd apps/api && node test/eslint-rules/no-req-user-id.spec.cjs`.
+
+**Defense-in-depth invariants preserved by the v1.7.4 fix (do NOT regress on future refactors):**
+
+- **§6.8.6 invariant unchanged.** The ParseIntPipe fix on `user.controller.ts#deleteUser` is independent of this §6.8.7 fix — one does NOT replace the other. v1.7.3 fixed the string-vs-number half; v1.7.4 fixes the user.userId-vs-user.id half. Together they form the complete contract: URL params are typed numbers (ParseIntPipe at the framework boundary), JWT claims are projected as `userId` (NOT `id` — JwtStrategy.validate drops `id`), comparisons use `userId`.
+- **§6.8.5 invariant unchanged.** The full-state-reset on logout (`clearAuthAndStateForLogout`) is independent. The §6.8.7 fixes (controller + middleware) are orthogonal to the frontend state cleanup.
+- **`req.user.userId` IS THE convention.** All existing sites use it (10+ call sites today, listed under "Where else the rule generalises" above). Any future code that introduces `req.user.id` is a regression. The new ESLint rule is the regression net.
+- **The middleware conditional shape is symmetric.** Both sides of the `if (req.user?.userId)` gate use the SAME projected field. A future contributor who splits this into `if (req.user?.foo) await settingsSvc.getOrCreateSettings(req.user.id)` re-introduces the leak at a different layer.
+- **TS non-null is NOT a save.** `req.user!.id` is the same undefined read as `req.user.id` — the assertion is a Promise to the type-checker that CANNOT physically stand. The rule catches both shapes; do NOT relax it.
+- **Single source of truth in `tools/eslint-rules/`.** Both apps load the SAME file (api via `rulePaths`, webClient via ESM import). If a future refactor copies the rule per-app, the two copies WILL drift and one will silently forget a fix from the other.
+- **`userId` is a NUMBER, never a coerced string.** `JwtStrategy.validate()` returns `payload.id || payload.sub` — both of which are numbers when this code signs them (`auth.service.ts` signs with `{ id: user.id, email, email, role }`). The runtime type of `req.user.userId` is `number`. Don't introduce a `Number(req.user.userId)` belt-and-braces unless you also introduce `Number(req.user.userId)` symmetrically on both sides of a comparison (mirror of §6.8.6's cross-check rule).
+- **Object-destructuring gap is a known limitation, NOT a hidden risk.** A follow-up rule should walk `VariableDeclarator` → `ObjectPattern` → `Property` and verify the `init` chain hits `req.user`. Today's audit finds zero live examples; pin before merge via `grep -rnE '\{\s*id\s*\}\s*=\s*req\.user|\{\s*user:\s*\{\s*id\s*\}\s*\}\s*=\s*req\b' apps/{api,webClient}/src` returning zero matches. Future contributors who introduce this shape must add the follow-up rule BEFORE shipping.
+
 ---
 
 ## 7. Development Workflow

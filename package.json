@@ -18,6 +18,7 @@
   "license": "ISC",
   "devDependencies": {
     "@types/node": "20.17.23",
+    "eslint-plugin-local-rules": "^3.0.2",
     "ts-node": "10.9.2",
     "turbo": "2.5.3"
   },
