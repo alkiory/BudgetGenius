@@ -99,6 +99,34 @@ export class AuthService {
         throw new ConflictException('⚠️ Email already in use');
       }
 
+      // v1.7.2 — defense-in-depth. Even though the `signup` new-user
+      // branch eagerly seeds `user_settings` with
+      // `hasCompletedOnboarding: false`, the existing-user branch
+      // previously skipped that step (the row was assumed to exist).
+      // The v1.7.2 production regression surfaced because a user
+      // whose `users` row was hard-deleted (e.g. via the danger-zone
+      // button that previously was a 2-second `setTimeout` placeholder)
+      // would re-arrive on this branch — their `user_settings` row
+      // had been cascade-removed but the FK on `signup`'s lookup
+      // returned nothing because the cascade hadn't happened yet.
+      //
+      // `eagerCreateUserSettingsRow` is idempotent (it calls
+      // `getOrCreateSettings`, which is `findByUserId-or-create`).
+      // For a normal "existing user, fully intact settings row" the
+      // method no-ops on the SELECT; for a fresh-after-cascade row it
+      // INSERTs. Worst case: an extra row getter (cheap) and a write
+      // (already happened in the new-user path with the same
+      // call-shape). Strict-positive OnboardingGuard
+      // (knowledge.md §6.8.3) now reads `hasCompletedOnboarding: true`
+      // only for users that genuinely completed the wizard — orphan
+      // recoveries cannot produce false-positive "already onboarded"
+      // signals.
+      await this.eagerCreateUserSettingsRow(
+        existingUser.id,
+        existingUser.email,
+        'email',
+      );
+
       const payload = {
         id: existingUser.id,
         email: existingUser.email,

@@ -1,11 +1,11 @@
 import { useSidebar } from "@adapters/hooks/sidebarContext";
 import { useMobile } from "@adapters/hooks/useMobile";
-import { logoutAction } from "@adapters/slices/auth/authSlice";
+import { clearAuthAndStateForLogout } from "@adapters/auth/clearAuthAndStateForLogout";
 import { RootState } from "@adapters/store/rootStore";
 import { logout } from "@application/auth/auth.service";
 import { AddTransactionModal } from "@presentation/components/dashboard/transaction/add-transaction-modal";
 import { RoutePaths } from "@presentation/utils/routes";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
   CreditCard,
@@ -67,6 +67,7 @@ export function DashboardSidebar() {
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const user = useSelector((state: RootState) => state.auth.user);
 
@@ -74,11 +75,21 @@ export function DashboardSidebar() {
 
   const pathname = useLocation().pathname;
 
+  // v1.7.2 — `clearAuthAndStateForLogout` is the canonical state-reset
+  // helper. The previous implementation dispatched `logoutAction` only;
+  // that left the React Query cache (especially `useGetSettings`'s
+  // `hasCompletedOnboarding: true`) lingering so a fresh user landing
+  // on the same device skipped onboarding. See knowledge.md §6.8.5
+  // and rpi/delete-account-cleanup/plan.md.
   const { mutate: logoutMutation } = useMutation({
     mutationKey: ["logout"],
     mutationFn: logout,
     onSuccess() {
-      dispatch(logoutAction());
+      clearAuthAndStateForLogout(dispatch, queryClient);
+      // Soft in-app navigation: regular logout (sidebar CTA) is
+      // reversible from a UX standpoint, unlike DESTRUCTIVE delete
+      // which hard-reloads. We do NOT call `window.location.href`
+      // here.
       navigate(`${RoutePaths.Auth}/${RoutePaths.Login}`, { replace: true });
     },
     onError(error) {

@@ -1,7 +1,9 @@
+import { clearAuthAndStateForLogout } from "@adapters/auth/clearAuthAndStateForLogout";
 import { updateSettingsAction } from "@adapters/slices/user-settings/settingsSlice";
 import { RootState } from "@adapters/store/rootStore";
-import { updateUserSettings } from "@application/user/user.service";
+import { deleteUser, updateUserSettings } from "@application/user/user.service";
 import { Currency } from "@presentation/utils/currencyService";
+import { UserSettings } from "@domain/user/userSettings";
 import { errorToast, successToast } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
@@ -25,6 +27,10 @@ export function AccountSettings() {
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const userSetting = useSelector((state: RootState) => state.userSettings);
+  // Needed for the `handleDeleteAccount` real DELETE call (v1.7.2 fix;
+  // the previous implementation was a 2-second `setTimeout` placeholder
+  // that never invoked the backend).
+  const currentUser = useSelector((state: RootState) => state.auth.user);
 
   const { settings } = userSetting;
 
@@ -68,11 +74,17 @@ export function AccountSettings() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const delta: {
-      timezone?: string;
-      currency?: string;
-      locale?: string;
-    } = {};
+    // v1.7.2 — type `delta` as `Partial<UserSettings>` (instead of a
+    // hand-rolled `{timezone?: string; currency?: string; locale?: string}`
+    // literal) so the `currency` field carries the literal-union type
+    // `Currency` from `Currency` (`"USD" | "EUR" | "COP"`) — the bare
+    // `string` annotation previously caused `TS2345` at
+    // `updateSettings(delta)` because `string` is NOT assignable to the
+    // narrow `Currency` union. `Partial<UserSettings>` is the canonical
+    // shape; the fields stay OPTIONAL, the types stay correct, and any
+    // future UserSettings reshape (new currency support, new locale
+    // type) ripples here automatically.
+    const delta: Partial<UserSettings> = {};
     if (settingsToUpdate.timezone !== settings?.timezone) {
       delta.timezone = settingsToUpdate.timezone;
     }
@@ -91,16 +103,72 @@ export function AccountSettings() {
     updateSettings(delta);
   };
 
-  const handleDeleteAccount = async () => {
+  // v1.7.2 — real DELETE call. The previous implementation was a
+  // 2-second `setTimeout` placeholder that NEVER invoked the backend,
+  // and that became the v1.7.2 production regression: the user was
+  // never actually deleted, the React Query cache and Redux slices
+  // lingered, and a re-login with the same email authenticated as an
+  // existing user (no onboarding, stale per-user data). See
+  // `rpi/delete-account-cleanup/{research.md, plan.md}` and
+  // `knowledge.md §6.8.5`.
+  const {
+    mutate: deleteAccountMutation,
+    isPending: isDeletingAccount,
+  } = useMutation({
+    mutationKey: ["delete-account"],
+    mutationFn: () => {
+      if (!currentUser?.id) {
+        // Defensive: if for any reason we don't have a valid user id,
+        // refuse to call DELETE with `NaN`/undefined — the backend
+        // would 401/400 and the user would be left wondering what
+        // happened. Surface the error to the toast instead.
+        throw new Error(
+          t(
+            "settings.deleteMissingUserId",
+            "No authenticated user — please log in again before deleting your account.",
+          ),
+        );
+      }
+      return deleteUser(currentUser.id);
+    },
+    onSuccess: () => {
+      // Order matters: clear BEFORE hard reload so the freshly
+      // mounted /auth/login tree cannot read stale tokens or settings.
+      // `clearAuthAndStateForLogout` codifies the order in
+      // knowledge.md §6.8.5:
+      //   1. localStorage.removeItem(accessToken + refreshToken)
+      //   2. sessionStorage.removeItem("mobile.splash.shown")
+      //   3. queryClient.clear()
+      //   4. dispatch(logoutAction())
+      clearAuthAndStateForLogout(dispatch, queryClient);
+      // Hard reload: the user is GONE server-side. There is no
+      // soft-navigation target — every closure must be torn down.
+      window.location.href = "/auth/login";
+    },
+    onError: (error: Error) => {
+      console.error("Error deleting account:", error);
+      errorToast(
+        error?.message ??
+          t(
+            "settings.deleteError",
+            "Failed to delete account. Please try again.",
+          ),
+        4000,
+        "delete-account",
+      );
+      // Flip the local UI state back so the destructive button
+      // re-enables. (We intentionally do NOT dispatch `logoutAction()`
+      // here — the user's account still exists, we just failed to
+      // delete it. A successful soft-delete UX would be: stay logged
+      // in, show an error toast, let the user retry.)
+      setIsDeleting(false);
+    },
+  });
+
+  const handleDeleteAccount = () => {
     if (!isDeleteConfirmed) return;
-
     setIsDeleting(true);
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    // Redirect to login page
-    window.location.href = "/auth/login";
+    deleteAccountMutation();
   };
 
   useEffect(() => {
@@ -249,9 +317,10 @@ export function AccountSettings() {
               <Button
                 variant="destructive"
                 onClick={handleDeleteAccount}
-                disabled={!isDeleteConfirmed || isDeleting}
+                disabled={!isDeleteConfirmed || isDeleting || isDeletingAccount}
+                data-testid="delete-account-button"
               >
-                {isDeleting
+                {isDeleting || isDeletingAccount
                   ? t("settings.deleting")
                   : t("settings.permanentlyDelete")}
               </Button>

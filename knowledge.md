@@ -717,6 +717,77 @@ A custom ESLint `no-restricted-syntax` AST rule walking `ThrowStatement` nodes w
 - **`nativegoogle:` text prefix preserved verbatim.** Back-compat with the existing log-greppers documented in `apps/mobile/README.md` and Sentry ingest. Removing the prefix while keeping the typed sentinel would orphan operator-side searches.
 - **The sentinel must NOT survive `JSON.stringify`-style round-trips.** If a future axios-internal change strips own properties of the `Error` instance (e.g., a custom serialiseConfig), `isAccountReauth` becomes `undefined` and the substring ladder fires again. Pin against this by keeping the matcher contract intact at `native-google-login.strategy.ts:91` (typed property assignment is the production site) AND by adding a comment in `api.config.ts` if a global serializer is ever introduced.
 
+#### 6.8.5 The "full-state-reset on logout / account-delete" invariant (v1.7.2 — must read before touching any logout-style code path)
+
+**The bug class.** Three independent "leave the identity" paths in this codebase all have distinct recoveries — but as of v1.7.x, only `authSlice.logoutAction` was wired, leaving React Query cache + settings slice + localStorage tokens in place. The v1.7.2 production regression manifested as: deleting the account on the Android APK bounced the user to `/auth/login` with a white screen, then authenticating with the deleted user's email/Google authenticated as an existing user — no onboarding wizard, no per-user data cleanup. The same bug class applied to (a) sidebar logout, (b) session-expired modal "Sign in again" CTA, and (c) the profile-page "Eliminar Cuenta" destructive button.
+
+The root causes were four, and ALL four needed to be addressed together:
+
+1. **`handleDeleteAccount` was a 2-second `setTimeout` placeholder** — never called the backend DELETE. The user was not actually deleted.
+2. **Logout paths only dispatched `authSlice.logoutAction`** — React Query cache (especially `useGetSettings`'s `hasCompletedOnboarding: true`) survived the redirect and let the next mount bypass §6.8.3 OnboardingGuard.
+3. **`User` entity had no `@OneToMany` cascade + every FK was `ON DELETE NO ACTION`** — the backend `deleteUser` either tripped a FK violation or silently left orphan rows in `user_settings`, `transactions`, `budgets`, `expense_categories`, `overview`.
+4. **`signup` existing-user branch skipped `eagerCreateUserSettingsRow(...)`** — even if the FK cascade succeeded, a stale `user_settings` row with `hasCompletedOnboarding: true` would survive if the user_settings row itself was orphaned from an incomplete delete cycle.
+
+**The rule.** Three ingredients are required for any "leave the identity" path:
+
+1. **A real backend delete call** — `userService.deleteUser(currentUser.id)` via `useMutation`. The destructive button `data-testid="delete-account-button"` MUST trigger this; a TODO/`setTimeout`-placeholder regression would silently bounce the user. Pin via `grep -r "setTimeout(resolve, 2000)" apps/webClient/src` returning 0 lines.
+2. **A centralised `clearAuthAndStateForLogout(dispatch, queryClient)` helper** — the side-effect ORDER is load-bearing:
+   ```
+   1. window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY, REFRESH_TOKEN_STORAGE_KEY)  ← first: long-lived tokens in localStorage
+   2. window.sessionStorage.removeItem("mobile.splash.shown")                              ← second: splash session flag
+   3. queryClient.clear()                                                                  ← third: React Query
+   4. dispatch(logoutAction())                                                              ← fourth and LAST: authSlice reducer
+   ```
+   Order matters because:
+   - If a late-arriving `axios` response interceptor (see `apps/webClient/src/infrastructure/api.config.ts`) fires AFTER the helper runs, its `localStorage.setItem` would re-persist tokens. Cleaning them FIRST means even a delayed response lands on top of a clean state.
+   - If any in-flight `useMutation.onSuccess` fires AFTER `dispatch(logoutAction)`, the `clearAuthAndStateForLogout` order ensures React Query is empty by the time the slice re-evaluates the redirect. Moving `dispatch(logoutAction)` BEFORE `queryClient.clear()` could leave a stale entry that the gate predicate reads as truthy.
+3. **Hard reload on DESTRUCTIVE paths; soft navigate on regular logout** — `window.location.href = "/auth/login"` (every closure torn down) for `handleDeleteAccount.onSuccess`; `navigate(\`${RoutePaths.Auth}/${RoutePaths.Login}\`, { replace: true })` for sidebar / session-expired. Hard reload on a regular logout is over-kill and breaks the SPA navigation history.
+
+For the backend, **Children-first cascade inside `manager.transaction`**:
+
+```ts
+async deleteUserTransactional(id: number): Promise<void> {
+  await this.repo.manager.transaction(async (tx) => {
+    await tx.delete(UserSettings,    { userId: id });
+    await tx.delete(Transaction,     { userId: id });
+    await tx.delete(Budget,          { userId: id }); // BudgetCategory via SQL ON DELETE CASCADE
+    await tx.delete(ExpenseCategory, { userId: id });
+    await tx.delete(Overview,        { userId: id });
+    await tx.delete(User,            { id });         // LAST — transaction rolls back if any child fails
+  });
+}
+```
+
+FK column names verified against `@domain/dashboard/{transaction,budget,overview}.entity.ts` `@JoinColumn({ name: 'userId' })` declarations and `@domain/user/user-settings.entity.ts` many-to-one default (`'user' + Id`). TypeORM's entity-based delete `tx.delete(Entity, criteria)` honours the connection-wide `schema: 'bg_public'` config in `apps/api/src/data-source.ts:32` so the SQL resolves to `DELETE FROM "bg_public"."<table>" WHERE "userId" = $1` without manual schema prefixing.
+
+**Why `<MainLayout>` doesn't need to be evicted from React Query.** Layout components (sidebar, header) are mounted under `OnboardingGuard` and `AuthGuard`, which re-evaluate against the cleared `authSlice` via leaf `useSelector` (§6.8.1 invariant). On the next mount after the helper runs, `isAuthenticated` is `false` so `<AuthGuard>` returns `<Navigate to="/auth/login" replace />`, and `useGetSettings`'s cleaned cache entry returns nothing so `<OnboardingGuard>` redirects to `/app/onboarding` instead of `/app/dashboard`. The fresh-user contract from §6.8.3 is preserved.
+
+**Three pre-merge questions** (additive to §6.8.2 / §6.8.3 / §6.8.4):
+
+1. Does the logout / delete path call `clearAuthAndStateForLogout(dispatch, queryClient)` once and ONLY once (no per-component local copy of the side-effects)?
+2. Is the side-effect order preserved verbatim (localStorage → sessionStorage → queryClient → dispatch)? Swapping any two side-effects is a production regression candidate.
+3. Is the destructive path using `window.location.href` (hard reload) and the regular logout path using `navigate(...)` (soft in-app)?
+
+If YES to all three — the path is safe. If NO to any — refactor through `clearAuthAndStateForLogout`, codify the swap under a §6.8.X invariant, and run the regression spec.
+
+**Where else the rule generalises.** ANY path that transitions the user out of an authenticated identity — including (a) future "Sign out everywhere" multi-device logout (planned v1.9.x), (b) social-account switch without browser refresh, (c) account-merger flows — must run `clearAuthAndStateForLogout` AT THE START of the transition. A future ticket that introduces these MUST NOT roll a custom multi-side-effect helper; the existing one is THE source of truth.
+
+**Lint hook (TODO).** No static rule yet catches:
+- A `useState(() => …)` initial literal inside `account-settings.tsx`'s `handleDeleteAccount` that DOES NOT route through `useMutation({mutationFn: () => deleteUser(user.id), …})`.
+- A `dispatch(logoutAction())` followed by a `navigate(...)` that DOES NOT precede it with `clearAuthAndStateForLogout(dispatch, queryClient)`.
+- A `new Promise((resolve) => setTimeout(resolve, 2000))` pattern whose sibling comment reads `// Simulate API call` — the v1.7.2 stub-fix anti-marker.
+
+A custom ESLint `no-restricted-syntax` AST rule walking JSX `onClick` callbacks (in `apps/webClient/src/presentation/components/profile/account-settings.tsx`'s case) that match `setTimeout` calls would catch the stub regression in CI. The rule would emit: "setTimeout placeholder detected — replace with useMutation({mutationFn: deleteUser, ...})" with a §6.8.5 link in the message.
+
+**Defense-in-depth invariants preserved by the v1.7.2 fix** (do not regress on future refactors):
+
+- **`setTimeout(resolve, 2000)` placeholder is FORBIDDEN in delete paths.** A future contributor who replaces the real `useMutation` with a fake delay (or with `Promise.resolve()` to "unblock" the redirect during demo) would silently re-introduce the regression. `grep -r "setTimeout(resolve, 2000)" apps/webClient/src` must return 0 lines before merge.
+- **`clearAuthAndStateForLogout` IS the only legitimate state-reset helper.** Future contributors must NOT introduce a parallel helper that names the side-effects differently. The exported function is typed `(dispatch: Dispatch, queryClient: QueryClient) => void` and lives at `@adapters/auth/clearAuthAndStateForLogout.ts` — codify the path in eslint if a parallel implementation appears.
+- **Hard reload on destructive paths; soft navigate on regular logout.** Reversing the choice (hard-reload on sidebar logout OR soft-navigate on account delete) breaks one or the other UX contract.
+- **Children-first cascade order is locked.** A future contributor who reverses the order or removes one of the `tx.delete` calls regresses §6.8.5 explicitly. The order is enumerated verbatim in `deleteUserTransactional` body comments.
+- **`tx.delete(User, {id})` is LAST.** If the user-row delete is moved before any child delete, the FK constraint trips a `QueryFailedError` and the transaction rolls back. The user-row being last also means a wedged child FK cannot cascade-delete the user silently.
+- **Defence-in-depth: `eagerCreateUserSettingsRow` on the existing-user branch.** A future refactor that removes this call in the interest of "skip the work if we know the user exists" would silently regress §6.8.3's strict-positive invariant. `getOrCreateSettings`'s SELECT-or-CREATE idempotency makes the call safe even when there is nothing to do.
+
 ---
 
 ## 7. Development Workflow
