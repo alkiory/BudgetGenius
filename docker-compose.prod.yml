@@ -3,6 +3,7 @@ name: budgetgenius-prod
 services:
   backend:
     container_name: bg-backend-prod
+    restart: always
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -29,6 +30,7 @@ services:
   database:
     image: postgres:15-alpine
     container_name: bg-db-prod
+    restart: always
     environment:
       - POSTGRES_USER=postgres_admin_prod
       - POSTGRES_PASSWORD=${DB_PASSWORD}
@@ -45,6 +47,7 @@ services:
   redis:
     image: redis:7.2-alpine
     container_name: bg-redis-prod
+    restart: always
     networks:
       - app-network
     volumes:
