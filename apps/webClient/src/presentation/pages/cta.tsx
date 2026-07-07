@@ -34,9 +34,7 @@ export default function HomePage() {
           aria-live="polite"
           aria-atomic="true"
           className="bg-slate-50 py-2 text-center text-xs text-slate-500 dark:bg-slate-900/40 dark:text-slate-400"
-        >
-          {t("landing.detectedTimezoneLabel", { tz: detectedTimezone })}
-        </div>
+        ></div>
         <Features />
         <MobileAppSection />
         <HowItWorks />

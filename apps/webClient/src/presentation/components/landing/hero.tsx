@@ -6,6 +6,7 @@ import { ArrowRight, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 import { Link } from "react-router";
+import { AndroidIcon, DownloadChevron } from "./download-app";
 import { MockupFrame } from "./mockup-frame";
 
 /**
@@ -89,6 +90,16 @@ export function Hero() {
               <a href="#how-it-works">{t("landing.seeHowItWorks")}</a>
             </Button>
           </div>
+
+          {/* Download App CTA — scrolls to #download section */}
+          <a
+            href="#download"
+            className="mt-5 group inline-flex items-center gap-2.5 rounded-xl border border-purple-200/60 bg-white/60 px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm backdrop-blur-sm transition-all hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700 hover:shadow-md dark:border-purple-700/40 dark:bg-slate-900/50 dark:text-slate-300 dark:hover:border-purple-600 dark:hover:bg-purple-900/30 dark:hover:text-purple-300"
+          >
+            <AndroidIcon className="h-5 w-5" />
+            <span>{t("landing.sectionDownloadApp.buttonLabel")}</span>
+            <DownloadChevron className="h-4 w-4 transition-transform group-hover:translate-y-0.5" />
+          </a>
 
           {/* Secondary trust chip — reinforces "free" beneath the CTAs */}
           <div className="mt-6 flex flex-wrap items-center gap-3">

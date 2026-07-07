@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scroll-behavior: smooth;
+}
+
 :root {
   --font-display: "system-ui", "Avenir", "Helvetica", "Arial", "sans-serif";
 
@@ -225,6 +229,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
   .animate-marquee-down,
   .animate-marquee-up {
     animation: none;

@@ -76,7 +76,7 @@ const APP_VERSION_LABEL = normalizeVersion(__APP_VERSION__);
  * no Android-brand icon, so we render a small, recognisable SVG
  * inline. Tailwind `text-*` on the parent button controls currentColor,
  * so dark-mode and hover variants come along for free. */
-function AndroidIcon({ className }: { className?: string }) {
+export function AndroidIcon({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 64 64"
@@ -110,7 +110,7 @@ function AndroidIcon({ className }: { className?: string }) {
 
 /* Subtle downward chevron used inside the button so visitors see
  * an obvious "download" affordance. */
-function DownloadChevron({ className }: { className?: string }) {
+export function DownloadChevron({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
