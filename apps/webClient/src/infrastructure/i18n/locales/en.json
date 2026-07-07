@@ -713,7 +713,7 @@
         "sectionTestimonials": {
             "badge": "Trusted by users",
             "title": "People trust BudgetGenius with their money",
-            "subtitle": "We're collecting real feedback from early users — here's the spot where their quotes will live.",
+            "subtitle": "Honest feedback from people managing their money with BudgetGenius.",
             "cta": "Be one of the first",
             "regionAria": "Customer testimonials carousel",
             "placeholder": {
@@ -722,7 +722,37 @@
                 "rating": "★★★★★ (5/5 expected)",
                 "body": "Your testimonial could live here. Drop us a line and yours could appear in this column as soon as it's published."
             },
-            "ctaHref": "mailto:support@budgetgenius.com"
+            "ctaHref": "mailto:support@budgetgenius.com",
+            "realTestimonials": {
+                "items": [
+                    {
+                        "id": "susan",
+                        "name": "Susan P.",
+                        "rating": "★★★★★ (5/5)",
+                        "body": "I wasn't clear on what I was spending daily, and with BudgetGenius I now have an overview of my finances. I can see where everything goes — amazing."
+                    },
+                    {
+                        "id": "nestor",
+                        "name": "Nestor",
+                        "role": "Tech lead architect",
+                        "rating": "★★★★☆ (4/5)",
+                        "body": "Friendly environment, real-time charts with up-to-date data, and easy to understand — really good."
+                    },
+                    {
+                        "id": "patricia",
+                        "name": "Patricia Val.",
+                        "rating": "★★★★★ (5/5)",
+                        "body": "Those 'ant' expenses are so tiny 😂. Now that I've spotted them, I can save more than before — thanks!"
+                    },
+                    {
+                        "id": "andres",
+                        "name": "Andres Villa",
+                        "role": "Senior Software Developer",
+                        "rating": "★★★★★ (5/5)",
+                        "body": "The currency conversion system surprised me — I can log my income in Colombian Pesos and in Dollars with full transparency."
+                    }
+                ]
+            }
         },
         "social": {
             "twitter": "Twitter",

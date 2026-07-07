@@ -701,7 +701,7 @@
     "sectionTestimonials": {
       "badge": "Confianza de nuestros usuarios",
       "title": "Personas que confían en BudgetGenius para su dinero",
-      "subtitle": "Estamos recogiendo feedback real de los primeros usuarios — aquí vivirán sus citas.",
+      "subtitle": "Feedback honesto de personas que gestionan su dinero con BudgetGenius.",
       "cta": "Sé uno de los primeros",
       "regionAria": "Carrusel de testimonios de clientes",
       "placeholder": {
@@ -710,7 +710,37 @@
         "rating": "★★★★★ (5/5 esperado)",
         "body": "Tu testimonio puede vivir aquí. Escríbenos y el tuyo podría aparecer en esta columna en cuanto se publique."
       },
-      "ctaHref": "mailto:support@budgetgenius.com"
+      "ctaHref": "mailto:support@budgetgenius.com",
+      "realTestimonials": {
+        "items": [
+          {
+            "id": "susan",
+            "name": "Susan P.",
+            "rating": "★★★★★ (5/5)",
+            "body": "No tenía claro cuándo gastaba diario y con esta BudgetGenius tengo una visión general de mis finanzas. Veo dónde va todo, espectacular."
+          },
+          {
+            "id": "nestor",
+            "name": "Nestor",
+            "role": "Tech lead architect",
+            "rating": "★★★★☆ (4/5)",
+            "body": "Entorno amigable, gráficas con datos en tiempo real y fácil de entender, muy buena."
+          },
+          {
+            "id": "patricia",
+            "name": "Patricia Val.",
+            "rating": "★★★★★ (5/5)",
+            "body": "Los gastos hormiga son tan pequeños 😂. Ahora que los he encontrado puedo ahorrar más que antes, gracias!"
+          },
+          {
+            "id": "andres",
+            "name": "Andres Villa",
+            "role": "Senior Software Developer",
+            "rating": "★★★★★ (5/5)",
+            "body": "El sistema de conversión de moneda me sorprendió, puedo agregar mis ingresos en Pesos Colombianos y en Dólares con total transparencia."
+          }
+        ]
+      }
     },
     "social": {
       "twitter": "Twitter",

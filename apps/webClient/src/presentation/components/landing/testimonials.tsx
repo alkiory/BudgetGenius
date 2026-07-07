@@ -1,8 +1,64 @@
 import { Quote } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-function PlaceholderCard({ cardIndex }: { cardIndex: number }) {
+type RawTestimonial = {
+  id?: string;
+  name?: string;
+  role?: string;
+  rating?: string;
+  body?: string;
+};
+
+/**
+ * Reads `realTestimonials.items` from i18n. When the array is missing or
+ * empty (e.g. an English locale with no translations yet), returns
+ * `undefined` so the rendering layer can fall back to the placeholder copy.
+ */
+function readRealTestimonials(
+  t: ReturnType<typeof useTranslation>["t"],
+): RawTestimonial[] | undefined {
+  const raw = t("landing.sectionTestimonials.realTestimonials.items", {
+    returnObjects: true,
+  });
+  return Array.isArray(raw) ? (raw as RawTestimonial[]) : undefined;
+}
+
+/**
+ * Picks the testimonial for a given card slot. Returns `null` when no real
+ * data is available so the calling component can apply the placeholder
+ * fallback for that single card (the marquee still needs 6 cards even when
+ * we have zero or fewer than 6 unique entries).
+ */
+function pickTestimonial(
+  items: RawTestimonial[] | undefined,
+  cardIndex: number,
+): RawTestimonial | null {
+  if (!items || items.length === 0) return null;
+  return items[cardIndex % items.length];
+}
+
+function TestimonialCard({
+  testimonial,
+  cardIndex,
+}: {
+  testimonial: RawTestimonial | null;
+  cardIndex: number;
+}) {
   const { t } = useTranslation();
+  // `||` (not `??`) so that an accidentally-empty `name`/`body` in the JSON
+  // locale entry still falls back to the localized placeholder. Mirrors the
+  // contract: when the source field exists but is empty (or null/undefined),
+  // we surface the markup-compatible fallback value instead of an empty
+  // heading / body paragraph.
+  const name =
+    testimonial?.name || t("landing.sectionTestimonials.placeholder.name");
+  const body =
+    testimonial?.body || t("landing.sectionTestimonials.placeholder.body");
+  // role / rating may legitimately be absent for testimonials where the user
+  // did not provide them (Susan, Patricia). The `<p>` paragraphs always
+  // render to preserve the original `<PlaceholderCard>` rhythm and
+  // vertical spacing — when the value is missing, the paragraph just
+  // renders empty (no fallback copy is invented).
   return (
     <article
       aria-label={`${t("landing.sectionTestimonials.regionAria")} card ${
@@ -19,28 +75,40 @@ function PlaceholderCard({ cardIndex }: { cardIndex: number }) {
         </div>
         <div className="min-w-0 flex-1">
           <h3 className="text-base font-semibold text-slate-900 dark:text-white">
-            {t("landing.sectionTestimonials.placeholder.name")}
+            {name}
           </h3>
           <p className="mt-0.5 text-xs uppercase tracking-wider text-purple-600 dark:text-purple-300">
-            {t("landing.sectionTestimonials.placeholder.rating")}
+            {testimonial?.rating}
           </p>
           <p className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-            {t("landing.sectionTestimonials.placeholder.role")}
+            {testimonial?.role}
           </p>
         </div>
       </div>
       <p className="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-        {t("landing.sectionTestimonials.placeholder.body")}
+        {body}
       </p>
     </article>
   );
 }
 
-function MarqueeColumn({ direction }: { direction: "down" | "up" }) {
+function MarqueeColumn({
+  direction,
+  offset,
+  items,
+}: {
+  direction: "down" | "up";
+  offset: number;
+  items: RawTestimonial[] | undefined;
+}) {
   // 6 placeholder cards rendered TWICE so the translateY(-50%) keyframe animation
   // produces a seamless vertical loop. The outer container has overflow-hidden +
   // fixed height so only the visible card row is rendered at a time.
-  const visibleCards = Array.from({ length: 6 }, (_, i) => i);
+  // `offset` staggers the rotation across the three columns so each column
+  // shows a slightly different ordering of the same pool of entries.
+  const visibleCards = Array.from({ length: 6 }, (_, i) =>
+    pickTestimonial(items, i + offset),
+  );
   return (
     <div className="hover-pause relative h-[420px] overflow-hidden rounded-2xl">
       {/* 24 s cycle ≈ 4 s per visible card cycle for 6 cards. Slow enough to
@@ -51,15 +119,23 @@ function MarqueeColumn({ direction }: { direction: "down" | "up" }) {
           direction === "down" ? "animate-marquee-down" : "animate-marquee-up"
         }`}
       >
-        {visibleCards.map((i) => (
-          <PlaceholderCard key={`visible-${i}`} cardIndex={i} />
+        {visibleCards.map((data, i) => (
+          <TestimonialCard
+            key={`visible-${i}`}
+            testimonial={data}
+            cardIndex={i}
+          />
         ))}
         {/* Duplicate set is aria-hidden — the visible batch already announces
             the cards; the duplicates exist only to make the translateY(-50%)
             keyframe loop seamless. */}
         <div aria-hidden="true">
-          {visibleCards.map((i) => (
-            <PlaceholderCard key={`duplicate-${i}`} cardIndex={i + 6} />
+          {visibleCards.map((data, i) => (
+            <TestimonialCard
+              key={`duplicate-${i}`}
+              testimonial={data}
+              cardIndex={i + 6}
+            />
           ))}
         </div>
       </div>
@@ -68,12 +144,18 @@ function MarqueeColumn({ direction }: { direction: "down" | "up" }) {
 }
 
 /**
- * Testimonials / Trust section. Three columns of placeholder cards scroll
- * vertically in opposite directions; the duplicate card list is
- * aria-hidden so screen readers only announce the visible batch.
+ * Testimonials / Trust section. Three columns of cards scroll vertically in
+ * opposite directions; entries are pulled from i18n
+ * (`landing.sectionTestimonials.realTestimonials.items`) and cycled across
+ * the 6 card slots per column with a per-column offset. When the array is
+ * empty or missing (e.g. an English locale with no translations shipped yet)
+ * every card falls back to the localized placeholder copy so the marquee
+ * still has 6 cards to render. The duplicate card list is aria-hidden so
+ * screen readers only announce the visible batch.
  */
 export function Testimonials() {
   const { t } = useTranslation();
+  const items = readRealTestimonials(t);
   return (
     <section className="relative isolate overflow-x-clip bg-gradient-to-b from-white via-purple-50/50 to-white py-20 dark:from-slate-900 dark:via-purple-950/40 dark:to-slate-900 lg:py-24">
       <div className="container mx-auto max-w-7xl px-6">
@@ -99,9 +181,9 @@ export function Testimonials() {
           className="grid grid-cols-1 gap-6 md:grid-cols-3"
           aria-label={t("landing.sectionTestimonials.regionAria")}
         >
-          <MarqueeColumn direction="down" />
-          <MarqueeColumn direction="up" />
-          <MarqueeColumn direction="down" />
+          <MarqueeColumn direction="down" offset={0} items={items} />
+          <MarqueeColumn direction="up" offset={1} items={items} />
+          <MarqueeColumn direction="down" offset={2} items={items} />
         </div>
       </div>
     </section>
