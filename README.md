@@ -1,5 +1,7 @@
 # BudgetGenius
 
+<img width="1267" height="819" alt="image" src="https://github.com/user-attachments/assets/be56e660-951f-4049-86dd-edd547757f1b" />
+
 <p align="center">
   <strong>Smart personal finance management — track expenses, set budgets, and achieve your financial goals with AI-powered insights.</strong>
 </p>
@@ -10,7 +12,6 @@
   <img src="https://img.shields.io/badge/version-v1.7.3-blue" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen" alt="Node" />
 </p>
-
 ---
 
 ## 📖 Table of Contents
