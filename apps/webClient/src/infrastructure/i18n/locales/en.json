@@ -564,6 +564,7 @@
         "blog": "Blog",
         "support": "Support",
         "allRightsReserved": "All rights reserved.",
+        "developedBy": "Developed by",
         "dashboardTitle": "Budget Genius Dashboard",
         "heroBadgeSub": "Multi-currency · Bilingual EN+ES · 100% free",
         "goToDashboard": "Go to dashboard",
@@ -688,11 +689,12 @@
             "badge": "Get started",
             "title": "Your money is waiting.",
             "subtitle": "Sign up in under a minute. No card, no commitment. Every feature included from day one."
-        },    "hamburger": {
-      "open": "Open menu",
-      "close": "Close menu",
-      "label": "Primary navigation"
-    },
+        },
+        "hamburger": {
+            "open": "Open menu",
+            "close": "Close menu",
+            "label": "Primary navigation"
+        },
         "sectionMobileApp": {
             "badge": "Available on Android",
             "title": "Your finances in your pocket",

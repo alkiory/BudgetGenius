@@ -10,15 +10,11 @@ import { Showcase } from "@presentation/components/landing/showcase";
 import { Testimonials } from "@presentation/components/landing/testimonials";
 import { Logo } from "@presentation/components/logo";
 import HeaderComponent from "@presentation/components/ui/header";
-import { detectTimezone } from "@presentation/utils/deviceCapabilities";
-import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 export default function HomePage() {
   const { t } = useTranslation();
-
-  const detectedTimezone = useMemo(() => detectTimezone(), []);
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -126,6 +122,17 @@ export default function HomePage() {
             <p className="text-sm text-slate-500 dark:text-slate-400">
               &copy; {new Date().getFullYear()} {t("app.name")}.{" "}
               {t("landing.allRightsReserved")}
+            </p>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              {t("landing.developedBy")}{" "}
+              <a
+                href="https://alkiory.com/es/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                Alkiory 👨🏽‍💻
+              </a>
             </p>
           </div>
         </div>
