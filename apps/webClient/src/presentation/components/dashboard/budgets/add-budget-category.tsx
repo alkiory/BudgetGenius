@@ -1,5 +1,5 @@
 import { RootState } from "@adapters/store/rootStore";
-import { TRANSACTION_CATEGORIES } from "@domain/dashboard/transactions/transaction.entity";
+import { BUDGET_CATEGORY_OPTIONS } from "@domain/dashboard/budgets/budget.entity";
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
@@ -14,13 +14,13 @@ import { useSelector } from "react-redux";
 export default function AddBudgetCategory({
   name,
   allocated,
-  spent,
+  amountLabel,
   handleNewCategoryChange,
   handleAddCategorySubmit,
 }: {
   name: string;
   allocated: string;
-  spent: string;
+  amountLabel: string;
   handleNewCategoryChange: (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => void;
@@ -28,18 +28,20 @@ export default function AddBudgetCategory({
 }) {
   const { t } = useTranslation();
   const userSetting = useSelector((state: RootState) => state.userSettings);
-  const targetCurrency = (userSetting?.settings?.currency || "USD") as Currency;
+  const targetCurrency = (userSetting?.settings?.currency || "EUR") as Currency;
   const currencySymbol = currencyService.getSymbol(targetCurrency);
   const precision = CURRENCY_PRECISION_MAP[targetCurrency] ?? 2;
   const stepAttr = precision === 0 ? 1 : 1 / 10 ** precision;
 
   return (
     <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
-      <div className="flex items-end gap-2">
-        <div className="flex-1 space-y-2">
-          <Label htmlFor="new-category-name">{t("budgets.categoryName")}</Label>
+      <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]">
+        <div className="min-w-0 space-y-2">
+          <Label htmlFor="new-category-name">
+            {t("budgets.categoryField")}
+          </Label>
           <select
-            id={`category-name-${name}`}
+            id="new-category-name"
             name="name"
             value={name}
             onChange={handleNewCategoryChange}
@@ -47,17 +49,15 @@ export default function AddBudgetCategory({
             required
           >
             <option value="">{t("transactions.selectCategory")}</option>
-            {TRANSACTION_CATEGORIES.map((category) => (
+            {BUDGET_CATEGORY_OPTIONS.map((category) => (
               <option key={category} value={category}>
                 {t(`categories.${category.toLowerCase()}`)}
               </option>
             ))}
           </select>
         </div>
-        <div className="flex-1 space-y-2">
-          <Label htmlFor="new-category-allocated">
-            {t("budgets.allocatedAmount")}
-          </Label>
+        <div className="min-w-0 space-y-2">
+          <Label htmlFor="new-category-allocated">{amountLabel}</Label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
               {currencySymbol}
@@ -68,7 +68,7 @@ export default function AddBudgetCategory({
               inputMode="decimal"
               name="allocatedText"
               step={stepAttr}
-              aria-label={t("budgets.allocatedAmount")}
+              aria-label={amountLabel}
               value={allocated}
               onChange={handleNewCategoryChange}
               className="pl-7"
@@ -76,27 +76,13 @@ export default function AddBudgetCategory({
             />
           </div>
         </div>
-        <div className="flex-1 space-y-2">
-          <Label htmlFor="new-category-spent">{t("budgets.spentAmount")}</Label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
-              {currencySymbol}
-            </span>
-            <Input
-              id="new-category-spent"
-              type="text"
-              inputMode="decimal"
-              name="spentText"
-              step={stepAttr}
-              aria-label={t("budgets.spentAmount")}
-              value={spent}
-              onChange={handleNewCategoryChange}
-              className="pl-7"
-              required
-            />
-          </div>
-        </div>
-        <Button onClick={handleAddCategorySubmit}>{t("common.add")}</Button>
+        <Button
+          onClick={handleAddCategorySubmit}
+          className="w-full sm:w-auto"
+          type="button"
+        >
+          {t("common.add")}
+        </Button>
       </div>
     </div>
   );

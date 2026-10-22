@@ -70,6 +70,20 @@ test.describe("Transaction form smoke test", () => {
       });
     });
 
+    await page.route("**/api/user-settings**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: 1,
+          timezone: "America/Bogota",
+          currency: "EUR",
+          locale: "es-CO",
+          hasCompletedOnboarding: true,
+        }),
+      });
+    });
+
     // Navigate to transactions page
     await page.goto("/app/dashboard/transactions", {
       waitUntil: "domcontentloaded",
@@ -131,6 +145,80 @@ test.describe("Transaction form smoke test", () => {
     // The error toast should appear
     const toast = page.getByText("Amount cannot be 0").first();
     await expect(toast).toBeVisible({ timeout: 5000 });
+  });
+
+  test("editing preserves typed fields across type changes and submits date and amount unchanged", async ({
+    page,
+  }) => {
+    const existing = {
+      id: 73,
+      date: "2026-02-04",
+      description: "Rent from tenant",
+      category: "Housing",
+      amount: 123.45,
+      recurrence: null,
+    };
+    const postedBodies: Array<Record<string, unknown>> = [];
+
+    await page.route("**/api/transactions**", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            transactions: [existing],
+            meta: { total: 1, offset: 0, limit: 50, nextOffset: null },
+          }),
+        });
+        return;
+      }
+      if (route.request().method() === "PUT") {
+        postedBodies.push(JSON.parse(route.request().postData() ?? "{}"));
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ message: "Transaction updated" }),
+        });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+    });
+
+    const listPromise = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/transactions") &&
+        response.request().method() === "GET",
+      { timeout: 15000 },
+    );
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await listPromise;
+    const editButton = page.locator('[data-testid="edit-transaction"]').first();
+    await expect(editButton).toBeVisible({ timeout: 15000 });
+    await editButton.click();
+
+    const description = page.locator("input#description");
+    const amount = page.locator("input#amount");
+    const date = page.locator("input#date");
+    await expect(description).toHaveValue(existing.description);
+    await expect(amount).toHaveValue("123.45");
+    await expect(date).toHaveValue(existing.date);
+
+    await description.fill("Updated rent payment");
+    await amount.fill("234.56");
+    await page.getByTestId("type-expense").click();
+    await expect(description).toHaveValue("Updated rent payment");
+    await expect(amount).toHaveValue("234.56");
+    await date.fill("2026-03-11");
+
+    await page.locator("form").evaluate((form) => form.requestSubmit());
+    await expect.poll(() => postedBodies.length).toBe(1);
+    expect(postedBodies[0]).toMatchObject({
+      id: existing.id,
+      date: "2026-03-11T00:00:00.000Z",
+      description: "Updated rent payment",
+      amount: -234.56,
+      currency: "EUR",
+    });
   });
 
   // Phase 5 (T5.6): assert that selecting a recurrence on the income
@@ -314,7 +402,7 @@ test.describe("Transaction form smoke test", () => {
       page.on("request", (req) => {
         if (
           req.method() === "PUT" &&
-          /\/api\/transactions\/\d+/.test(req.url())
+          /\/api\/transactions(\/\d+)?(\?.*)?$/.test(req.url())
         ) {
           try {
             resolve(JSON.parse(req.postData() ?? "{}"));
@@ -376,7 +464,7 @@ test.describe("Transaction form smoke test", () => {
     });
     await listPromise;
 
-    const editButton = page.getByRole("button", { name: /edit/i }).first();
+    const editButton = page.locator('[data-testid="edit-transaction"]').first();
     await expect(editButton).toBeVisible({ timeout: 10000 });
     await editButton.click();
 
@@ -401,5 +489,95 @@ test.describe("Transaction form smoke test", () => {
 
     const updatedBody = await updatedBodyPromise;
     expect(updatedBody).toMatchObject({ amount: 23.15 });
+  });
+
+  // Historical rows carry float residue from the removed currency-conversion
+  // flow (`62.787499999999994`). The editor must seed a clean 2-decimal value
+  // and persist that clean value instead of the residue.
+  test("editing a legacy float seeds and saves the amount rounded to 2 decimals", async ({
+    page,
+  }) => {
+    const updatedBodyPromise = new Promise<unknown>((resolve) => {
+      page.on("request", (req) => {
+        if (
+          req.method() === "PUT" &&
+          /\/api\/transactions(\/\d+)?(\?.*)?$/.test(req.url())
+        ) {
+          try {
+            resolve(JSON.parse(req.postData() ?? "{}"));
+          } catch {
+            resolve(req.postData());
+          }
+        }
+      });
+    });
+
+    await page.route("**/api/transactions**", async (route) => {
+      const method = route.request().method();
+      if (method === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            transactions: [
+              {
+                id: 1,
+                date: new Date().toISOString(),
+                description: "Legacy converted row",
+                category: "Food",
+                amount: -62.787499999999994,
+                recurrence: null,
+              },
+            ],
+            meta: { total: 1, offset: "0", limit: "50", nextOffset: null },
+          }),
+        });
+        return;
+      }
+      if (method === "PUT") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ message: "Updated" }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+    });
+
+    const listPromise = page.waitForResponse(
+      (resp) =>
+        resp.url().includes("/api/transactions") &&
+        resp.request().method() === "GET",
+      { timeout: 15000 },
+    );
+
+    await page.goto("/app/dashboard/transactions", {
+      waitUntil: "domcontentloaded",
+    });
+    await listPromise;
+
+    const editButton = page.locator('[data-testid="edit-transaction"]').first();
+    await expect(editButton).toBeVisible({ timeout: 10000 });
+    await editButton.click();
+
+    const amountInput = page.locator("input#amount");
+    await expect(amountInput).toBeVisible({ timeout: 5000 });
+    await expect(amountInput).toHaveValue("62.79");
+
+    // Typing extra decimals must not be swallowed or reformatted mid-edit;
+    // the buffer keeps the raw keystrokes and validation happens on submit.
+    await amountInput.fill("62.789");
+    await expect(amountInput).toHaveValue("62.789");
+    await amountInput.fill("62.79");
+
+    await page.locator("form").evaluate((form) => form.requestSubmit());
+
+    const updatedBody = await updatedBodyPromise;
+    expect(updatedBody).toMatchObject({ amount: -62.79 });
   });
 });

@@ -12,12 +12,15 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
   particleCount = 30, // Número de partículas por defecto
 }) => {
   return (
-    <div className="absolute inset-0 z-0 overflow-hidden">
+    // Fixed + full viewport so the gradient always fills the whole screen,
+    // regardless of how tall the page content is. `-z-10` keeps it behind
+    // every page and prevents any section from painting over it.
+    <div className="pointer-events-none fixed inset-0 -z-10 h-screen w-screen overflow-hidden">
       {/* Fondo animado */}
       <div
-        className={`absolute inset-0 bg-gradient-to-r ${gradientColors.join(
+        className={`absolute inset-0 bg-gradient-to-br ${gradientColors.join(
           " ",
-        )} animate-gradient`}
+        )} bg-[length:200%_200%] animate-gradient`}
       ></div>
 
       {/* Partículas */}

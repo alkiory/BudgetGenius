@@ -13,6 +13,18 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 
+function toDateInputValue(value: Date | string): string {
+  if (typeof value === "string") {
+    const dateOnly = value.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+    if (dateOnly) return dateOnly;
+  }
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 interface AddTransactionFormProps {
   onSubmit: (transaction: NewTransactionInput) => void;
   onCancel: () => void;
@@ -24,13 +36,13 @@ export default function AddTransactionForm({
 }: AddTransactionFormProps) {
   const { t } = useTranslation();
   const userSetting = useSelector((state: RootState) => state.userSettings);
-  const userCurrency = (userSetting?.settings?.currency || "USD") as Currency;
+  const userCurrency = (userSetting?.settings?.currency || "EUR") as Currency;
 
   const [transactionType, setTransactionType] = useState<"income" | "expense">(
     "expense",
   );
   const [formData, setFormData] = useState<NewTransactionInput>({
-    date: new Date(),
+    date: toDateInputValue(new Date()),
     category: "Other",
     description: "",
     amount: undefined as unknown as number,
@@ -64,9 +76,7 @@ export default function AddTransactionForm({
       return;
     }
 
-    if (
-      !currencyService.validateAmount(absAmount, formData.currency as Currency)
-    ) {
+    if (!currencyService.validateAmount(absAmount, userCurrency)) {
       errorToast(
         t("transactions.invalidCurrencyAmount"),
         3000,
@@ -80,11 +90,9 @@ export default function AddTransactionForm({
 
     onSubmit({
       ...formData,
-      amount: currencyService.normalizeAmount(
-        signedAmount,
-        formData.currency as Currency,
-      ),
-      date: new Date(),
+      amount: signedAmount,
+      currency: userCurrency,
+      date: new Date(`${formData.date}T00:00:00.000Z`),
     });
   };
 
@@ -98,10 +106,11 @@ export default function AddTransactionForm({
             type="button"
             data-testid="type-expense"
             onClick={() => setTransactionType("expense")}
-            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${transactionType === "expense"
+            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+              transactionType === "expense"
                 ? "bg-red-500 text-white"
                 : "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-              }`}
+            }`}
           >
             {t("transactions.expense")}
           </button>
@@ -109,10 +118,11 @@ export default function AddTransactionForm({
             type="button"
             data-testid="type-income"
             onClick={() => setTransactionType("income")}
-            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${transactionType === "income"
+            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+              transactionType === "income"
                 ? "bg-green-500 text-white"
                 : "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-              }`}
+            }`}
           >
             {t("transactions.income")}
           </button>
@@ -126,7 +136,7 @@ export default function AddTransactionForm({
           name="category"
           value={formData.category}
           onChange={handleChange}
-          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+          className="block w-full max-w-full box-border rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
           required
         >
           <option value="Other">{t("categories.other")}</option>
@@ -138,6 +148,18 @@ export default function AddTransactionForm({
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="date">{t("transactions.date")}</Label>
+        <Input
+          id="date"
+          name="date"
+          type="date"
+          value={toDateInputValue(formData.date)}
+          onChange={handleChange}
+          required
+        />
       </div>
 
       <div className="space-y-2">
@@ -184,7 +206,7 @@ export default function AddTransactionForm({
         </p>
       </div>
 
-      <div className="mt-6 flex justify-end gap-2">
+      <div className="sticky bottom-0 z-10 -mx-1 mt-6 flex justify-end gap-2 border-t border-slate-200/80 bg-slate-50/95 px-1 py-3 backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/95">
         <Button type="button" variant="outline" onClick={onCancel}>
           {t("common.cancel")}
         </Button>

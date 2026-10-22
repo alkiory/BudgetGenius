@@ -3,10 +3,7 @@ import { Budget } from "@domain/dashboard/budgets/budget.entity";
 import Loader from "@presentation/components/loader";
 import { OverBudgetIcon } from "@presentation/components/ui/budget-status";
 import { Button } from "@presentation/components/ui/button";
-import {
-  currencyService,
-  toCurrency,
-} from "@presentation/utils/currencyService";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { CalendarIcon, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -52,26 +49,16 @@ export function BudgetList({
       {budgets && budgets.length > 0 ? (
         <div className="space-y-2">
           {budgets.map((budget) => {
+            const isSavings = budget.type === "savings";
             const percentSpent =
               budget.totalAllocated > 0
                 ? (budget.totalSpent / budget.totalAllocated) * 100
                 : 0;
             const remaining = budget.totalAllocated - budget.totalSpent;
 
-            // The api `Budget` entity has no `currency` column (only
-            // the child `BudgetCategory` table got one in migration
-            // 1800000000004), so the totals returned from the backend
-            // are USD-normalized at the source — the same convention
-            // `budget-summary.tsx` uses — and we MUST convert from
-            // USD to the user's target currency. The previous version
-            // of this file used from === to === target, which made
-            // the conversion a no-op and a USD-budget user viewing
-            // in EUR would see USD-formatted numbers with EUR locale
-            // grouping. `toCurrency(...)` keeps the settings-read
-            // path type-safe even if the setting is ever-shaped as an
-            // unknown value.
-            const targetCurrency = toCurrency(settings?.currency);
-            const sourceCurrency = "USD";
+            // Currency selection affects formatting only; budget values
+            // are passed through unchanged.
+            const targetCurrency = (settings?.currency || "EUR") as Currency;
             // `remaining` can be negative (over budget). We pass
             // `Math.abs(remaining)` to the formatter and `showSign:
             // false` so the formatted string is always the magnitude
@@ -84,32 +71,30 @@ export function BudgetList({
             // `totalAllocated` (also `showSign: false`).
             const formattedRemaining = currencyService.formatCurrency(
               Math.abs(remaining),
-              sourceCurrency,
               targetCurrency,
               false,
             );
             const formattedAllocated = currencyService.formatCurrency(
               budget.totalAllocated,
-              sourceCurrency,
               targetCurrency,
               false,
             );
             const formattedSpent = currencyService.formatCurrency(
               budget.totalSpent,
-              sourceCurrency,
               targetCurrency,
               false,
             );
 
-            // Determine progress color based on percentage spent
+            // Savings goals fill up green and are never "over budget".
             let progressColor = "bg-green-500";
-            if (percentSpent > 90) {
+            if (!isSavings && percentSpent > 90) {
               progressColor = "bg-red-500";
-            } else if (percentSpent > 75) {
+            } else if (!isSavings && percentSpent > 75) {
               progressColor = "bg-yellow-500";
             }
 
-            const isOverBudget = budget.totalSpent > budget.totalAllocated;
+            const isOverBudget =
+              !isSavings && budget.totalSpent > budget.totalAllocated;
             const isActiveBudget = activeBudget?.id === budget.id;
 
             let borderClasses =
@@ -181,7 +166,10 @@ export function BudgetList({
                     <div className="flex flex-col gap-0.5">
                       <span>
                         <span className="text-slate-500 dark:text-slate-400">
-                          {t("budgets.spentLabel")}:{" "}
+                          {isSavings
+                            ? t("budgets.savedLabel")
+                            : t("budgets.spentLabel")}
+                          :{" "}
                         </span>
                         <span className="font-medium">
                           {formattedSpent.formatted}
@@ -189,7 +177,10 @@ export function BudgetList({
                       </span>
                       <span>
                         <span className="text-slate-500 dark:text-slate-400">
-                          {t("budgets.limitLabel")}:{" "}
+                          {isSavings
+                            ? t("budgets.goalLabel")
+                            : t("budgets.limitLabel")}
+                          :{" "}
                         </span>
                         <span className="font-medium">
                           {formattedAllocated.formatted}
@@ -211,15 +202,21 @@ export function BudgetList({
                 <div className="mt-2 text-sm">
                   <span
                     className={
-                      remaining >= 0
+                      remaining >= 0 || isSavings
                         ? "text-green-600 dark:text-green-400"
                         : "text-red-600 dark:text-red-400"
                     }
                   >
                     {remaining >= 0
-                      ? t("budgets.availableAmount", {
-                          amount: formattedRemaining.formatted,
-                        })
+                      ? isSavings
+                        ? t("budgets.goalRemaining", {
+                            amount: formattedRemaining.formatted,
+                          })
+                        : t("budgets.availableAmount", {
+                            amount: formattedRemaining.formatted,
+                          })
+                      : isSavings
+                      ? t("budgets.goalReached")
                       : t("budgets.amountOverBudget", {
                           amount: `-${formattedRemaining.formatted}`,
                         })}

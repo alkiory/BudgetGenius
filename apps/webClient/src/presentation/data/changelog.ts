@@ -14,6 +14,9 @@
 //  6. Set `highlight: true` ONLY on the most recent material change.
 //     On the next release, move the flag to the new top entry and
 //     remove it from the previous one — only one highlighted at a time.
+//     The "new" pill is per visitor: /changelog marks every version
+//     newer than the one they last saw, and uses `highlight` only as
+//     the first-visit announcement.
 //
 //  Save the file. The /changelog page updates automatically — no JSX
 //  edits, no i18n JSON edits, no extra wiring.
@@ -45,7 +48,11 @@ export interface ChangelogEntry {
   title: LocalizedString;
   /** One short paragraph describing the BENEFIT, not the implementation. Jargon-free. */
   description: LocalizedString;
-  /** Optional — render a small "new" pill next to the version badge. Remove on the next release. */
+  /**
+   * Marks the release announced to first-time visitors. The "new" pill is
+   * per visitor: `/changelog` also badges every version newer than the one
+   * they last saw. Keep it on the newest entry only.
+   */
   highlight?: boolean;
 }
 
@@ -56,28 +63,40 @@ export interface ChangelogEntry {
  */
 export const changelog: ChangelogEntry[] = [
   {
-    version: "1.7",
-    date: "2026-07-01",
+    version: "1.9",
+    date: "2026-10-22",
     highlight: true,
     title: {
-      en: "Set up your experience from day one",
-      es: "Configura tu experiencia desde el primer momento",
+      en: "Budgets for spending and saving",
+      es: "Presupuestos para gastar y ahorrar",
     },
     description: {
-      en: "When you create your account, BudgetGenius now asks for your timezone, your preferred currency, and your language — so everything is ready for you from your first session, without having to dig through settings later.",
-      es: "Al crear tu cuenta, BudgetGenius ahora te pregunta tu zona horaria, tu moneda preferida y el idioma — así todo está listo para ti desde tu primera sesión, sin tener que buscar ajustes después.",
+      en: "You can now choose between a spending budget and a savings goal. Spending limits are filled automatically from your transactions, while savings goals grow as you add money. The budget form is simpler: just pick a category and set its limit or goal.",
+      es: "Ahora puedes elegir entre un presupuesto de gasto y una meta de ahorro. Los límites de gasto se completan automáticamente con tus transacciones, mientras que las metas de ahorro crecen a medida que añades dinero. El formulario es más sencillo: solo eliges la categoría y defines su límite u objetivo.",
+    },
+  },
+  {
+    version: "1.8",
+    date: "2026-10-22",
+    title: {
+      en: "Better numbers, forms, and a fresh look",
+      es: "Mejores números, formularios y un nuevo look",
+    },
+    description: {
+      en: "Everything now works in euros (€) without external conversions. Dashboard numbers always show two decimals, and chart labels no longer overlap. Transaction forms now include a date field, retain your data when switching types, and scroll neatly. Plus, the registration screen has a fresh new look with a full animated background.",
+      es: "Todo funciona ahora en euros (€) sin conversiones externas. Los números del panel siempre muestran dos decimales y las etiquetas del gráfico ya no se superponen. Los formularios de transacciones ahora incluyen fecha, mantienen tus datos al cambiar de tipo y se desplazan correctamente. Además, la pantalla de registro tiene un nuevo look con fondo animado a pantalla completa.",
     },
   },
   {
     version: "1.7",
     date: "2026-07-01",
     title: {
-      en: "More reliable account deletion",
-      es: "Eliminación de cuenta más confiable",
+      en: "A smoother start and safer account deletion",
+      es: "Un comienzo más fluido y una eliminación de cuenta más segura",
     },
     description: {
-      en: "The delete-account confirmation button now responds the moment you type the confirmation phrase — capitalization or stray spaces no longer block it.",
-      es: "El botón de confirmación para eliminar tu cuenta ahora responde en cuanto escribes la frase de confirmación — mayúsculas iniciales o espacios extra ya no lo bloquean.",
+      en: "When you create your account, BudgetGenius asks for your timezone, your preferred currency, and your language — so everything is ready from your first session. The delete-account confirmation button also responds the moment you type the phrase — capitalization or stray spaces no longer block it.",
+      es: "Al crear tu cuenta, BudgetGenius te pregunta tu zona horaria, tu moneda preferida y tu idioma — así todo está listo desde tu primera sesión. Además, el botón de confirmación para eliminar tu cuenta responde en cuanto escribes la frase — mayúsculas iniciales o espacios extra ya no lo bloquean.",
     },
   },
   {
@@ -96,24 +115,12 @@ export const changelog: ChangelogEntry[] = [
     version: "1.4",
     date: "2026-06-27",
     title: {
-      en: "Easier way to type amounts",
-      es: "Maneras más fáciles de escribir montos",
+      en: "Easier amounts and mixed currencies",
+      es: "Montos más fáciles y monedas combinadas",
     },
     description: {
-      en: "Type your amounts however you naturally write them. Whether you use a comma or a period for decimals, BudgetGenius understands your format and saves the correct value.",
-      es: "Escribe tus montos como los escribes normalmente, ya uses coma o punto como separador decimal. BudgetGenius entiende tu formato y guarda el valor correcto.",
-    },
-  },
-  {
-    version: "1.4",
-    date: "2026-06-27",
-    title: {
-      en: "Mix currencies in the same budget",
-      es: "Combina monedas en un mismo presupuesto",
-    },
-    description: {
-      en: "Use different currencies in different categories — dollars, euros, pesos, whatever works for each — and your total reflects your actual money, not a confusing sum of mixed numbers.",
-      es: "Usa distintas monedas en tus categorías — dólares, euros, pesos, lo que tenga sentido para cada una — y el total refleja tu dinero real, sin confusiones al sumar cantidades en monedas diferentes.",
+      en: "Type your amounts however you naturally write them — a comma or a period for decimals is understood and saved correctly. You can also use different currencies in different categories, so each one reflects the money you actually spend.",
+      es: "Escribe tus montos como los escribes normalmente — la coma o el punto decimal se entienden y se guardan correctamente. También puedes usar distintas monedas en tus categorías, para que cada una refleje el dinero que realmente gastas.",
     },
   },
   {

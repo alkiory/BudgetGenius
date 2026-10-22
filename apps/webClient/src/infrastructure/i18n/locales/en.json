@@ -3,6 +3,9 @@
         "name": "Budget Genius",
         "tagline": "Smart personal finance management"
     },
+    "splash": {
+        "loading": "Loading..."
+    },
     "onboarding": {
         "title": "Set up your preferences",
         "subtitle": "Welcome, {{name}}! A few quick preferences so reports, currency, and Finny respond correctly from day one.",
@@ -20,6 +23,7 @@
     },
     "common": {
         "loading": "Loading...",
+        "add": "Add",
         "save": "Save",
         "cancel": "Cancel",
         "delete": "Delete",
@@ -197,12 +201,13 @@
     },
     "budgets": {
         "title": "Budgets",
-        "description": "Create and manage your budgets to track your spending.",
+        "description": "Plan your spending and savings goals in one place.",
         "createBudget": "Create Budget",
         "editBudget": "Edit Budget",
         "createSuccess": "Budget created successfully",
         "updateSuccess": "Budget updated successfully",
         "deleteSuccess": "Budget deleted successfully",
+        "deleteError": "Failed to delete budget",
         "deleteConfirm": "Are you sure you want to delete this budget?",
         "name": "Name",
         "period": "Period",
@@ -245,7 +250,37 @@
         "updateSpentLabel": "Update Spent Amount",
         "addExpense": "Add expense",
         "addExpenseCurrent": "Current: {{current}}",
-        "spentLabelAria": "Spent amount for {{category}}"
+        "spentLabelAria": "Spent amount for {{category}}",
+        "budgetType": "Budget type",
+        "typeSpending": "Spending",
+        "typeSavings": "Savings",
+        "spendingTypeHint": "Set a spending limit. Spent is calculated from transactions in the category.",
+        "savingsTypeHint": "Set a savings goal and add money until you reach it.",
+        "goalLabel": "Goal",
+        "totalGoal": "Total Goal",
+        "addSavingsCategory": "Add goal",
+        "addSpendingCategory": "Add category",
+        "categoryField": "Category",
+        "categoryHelp": "Pick a category and set its limit or goal.",
+        "spendingTotalHint": "Actual spending is added automatically from your transactions.",
+        "savingsTotalHint": "Sum of every savings goal in this budget.",
+        "removeCategory": "Remove category",
+        "savedLabel": "Saved",
+        "savedOfGoal": "{{saved}} of {{goal}}",
+        "goalRemaining": "{{amount}} to go",
+        "goalReached": "Goal reached!",
+        "hasSaved": "You've saved {{amount}}",
+        "addSaving": "Add savings",
+        "addSavingCurrent": "Currently saved: {{current}}",
+        "addSavingAria": "Add savings to {{category}}",
+        "savingsByCategory": "Savings by category",
+        "spendingByCategory": "Spending by category",
+        "categoriesOverBudget": "{{count}} categories over budget",
+        "chartOverBy": "⚠ Over budget by {{amount}}",
+        "categoryAdded": "Category added successfully",
+        "categoryUpdated": "Category updated successfully",
+        "categoryDeleted": "Category deleted successfully",
+        "categoryError": "Failed to update the category"
     },
     "reports": {
         "title": "Financial Reports",
@@ -338,7 +373,8 @@
         "freelance": "Freelance",
         "investments": "Investments",
         "rental": "Rental",
-        "business": "Business"
+        "business": "Business",
+        "refunds": "Refunds"
     },
     "incomeCategories": {
         "all": "All",

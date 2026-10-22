@@ -84,9 +84,9 @@ export function RecentTransactions() {
 
   const recentTransactions = (data?.transactions ?? []).slice(0, 3);
 
-  const targetCurrency = (settings?.currency || "USD") as Currency;
+  const targetCurrency = (settings?.currency || "EUR") as Currency;
   const renderAmount = (raw: number) =>
-    currencyService.formatCurrency(raw, "USD" as Currency, targetCurrency);
+    currencyService.formatCurrency(raw, targetCurrency);
 
   return (
     <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">

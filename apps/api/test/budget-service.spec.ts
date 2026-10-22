@@ -5,14 +5,12 @@ import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import {
   NotFoundException,
   BadRequestException,
-  ServiceUnavailableException,
 } from '@nestjs/common';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { UserSettingsService } from '@application/user/user-settings.service';
-import { CurrencyService } from '@infrastructure/currency/currency.service';
-import { SupportedCurrency } from '@domain/user/user-settings.entity';
 import { QueryFailedError } from 'typeorm';
 import { BUDGET_CATEGORY_UNIQUE_CONSTRAINT_NAME } from '@domain/dashboard/budget-category.entity';
+import { SupportedCurrency } from '@domain/user/user-settings.entity';
 
 // Full mock User object matching the User entity
 const mockUser = {
@@ -69,6 +67,7 @@ const budgetUser = {
 const categoryBudget = {
   id: 1,
   name: 'Monthly Budget',
+  type: 'spending' as const,
   period: 'Weekly',
   startDate: new Date('2026-06-01'),
   endDate: new Date('2026-06-30'),
@@ -81,22 +80,25 @@ const categoryBudget = {
 };
 
 // Full mock BudgetCategory
-const buildCategory = (overrides: Partial<typeof mockCategoryShape> = {}) => ({
-  ...mockCategoryShape,
-  ...overrides,
-});
+const buildCategory = (overrides: Partial<typeof mockCategoryShape> = {}) => {
+  // Legacy fixtures only declare `spent`; before the manual/transaction
+  // split that value WAS the manual baseline. Mirror it into manualSpent
+  // unless a test is explicitly exercising the split.
+  return {
+    ...mockCategoryShape,
+    ...(overrides.spent !== undefined && overrides.manualSpent === undefined
+      ? { manualSpent: overrides.spent }
+      : {}),
+    ...overrides,
+  };
+};
 
 const mockCategoryShape = {
   id: 1,
   name: 'Medical',
   allocated: 550,
   spent: 250,
-  // Widened from `'USD' as const` to `SupportedCurrency` so the
-  // spread-override pattern in cross-currency tests (e.g.
-  // `{ ...buildCategory(...), currency: 'COP' as SupportedCurrency }`)
-  // still satisfies the resulting object's currency field. Existing
-  // overrides that use `currency: 'USD' as const` remain assignable
-  // because `'USD'` is a member of `SupportedCurrency`.
+  manualSpent: 250,
   currency: 'USD' as SupportedCurrency,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -109,38 +111,10 @@ const buildBudget = (overrides: Partial<typeof mockBudgetShape> = {}) => ({
   ...overrides,
 });
 
-// Module-level singleton CurrencyService fake. Identity default behaviour
-// (returns `amount` unchanged via `convertedAmount: amount`) so existing
-// tests with single-currency USD fixtures pass without per-test mock
-// overrides. Per-test overrides via `(fakeCurrencyService.convert as
-// jest.Mock).mockImplementation(...)` (T4.1/T4.2 cross-currency tests).
-const fakeCurrencyService = {
-  convert: jest
-    .fn()
-    .mockImplementation(
-      async ({
-        amount,
-        fromCurrency,
-        toCurrency,
-      }: {
-        amount: number;
-        fromCurrency: string;
-        toCurrency: string;
-      }) => ({
-        amount,
-        fromCurrency,
-        toCurrency,
-        convertedAmount: amount, // identity by default
-        rate: 1,
-        fetchedAt: new Date().toISOString(),
-        cacheHit: true,
-      }),
-    ),
-};
-
 const mockBudgetShape = {
   id: 1,
   name: 'Monthly Budget',
+  type: 'spending' as 'spending' | 'savings',
   period: 'Weekly',
   startDate: new Date('2026-06-01'),
   endDate: new Date('2026-06-30'),
@@ -173,6 +147,7 @@ describe('BudgetService', () => {
             findByBudgetId: jest.fn(),
             getBudgetCategory: jest.fn(),
             findCategotyQuery: jest.fn(),
+            sumExpenseAmountsByBudget: jest.fn().mockResolvedValue([]),
             updateBudget: jest.fn(),
             updateBudgetCategory: jest.fn(),
             deleteBudgetCategory: jest.fn(),
@@ -204,10 +179,6 @@ describe('BudgetService', () => {
             }),
           },
         },
-        {
-          provide: CurrencyService,
-          useValue: fakeCurrencyService,
-        },
       ],
     }).compile();
 
@@ -215,12 +186,6 @@ describe('BudgetService', () => {
     repo = module.get(BudgetRepository);
     userRepo = module.get(UserRepositoryImpl);
     logger = module.get(LoggingService);
-
-    // Reset CurrencyService mock state per test so cross-currency
-    // overrides from inner describe blocks don't leak into the standard
-    // 27-test suite. mockClear wipes call history; the default identity
-    // implementation defined at module top survives mockClear.
-    (fakeCurrencyService.convert as jest.Mock).mockClear();
   });
 
   describe('createBudget', () => {
@@ -296,10 +261,6 @@ describe('BudgetService', () => {
       expect(result[0].totalSpent).toBe(850);
       // totalAllocated should be recalculated from categories: 550
       expect(result[0].totalAllocated).toBe(550);
-      // Phase 3 T3.2: identity fast-path (USD→USD) keeps zero Redis
-      // round-trips. Pin the optimization — a regression that removes
-      // the fast-path would issue 1 round-trip per category here.
-      expect(fakeCurrencyService.convert).not.toHaveBeenCalled();
     });
 
     it('should recalculate totalSpent and totalAllocated from categories over stale DB values', async () => {
@@ -324,10 +285,67 @@ describe('BudgetService', () => {
       // Both should be recalculated from categories, not from stale DB values
       expect(result[0].totalSpent).toBe(430); // 250 + 180
       expect(result[0].totalAllocated).toBe(500); // 300 + 200, overrides stale 999
-      // Phase 3 T3.3: identity fast-path (USD→USD) keeps zero Redis
-      // round-trips across 2 categories. Same pin as T3.2 — guards
-      // the optimization from regression.
-      expect(fakeCurrencyService.convert).not.toHaveBeenCalled();
+    });
+
+    it('should add transaction spending on top of the manual baseline (spending budget)', async () => {
+      const category = buildCategory({
+        id: 1,
+        name: 'Medical',
+        allocated: 500,
+        spent: 100,
+        manualSpent: 100,
+      });
+      const budget = buildBudget({
+        id: 1,
+        type: 'spending',
+        categories: [category],
+      });
+
+      repo.findByUser.mockResolvedValue([budget]);
+      repo.sumExpenseAmountsByBudget.mockResolvedValue([
+        { budgetId: 1, category: 'medical', total: 50 },
+      ]);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [budget],
+      });
+
+      const result = await service.getBudgets(1);
+
+      expect(result[0].categories[0].manualSpent).toBe(100);
+      expect(result[0].categories[0].transactionSpent).toBe(50);
+      expect(result[0].categories[0].spent).toBe(150);
+      expect(result[0].totalSpent).toBe(150);
+    });
+
+    it('should ignore transaction spending for savings budgets', async () => {
+      const category = buildCategory({
+        id: 1,
+        name: 'Transport',
+        allocated: 1000,
+        spent: 400,
+        manualSpent: 400,
+      });
+      const budget = buildBudget({
+        id: 1,
+        type: 'savings',
+        categories: [category],
+      });
+
+      repo.findByUser.mockResolvedValue([budget]);
+      repo.sumExpenseAmountsByBudget.mockResolvedValue([
+        { budgetId: 1, category: 'transport', total: 75 },
+      ]);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [budget],
+      });
+
+      const result = await service.getBudgets(1);
+
+      expect(result[0].categories[0].transactionSpent).toBe(0);
+      expect(result[0].categories[0].spent).toBe(400);
+      expect(result[0].totalSpent).toBe(400);
     });
 
     it('should return empty array when user has no budgets', async () => {
@@ -889,13 +907,8 @@ describe('BudgetService', () => {
     });
   });
 
-  // AUDIT (rpi/budget-currency-coercion/plan.md Phase 4): cross-currency
-  // tests verify the FX coercion math end-to-end. Each test overrides
-  // `fakeCurrencyService.convert.mockImplementation(...)` per-test to
-  // dispatch on (fromCurrency, toCurrency); the outer beforeEach's
-  // `mockClear` wipes call-history between tests so overrides don't leak.
-  describe('cross-currency coercion', () => {
-    it('getBudgets: USD + COP mixed categories coerce to canonical (USD)', async () => {
+  describe('single-currency budget totals', () => {
+    it('sums mixed-currency entries unchanged when listing budgets', async () => {
       const mixedBudget = buildBudget({
         id: 1,
         totalSpent: 0,
@@ -914,7 +927,7 @@ describe('BudgetService', () => {
               spent: 200000,
               allocated: 200000,
             }),
-            currency: 'COP' as SupportedCurrency,
+            currency: 'COP',
           },
         ],
       });
@@ -924,48 +937,15 @@ describe('BudgetService', () => {
         budgets: [mixedBudget],
       });
 
-      // Override convert: USD→USD identity; COP→USD = amount / 4000
-      // (matches the CurrencyService mock rate table in
-      // apps/api/test/currency.service.spec.ts). Per-test implementation
-      // survives mockClear because we replace — not just stack — the
-      // default identity via `mockImplementation`.
-      (fakeCurrencyService.convert as jest.Mock).mockImplementation(
-        async (args: {
-          amount: number;
-          fromCurrency: string;
-          toCurrency: string;
-        }) => ({
-          ...args,
-          convertedAmount:
-            args.fromCurrency === args.toCurrency
-              ? args.amount
-              : args.amount / 4000,
-          rate: args.fromCurrency === args.toCurrency ? 1 : 0.00025,
-          cacheHit: true,
-          fetchedAt: 'x',
-        }),
-      );
-
       const result = await service.getBudgets(1);
 
       expect(result).toHaveLength(1);
-      // 50 USD + (200000 COP / 4000) = 50 + 50 = 100 USD.
-      expect(result[0].totalSpent).toBe(100);
-      expect(result[0].totalAllocated).toBe(100);
-      // Convert called twice: the USD-cat spent/allocated skip the
-      // fast-path's identity branch AND return amount unchanged, so only
-      // the COP-cat fields trigger a real convert call (spent + allocated).
-      expect(fakeCurrencyService.convert).toHaveBeenCalledTimes(2);
-      expect(fakeCurrencyService.convert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          fromCurrency: 'COP',
-          toCurrency: 'USD',
-          amount: 200000,
-        }),
-      );
+      // Switching currency does not alter the source numeric values.
+      expect(result[0].totalSpent).toBe(200050);
+      expect(result[0].totalAllocated).toBe(200050);
     });
 
-    it('getBudgets: identity fast-path skips CurrencyService when canonical === every cat.currency', async () => {
+    it('keeps values unchanged for a single-currency budget', async () => {
       const usdBudget = buildBudget({
         id: 1,
         categories: [
@@ -982,14 +962,13 @@ describe('BudgetService', () => {
         budgets: [usdBudget],
       });
 
-      await service.getBudgets(1);
+      const result = await service.getBudgets(1);
 
-      // Identity fast-path: USD→USD skips convert entirely for both
-      // spent and allocated on the single category. Zero Redis traffic.
-      expect(fakeCurrencyService.convert).not.toHaveBeenCalled();
+      expect(result[0].totalSpent).toBe(850);
+      expect(result[0].totalAllocated).toBe(550);
     });
 
-    it('getBudgets: graceful degradation when CurrencyService throws ServiceUnavailableException', async () => {
+    it('keeps category values unchanged even when their currency differs from the user setting', async () => {
       const copBudget = buildBudget({
         id: 1,
         categories: [
@@ -1009,30 +988,13 @@ describe('BudgetService', () => {
         budgets: [copBudget],
       });
 
-      // Simulate upstream provider failure on the COP→USD conversion.
-      // `mockRejectedValue` (not `mockRejectedValueOnce`) so both
-      // coerceCategoryTotals's parallel coerceToCanonical calls see
-      // the failure and both fall back to identity.
-      (fakeCurrencyService.convert as jest.Mock).mockRejectedValue(
-        new ServiceUnavailableException('Exchange-rate provider unavailable'),
-      );
-
       const result = await service.getBudgets(1);
 
-      // Identity fallback: totalSpent === category.spent (50) unchanged.
-      // The fallback is silent to the caller (no exception propagated).
       expect(result[0].totalSpent).toBe(50);
       expect(result[0].totalAllocated).toBe(50);
-      // Warn log surfaces the caller context + fallback reason. Match
-      // the prefix from coerceToCanonical: `[budget-currency-coerce]`.
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringMatching(
-          /\[budget-currency-coerce\] identity fallback \(caller=getBudgets/,
-        ),
-      );
     });
 
-    it('recalculateBudgetTotalSpent: persists FX-coerced totals on update (COP → USD canonical)', async () => {
+    it('recalculates mixed-currency category totals without conversion', async () => {
       const copCategory = {
         ...buildCategory({
           id: 1,
@@ -1056,24 +1018,6 @@ describe('BudgetService', () => {
       // Recalc reads the (now-COP) budget + writes the coerced totals.
       repo.findById.mockResolvedValue(copBudget);
 
-      // Override convert: COP→USD = amount / 4000.
-      (fakeCurrencyService.convert as jest.Mock).mockImplementation(
-        async (args: {
-          amount: number;
-          fromCurrency: string;
-          toCurrency: string;
-        }) => ({
-          ...args,
-          convertedAmount:
-            args.fromCurrency === args.toCurrency
-              ? args.amount
-              : args.amount / 4000,
-          rate: args.fromCurrency === args.toCurrency ? 1 : 0.00025,
-          cacheHit: true,
-          fetchedAt: 'x',
-        }),
-      );
-
       await service.updateBudgetCategory(1, {
         id: 1,
         name: 'Sweets',
@@ -1082,15 +1026,10 @@ describe('BudgetService', () => {
         currency: 'COP',
       } as any);
 
-      // The totalSpent write should be coerced: 200000 COP / 4000 = 50.
       expect(repo.updateBudget).toHaveBeenCalledTimes(1);
       const writtenBudget = repo.updateBudget.mock.calls[0][0];
-      expect(writtenBudget.totalSpent).toBe(50);
-      expect(writtenBudget.totalAllocated).toBe(50);
-      // Convert called twice (spent + allocated on the COP category);
-      // identity fast-path never fires because cat.currency ('COP') ≠
-      // canonical ('USD').
-      expect(fakeCurrencyService.convert).toHaveBeenCalledTimes(2);
+      expect(writtenBudget.totalSpent).toBe(200000);
+      expect(writtenBudget.totalAllocated).toBe(200000);
     });
   });
 });

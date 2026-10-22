@@ -9,12 +9,15 @@ import { Security } from "@presentation/components/landing/security";
 import { Showcase } from "@presentation/components/landing/showcase";
 import { Testimonials } from "@presentation/components/landing/testimonials";
 import { Logo } from "@presentation/components/logo";
+import { ChangelogUnseenDot } from "@presentation/components/ui/changelog-unseen-dot";
 import HeaderComponent from "@presentation/components/ui/header";
+import { useChangelogUnseen } from "@presentation/hooks/useChangelogUnseen";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 export default function HomePage() {
   const { t } = useTranslation();
+  const hasUnseenChangelog = useChangelogUnseen();
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -68,6 +71,7 @@ export default function HomePage() {
                 className="text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white"
               >
                 {t("landing.changelog.footerLink")}
+                {hasUnseenChangelog && <ChangelogUnseenDot />}
               </Link>
               <Link
                 to="/contact-sales"

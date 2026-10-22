@@ -2,7 +2,6 @@ import { clearAuthAndStateForLogout } from "@adapters/auth/clearAuthAndStateForL
 import { updateSettingsAction } from "@adapters/slices/user-settings/settingsSlice";
 import { RootState } from "@adapters/store/rootStore";
 import { deleteUser, updateUserSettings } from "@application/user/user.service";
-import { Currency } from "@presentation/utils/currencyService";
 import { UserSettings } from "@domain/user/userSettings";
 import { errorToast, successToast } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -34,9 +33,10 @@ export function AccountSettings() {
 
   const { settings } = userSetting;
 
+  // Currency is intentionally absent: the app is Euro-only and the
+  // preference is no longer user-editable.
   const [settingsToUpdate, setSettingsToUpdate] = useState({
     timezone: settings?.timezone || "America/New_York",
-    currency: settings?.currency || "USD",
     locale: settings?.locale || "en-US",
   });
 
@@ -72,24 +72,11 @@ export function AccountSettings() {
   });
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // v1.7.2 — type `delta` as `Partial<UserSettings>` (instead of a
-    // hand-rolled `{timezone?: string; currency?: string; locale?: string}`
-    // literal) so the `currency` field carries the literal-union type
-    // `Currency` from `Currency` (`"USD" | "EUR" | "COP"`) — the bare
-    // `string` annotation previously caused `TS2345` at
-    // `updateSettings(delta)` because `string` is NOT assignable to the
-    // narrow `Currency` union. `Partial<UserSettings>` is the canonical
-    // shape; the fields stay OPTIONAL, the types stay correct, and any
-    // future UserSettings reshape (new currency support, new locale
-    // type) ripples here automatically.
+    e.preventDefault(); // Type `delta` as `Partial<UserSettings>` so future settings
+    // additions keep the narrow field types. The fields stay OPTIONAL.
     const delta: Partial<UserSettings> = {};
     if (settingsToUpdate.timezone !== settings?.timezone) {
       delta.timezone = settingsToUpdate.timezone;
-    }
-    if (settingsToUpdate.currency !== settings?.currency) {
-      delta.currency = settingsToUpdate.currency;
     }
     if (settingsToUpdate.locale !== settings?.locale) {
       delta.locale = settingsToUpdate.locale;
@@ -111,59 +98,57 @@ export function AccountSettings() {
   // existing user (no onboarding, stale per-user data). See
   // `rpi/delete-account-cleanup/{research.md, plan.md}` and
   // `knowledge.md §6.8.5`.
-  const {
-    mutate: deleteAccountMutation,
-    isPending: isDeletingAccount,
-  } = useMutation({
-    mutationKey: ["delete-account"],
-    mutationFn: () => {
-      if (!currentUser?.id) {
-        // Defensive: if for any reason we don't have a valid user id,
-        // refuse to call DELETE with `NaN`/undefined — the backend
-        // would 401/400 and the user would be left wondering what
-        // happened. Surface the error to the toast instead.
-        throw new Error(
-          t(
-            "settings.deleteMissingUserId",
-            "No authenticated user — please log in again before deleting your account.",
-          ),
+  const { mutate: deleteAccountMutation, isPending: isDeletingAccount } =
+    useMutation({
+      mutationKey: ["delete-account"],
+      mutationFn: () => {
+        if (!currentUser?.id) {
+          // Defensive: if for any reason we don't have a valid user id,
+          // refuse to call DELETE with `NaN`/undefined — the backend
+          // would 401/400 and the user would be left wondering what
+          // happened. Surface the error to the toast instead.
+          throw new Error(
+            t(
+              "settings.deleteMissingUserId",
+              "No authenticated user — please log in again before deleting your account.",
+            ),
+          );
+        }
+        return deleteUser(currentUser.id);
+      },
+      onSuccess: () => {
+        // Order matters: clear BEFORE hard reload so the freshly
+        // mounted /auth/login tree cannot read stale tokens or settings.
+        // `clearAuthAndStateForLogout` codifies the order in
+        // knowledge.md §6.8.5:
+        //   1. localStorage.removeItem(accessToken + refreshToken)
+        //   2. sessionStorage.removeItem("mobile.splash.shown")
+        //   3. queryClient.clear()
+        //   4. dispatch(logoutAction())
+        clearAuthAndStateForLogout(dispatch, queryClient);
+        // Hard reload: the user is GONE server-side. There is no
+        // soft-navigation target — every closure must be torn down.
+        window.location.href = "/auth/login";
+      },
+      onError: (error: Error) => {
+        console.error("Error deleting account:", error);
+        errorToast(
+          error?.message ??
+            t(
+              "settings.deleteError",
+              "Failed to delete account. Please try again.",
+            ),
+          4000,
+          "delete-account",
         );
-      }
-      return deleteUser(currentUser.id);
-    },
-    onSuccess: () => {
-      // Order matters: clear BEFORE hard reload so the freshly
-      // mounted /auth/login tree cannot read stale tokens or settings.
-      // `clearAuthAndStateForLogout` codifies the order in
-      // knowledge.md §6.8.5:
-      //   1. localStorage.removeItem(accessToken + refreshToken)
-      //   2. sessionStorage.removeItem("mobile.splash.shown")
-      //   3. queryClient.clear()
-      //   4. dispatch(logoutAction())
-      clearAuthAndStateForLogout(dispatch, queryClient);
-      // Hard reload: the user is GONE server-side. There is no
-      // soft-navigation target — every closure must be torn down.
-      window.location.href = "/auth/login";
-    },
-    onError: (error: Error) => {
-      console.error("Error deleting account:", error);
-      errorToast(
-        error?.message ??
-          t(
-            "settings.deleteError",
-            "Failed to delete account. Please try again.",
-          ),
-        4000,
-        "delete-account",
-      );
-      // Flip the local UI state back so the destructive button
-      // re-enables. (We intentionally do NOT dispatch `logoutAction()`
-      // here — the user's account still exists, we just failed to
-      // delete it. A successful soft-delete UX would be: stay logged
-      // in, show an error toast, let the user retry.)
-      setIsDeleting(false);
-    },
-  });
+        // Flip the local UI state back so the destructive button
+        // re-enables. (We intentionally do NOT dispatch `logoutAction()`
+        // here — the user's account still exists, we just failed to
+        // delete it. A successful soft-delete UX would be: stay logged
+        // in, show an error toast, let the user retry.)
+        setIsDeleting(false);
+      },
+    });
 
   const handleDeleteAccount = () => {
     if (!isDeleteConfirmed) return;
@@ -175,7 +160,6 @@ export function AccountSettings() {
     if (settings) {
       setSettingsToUpdate({
         timezone: settings.timezone,
-        currency: settings.currency,
         locale: settings.locale as string,
       });
     }
@@ -204,23 +188,6 @@ export function AccountSettings() {
                 { value: "Europe/London", label: "Greenwich Mean Time (GMT)" },
                 { value: "Europe/Paris", label: "Central European Time (CET)" },
                 { value: "Asia/Tokyo", label: "Japan Standard Time (JST)" },
-              ]}
-            />
-
-            <Select
-              label={t("settings.currency")}
-              name="Currency"
-              value={settingsToUpdate.currency}
-              onChange={(value) => {
-                setSettingsToUpdate((prev) => ({
-                  ...prev,
-                  currency: value as Currency,
-                }));
-              }}
-              options={[
-                { value: "USD", label: "United States Dollar (USD)" },
-                { value: "EUR", label: "Euro (EUR)" },
-                { value: "COP", label: "Colombian Peso (COP)" },
               ]}
             />
 

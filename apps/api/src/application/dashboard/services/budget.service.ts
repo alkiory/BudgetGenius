@@ -21,19 +21,14 @@ import {
 import { User } from '@domain/user/user.entity';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { QueryFailedError } from 'typeorm';
-import { UserSettingsService } from '@application/user/user-settings.service';
-import { SupportedCurrency } from '@domain/user/user-settings.entity';
-import { CurrencyService } from '@infrastructure/currency/currency.service';
-import { ConvertCurrencyDto } from '@infrastructure/currency/dto/convert.dto';
 
-// Runtime members of the SupportedCurrency string-union. Used by
-// `resolveCategoryCurrency` (Phase 2 polish) to defend against malformed
-// DB values that bypass the TypeORM enum check.
-const SUPPORTED_CURRENCIES: readonly SupportedCurrency[] = [
-  'USD',
-  'EUR',
-  'COP',
-];
+/** Persisted money is kept at two decimals. */
+const roundMoney = (value: number): number =>
+  Number(Number(value).toFixed(2));
+
+/** Case-insensitive category name used to match transactions. */
+const categoryKey = (name: string | undefined): string =>
+  (name ?? '').trim().toLowerCase();
 
 @Injectable()
 export class BudgetService {
@@ -42,14 +37,13 @@ export class BudgetService {
     private readonly categoryRepo: BudgetRepository,
     private readonly userRepo: UserRepositoryImpl,
     private readonly logger: LoggingService,
-    private readonly userSettingsService: UserSettingsService,
-    private readonly currencyService: CurrencyService,
   ) {}
 
   async createBudget(userId: number, dto: CreateBudgetDto): Promise<Budget> {
     const user = await this.userRepo.findById(userId);
 
     const totalSpent = dto.totalSpent ?? 0;
+    const budgetType = dto.type ?? 'spending';
 
     if (user.budgets.find((b) => b.name === dto.name)) {
       throw new BadRequestException(`Budget ${dto.name} already exists`);
@@ -61,12 +55,22 @@ export class BudgetService {
       );
     }
 
-    const categories = dto.categories?.map((category) => ({
-      ...category,
-    })) as BudgetCategory[];
+    const categories = dto.categories?.map((category) => {
+      // A brand-new category starts from its manual baseline (normally 0);
+      // transaction spending is added dynamically on read.
+      const manualSpent = roundMoney(
+        category.manualSpent ?? category.spent ?? 0,
+      );
+      return {
+        ...category,
+        manualSpent,
+        spent: manualSpent,
+      };
+    }) as BudgetCategory[];
 
     this.logger.log('budget created: ', {
       ...dto,
+      type: budgetType,
       totalSpent,
       user: { id: userId } as User,
       categories,
@@ -76,6 +80,7 @@ export class BudgetService {
 
     return this.repo.createBudget({
       ...dto,
+      type: budgetType,
       totalSpent,
       user: { id: userId } as User,
       categories,
@@ -113,12 +118,11 @@ export class BudgetService {
       );
     }
 
-    const resolvedCurrency: SupportedCurrency =
-      dto.currency ?? (await this.resolveCurrencyForUser(userId));
-
+    const manualSpent = roundMoney(dto.manualSpent ?? dto.spent ?? 0);
     const newCategory = {
       ...dto,
-      currency: resolvedCurrency,
+      manualSpent,
+      spent: manualSpent,
       budget: { id: budgetId } as Budget,
     };
     try {
@@ -135,7 +139,7 @@ export class BudgetService {
         await this.recalculateBudgetTotalSpent(budgetId, userId);
       } catch (recalcErr) {
         this.logger.warn(
-          `[budget-currency-coercion] post-create recalculation failed ` +
+          `[budget-total-recalculation] post-create recalculation failed ` +
             `for budget=${budgetId} after category insert: ` +
             `${(recalcErr as Error)?.message ?? recalcErr}`,
         );
@@ -171,41 +175,27 @@ export class BudgetService {
       return [];
     }
 
-    // AUDIT (rpi/budget-currency-coercion): on-the-fly FX-coerced sum,
-    // never persisted (the Budget entity's column is now vestigial — see
-    // research.md §"Dead column signal"). The list endpoint computes
-    // fresh math every request, eliminating rate-locking concerns. For
-    // a single-currency user (canonicalCurrency === all cat.currency),
-    // every coerceToCanonical is the identity fast-path and adds no
-    // Redis traffic. canonicalCurrency resolved ONCE per request outside
-    // the per-budget loop — same value applies to all budgets the user
-    // owns. Inner coercion delegates to coerceCategoryTotals (Phase 2
-    // polish DRY), collapsing the per-category body to a single line.
-    const canonicalCurrency = await this.resolveCurrencyForUser(userId);
+    // Effective spending = manual baseline + expense transactions linked
+    // by category name inside the budget window. Savings budgets never
+    // pull transaction spending, so their progress is purely manual.
+    const spendingByBudget = await this.loadTransactionSpending(userId);
     for (const budget of budgets) {
-      let totalSpent = 0;
-      let totalAllocated = 0;
-      for (const category of budget.categories) {
-        const { spent, allocated } = await this.coerceCategoryTotals({
-          cat: category,
-          canonicalCurrency,
-          caller: 'getBudgets',
-        });
-        totalSpent += spent;
-        totalAllocated += allocated;
+      for (const category of budget.categories ?? []) {
+        this.applyEffectiveSpent(category, budget, spendingByBudget);
       }
-      budget.totalSpent = totalSpent;
-      budget.totalAllocated = totalAllocated;
+      budget.totalSpent = roundMoney(
+        (budget.categories ?? []).reduce(
+          (total, category) => total + category.spent,
+          0,
+        ),
+      );
+      budget.totalAllocated = roundMoney(
+        (budget.categories ?? []).reduce(
+          (total, category) => total + category.allocated,
+          0,
+        ),
+      );
     }
-
-    // FIX SHIPPED (rpi/budget-currency-coercion, docs/changelog.md [v1.4.1]):
-    // the stale AUDIT-TODO block above this comment was the original 2026-06
-    // audit noting that this loop produced garbage for mixed-currency budgets.
-    // The fix landed via `coerceCategoryTotals` (line above) — every
-    // category.spent / .allocated is now FX-coerced into canonicalCurrency
-    // before `+=`. The persisted `Budget.totalSpent` / `.totalAllocated`
-    // columns remain vestigial and are NOT recomputed on read for
-    // `getBudget(id)` (single-budget fetch); that's an isolated follow-up.
 
     return budgets;
   }
@@ -213,7 +203,24 @@ export class BudgetService {
   async getBudget(id: number, userId: number): Promise<Budget> {
     // Repo scopes by userId — throws NotFoundException on miss so we don't
     // leak whether the budget exists for another user.
-    return this.repo.findById(id, userId);
+    const budget = await this.repo.findById(id, userId);
+    const spendingByBudget = await this.loadTransactionSpending(userId);
+    for (const category of budget.categories ?? []) {
+      this.applyEffectiveSpent(category, budget, spendingByBudget);
+    }
+    budget.totalSpent = roundMoney(
+      (budget.categories ?? []).reduce(
+        (total, category) => total + category.spent,
+        0,
+      ),
+    );
+    budget.totalAllocated = roundMoney(
+      (budget.categories ?? []).reduce(
+        (total, category) => total + category.allocated,
+        0,
+      ),
+    );
+    return budget;
   }
 
   async findCategories(filters: {
@@ -242,7 +249,74 @@ export class BudgetService {
     if (filters.name) {
       where.name = filters.name;
     }
-    return this.repo.findCategotyQuery({ where });
+    const categories = await this.repo.findCategotyQuery({
+      where,
+      relations: ['budget'],
+    });
+
+    // The category rows carry the manual baseline; the response's `spent`
+    // is the effective total used by every budget surface.
+    const spendingByBudget = await this.loadTransactionSpending(
+      filters.userId,
+    );
+    const budgetsById = new Map(
+      (user.budgets ?? []).map((budget) => [Number(budget.id), budget]),
+    );
+    return categories.map((category) => {
+      const budget =
+        category.budget ??
+        budgetsById.get(Number(category.budget?.id ?? filters.budgetId));
+      if (budget) {
+        this.applyEffectiveSpent(category, budget, spendingByBudget);
+      }
+      return category;
+    });
+  }
+
+  /**
+   * Builds a `budgetId -> categoryName -> expenseTotal` lookup from the
+   * transaction repository aggregation. Savings budgets are ignored when
+   * applying the lookup, so the data can be fetched once per request.
+   */
+  private async loadTransactionSpending(
+    userId: number,
+  ): Promise<Map<number, Map<string, number>>> {
+    const rows = (await this.repo.sumExpenseAmountsByBudget(userId)) ?? [];
+    const byBudget = new Map<number, Map<string, number>>();
+    for (const row of rows) {
+      const budgetId = Number(row.budgetId);
+      const category = categoryKey(row.category);
+      if (!byBudget.has(budgetId)) {
+        byBudget.set(budgetId, new Map());
+      }
+      byBudget.get(budgetId)!.set(category, Number(row.total) || 0);
+    }
+    return byBudget;
+  }
+
+  /**
+   * Sets `manualSpent`, `transactionSpent` and the effective `spent` for a
+   * category. Mutates in place because these are response-only enrichments
+   * on entities that are (at most) cached by the caller, never re-saved
+   * from these read paths.
+   */
+  private applyEffectiveSpent(
+    category: BudgetCategory,
+    budget: Budget,
+    spendingByBudget: Map<number, Map<string, number>>,
+  ): void {
+    const manual = roundMoney(
+      Number(category.manualSpent ?? category.spent ?? 0),
+    );
+    const transactionSpent =
+      budget.type === 'savings'
+        ? 0
+        : spendingByBudget
+            .get(Number(budget.id))
+            ?.get(categoryKey(category.name)) ?? 0;
+    category.manualSpent = manual;
+    category.transactionSpent = roundMoney(transactionSpent);
+    category.spent = roundMoney(manual + transactionSpent);
   }
 
   async getBudgetCategory(id: number, userId: number): Promise<BudgetCategory> {
@@ -267,12 +341,20 @@ export class BudgetService {
       );
     }
 
-    const updatedCategories = dto.categories?.map((category) => ({
-      ...category,
-      id: category.id,
-      allocated: category.allocated,
-      spent: category.spent,
-    })) as BudgetCategory[];
+    const updatedCategories = dto.categories?.map((category) => {
+      const manualSpent = roundMoney(
+        category.manualSpent ?? category.spent ?? 0,
+      );
+      return {
+        ...category,
+        id: category.id,
+        allocated: category.allocated,
+        manualSpent,
+        // Keep the cached total consistent for the fields the caller sent;
+        // read paths recompute it with transaction spending.
+        spent: roundMoney(category.spent ?? manualSpent),
+      };
+    }) as BudgetCategory[];
 
     return this.repo.updateBudget(
       {
@@ -293,15 +375,22 @@ export class BudgetService {
       throw new NotFoundException(`Category ${dto.id} not found`);
     }
 
-    const resolvedCurrency: SupportedCurrency =
-      dto.currency ??
-      (category.currency as SupportedCurrency | undefined) ??
-      (await this.resolveCurrencyForUser(userId));
-
+    // `manualSpent` is the authoritative manual baseline going forward.
+    // The legacy `spent` field is still accepted (older clients) and is
+    // treated as manual input; transaction spending is layered on top by
+    // the read paths.
+    const manualSpent =
+      dto.manualSpent !== undefined
+        ? roundMoney(dto.manualSpent)
+        : dto.spent !== undefined
+          ? roundMoney(dto.spent)
+          : undefined;
     const updatedCategory = await this.repo.updateBudgetCategory(
       {
         ...dto,
-        currency: resolvedCurrency,
+        ...(manualSpent !== undefined
+          ? { manualSpent, spent: manualSpent }
+          : {}),
         updatedAt: new Date(),
       },
       userId,
@@ -311,107 +400,6 @@ export class BudgetService {
     await this.recalculateBudgetTotalSpent(category.budget.id, userId);
 
     return updatedCategory;
-  }
-
-  private async resolveCurrencyForUser(
-    userId: number,
-  ): Promise<SupportedCurrency> {
-    try {
-      const settings = await this.userSettingsService.getOrCreateSettings(
-        userId,
-      );
-      return (settings?.currency as SupportedCurrency) ?? 'USD';
-    } catch (err) {
-      this.logger.warn(
-        `[resolveCurrencyForUser] settings lookup failed for user ${userId}; ` +
-          `defaulting to USD (${(err as Error)?.message ?? err})`,
-      );
-      return 'USD';
-    }
-  }
-
-  // AUDIT (rpi/budget-currency-coercion): batched per-category coercion.
-  // Reduces both `getBudgets` (the in-memory read path) and
-  // `recalculateBudgetTotalSpent` (the persisted write path) to a single
-  // for-loop body of four lines. Internally: resolves category currency
-  // (defending against malformed DB values via resolveCategoryCurrency)
-  // then awaits two parallel coerceToCanonical calls (one per field) via
-  // Promise.all. Returns Coerced totals in the canonical currency,
-  // preserving integer / float precision through CurrencyService.applyRates.
-  // Plan: rpi/budget-currency-coercion/plan.md Phase 2 polish (DRY).
-  private async coerceCategoryTotals(args: {
-    cat: BudgetCategory;
-    canonicalCurrency: SupportedCurrency;
-    caller: string;
-  }): Promise<{ spent: number; allocated: number }> {
-    const { cat, canonicalCurrency, caller } = args;
-    const catCurrency = this.resolveCategoryCurrency(cat, canonicalCurrency);
-    const [spent, allocated] = await Promise.all([
-      this.coerceToCanonical({
-        amount: cat.spent,
-        fromCurrency: catCurrency,
-        targetCurrency: canonicalCurrency,
-        caller,
-      }),
-      this.coerceToCanonical({
-        amount: cat.allocated,
-        fromCurrency: catCurrency,
-        targetCurrency: canonicalCurrency,
-        caller,
-      }),
-    ]);
-    return { spent, allocated };
-  }
-
-  // AUDIT (rpi/budget-currency-coercion): sync helper. Resolves a
-  // category's effective currency, defending against malformed DB values
-  // (via the SUPPORTED_CURRENCIES runtime check) and falling back to the
-  // canonical currency if the row's column is null/undefined or holds an
-  // out-of-enum value. Plans: rpi/budget-currency-coercion/plan.md Phase
-  // 2 polish.
-  private resolveCategoryCurrency(
-    cat: BudgetCategory | undefined,
-    fallbackCurrency: SupportedCurrency,
-  ): SupportedCurrency {
-    const raw = cat?.currency;
-    if (
-      typeof raw === 'string' &&
-      (SUPPORTED_CURRENCIES as readonly string[]).includes(raw)
-    ) {
-      return raw as SupportedCurrency;
-    }
-    return fallbackCurrency;
-  }
-
-  // AUDIT (rpi/budget-currency-coercion): FX coercion helper. Identity
-  // fast-path skips CurrencyService entirely when from === target
-  // (single-currency case is zero-cost). On upstream failure, returns
-  // amount unchanged + structured warn log with caller context. Object-
-  // param signature matches the findCategories(filters:{...}) pattern
-  // in this file. Plan: rpi/budget-currency-coercion/plan.md Phase 1.
-  private async coerceToCanonical(args: {
-    amount: number;
-    fromCurrency: SupportedCurrency;
-    targetCurrency: SupportedCurrency;
-    caller: string;
-  }): Promise<number> {
-    const { amount, fromCurrency, targetCurrency, caller } = args;
-    if (fromCurrency === targetCurrency) return amount;
-    try {
-      const res = await this.currencyService.convert({
-        fromCurrency,
-        toCurrency: targetCurrency,
-        amount,
-      } as ConvertCurrencyDto);
-      return res.convertedAmount;
-    } catch (err) {
-      const msg = (err as Error)?.message ?? String(err);
-      this.logger.warn(
-        `[budget-currency-coerce] identity fallback (caller=${caller} ` +
-          `from=${fromCurrency} to=${targetCurrency} amount=${amount}): ${msg}`,
-      );
-      return amount;
-    }
   }
 
   private async recalculateBudgetTotalSpent(
@@ -439,39 +427,16 @@ export class BudgetService {
       );
       return;
     }
-    // FX-coerce every category.spent / .allocated to the user's canonical
-    // currency (user_settings.currency via resolveCurrencyForUser, falls
-    // back to 'USD'). The identity fast-path in coerceToCanonical skips the
-    // CurrencyService round-trip entirely for the common single-currency
-    // case — this loop costs zero Redis traffic when canonicalCurrency
-    // equals every cat.currency. Promise.all reduces the per-category cost
-    // from 2N sequential awaits (one per field) to N parallel awaits for
-    // mixed-currency users.
-    let totalSpent = 0;
-    let totalAllocated = 0;
-    const canonicalCurrency = await this.resolveCurrencyForUser(userId);
-    for (const cat of budget.categories) {
-      const { spent, allocated } = await this.coerceCategoryTotals({
-        cat,
-        canonicalCurrency,
-        caller: 'recalculateBudgetTotalSpent',
-      });
-      totalSpent += spent;
-      totalAllocated += allocated;
-    }
-    budget.totalSpent = totalSpent;
-    budget.totalAllocated = totalAllocated;
+    // Persist raw category sums without applying exchange rates.
+    budget.totalSpent = budget.categories.reduce(
+      (total, category) => total + category.spent,
+      0,
+    );
+    budget.totalAllocated = budget.categories.reduce(
+      (total, category) => total + category.allocated,
+      0,
+    );
     await this.repo.updateBudget(budget, userId);
-
-    // FIX SHIPPED (rpi/budget-currency-coercion, docs/changelog.md [v1.4.1]):
-    // the stale AUDIT-TODO block above was the original 2026-06 audit
-    // noting that this persisted reduction writes mixed-currency nonsense
-    // into the DB column. The fix landed via `coerceCategoryTotals` (call
-    // above the persist) — every category.spent / .allocated is now
-    // FX-coerced into canonicalCurrency before `+=` and BEFORE the trailing
-    // `updateBudget` persists the sums. The persisted column is still
-    // authoritative for `getBudget(id)` until that endpoint is migrated to
-    // in-memory recompute too.
   }
 
   async deleteBudgetCategory(userId: number, id: number) {
@@ -514,7 +479,7 @@ export class BudgetService {
         await this.recalculateBudgetTotalSpent(budgetId, userId);
       } catch (recalcErr) {
         this.logger.warn(
-          `[budget-currency-coercion] post-delete recalculation failed ` +
+          `[budget-total-recalculation] post-delete recalculation failed ` +
             `for budget=${budgetId} after category delete: ` +
             `${(recalcErr as Error)?.message ?? recalcErr}`,
         );

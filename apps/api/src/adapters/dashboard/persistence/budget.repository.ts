@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Budget } from '@domain/dashboard/budget.entity';
 import { BudgetCategory } from '@domain/dashboard/budget-category.entity';
+import { Transaction } from '@domain/dashboard/transaction.entity';
 
 @Injectable()
 export class BudgetRepository {
@@ -11,6 +12,8 @@ export class BudgetRepository {
     private readonly repo: Repository<Budget>,
     @InjectRepository(BudgetCategory)
     private readonly categoryRepo: Repository<BudgetCategory>,
+    @InjectRepository(Transaction)
+    private readonly transactionRepo: Repository<Transaction>,
   ) {}
 
   async countByUser(userId: number): Promise<number> {
@@ -29,6 +32,45 @@ export class BudgetRepository {
     return this.categoryRepo.save(cat);
   }
 
+  /**
+   * Sum of expense transactions per budget and category, across every
+   * budget owned by the user. Each transaction is matched to a budget by
+   * the budget's date window, and to a category by a case-insensitive
+   * `transactions.category = budget_categories.name` comparison.
+   *
+   * Runs as one grouped query instead of per-category round-trips; the
+   * service merges the result with each category's manual baseline.
+   */
+  async sumExpenseAmountsByBudget(
+    userId: number,
+  ): Promise<Array<{ budgetId: number; category: string; total: number }>> {
+    const rows = await this.transactionRepo
+      .createQueryBuilder('t')
+      // Quote the camelCase FK/date columns explicitly: QueryBuilder's
+      // property replacer does not know `userId` (it is not a mapped
+      // property on Transaction) and unquoted `startDate`/`endDate` would
+      // fold to lowercase in Postgres and fail.
+      .innerJoin(
+        Budget,
+        'b',
+        'b."userId" = t."userId" AND t.date BETWEEN b."startDate" AND b."endDate"',
+      )
+      .select('b.id', 'budgetId')
+      .addSelect('LOWER(t.category)', 'category')
+      .addSelect('SUM(ABS(t.amount))', 'total')
+      .where('t."userId" = :userId', { userId })
+      .andWhere('t.amount < 0')
+      .groupBy('b.id')
+      .addGroupBy('LOWER(t.category)')
+      .getRawMany<{ budgetId: string; category: string; total: string }>();
+
+    return rows.map((row) => ({
+      budgetId: Number(row.budgetId),
+      category: (row.category ?? '').toLowerCase(),
+      total: Number(row.total) || 0,
+    }));
+  }
+
   async findByUser(userId: number): Promise<Budget[]> {
     return this.repo.find({
       where: { user: { id: userId } },
@@ -45,7 +87,11 @@ export class BudgetRepository {
   async findById(id: number, userId: number): Promise<Budget> {
     const b = await this.repo.findOne({
       where: { id, user: { id: userId } },
-      relations: ['categories', 'user'],
+      // `user` is deliberately NOT loaded: ownership is already enforced by
+      // the where clause, and this result is returned verbatim by
+      // `GET /budgets/:id`. Loading the relation serialized the owner's
+      // bcrypt `password` hash and `refreshToken` in that response.
+      relations: ['categories'],
     });
     if (!b) throw new NotFoundException(`Budget ${id} not found`);
     return b;

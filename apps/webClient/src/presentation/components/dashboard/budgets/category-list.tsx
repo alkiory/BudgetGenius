@@ -1,32 +1,34 @@
 import { RootState } from "@adapters/store/rootStore";
-import { BudgetCategory } from "@domain/dashboard/budgets/budget.entity";
+import {
+  BudgetCategory,
+  BudgetType,
+} from "@domain/dashboard/budgets/budget.entity";
 import {
   OverBudgetContainer,
   OverBudgetIcon,
   OverBudgetBadge,
 } from "@presentation/components/ui/budget-status";
-import {
-  Currency,
-  currencyService,
-  toCurrency,
-} from "@presentation/utils/currencyService";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 import { EditableBudgetCategory } from "./budget-category";
 
 export default function BudgetCategoryList({
   categoryBudgets,
-  onUpdateSpent,
+  budgetType,
+  onAddManualAmount,
   onDeleteCategoryHandler,
 }: {
   categoryBudgets: BudgetCategory[];
-  onUpdateSpent: (categoryId: number, spent: number) => void;
+  budgetType: BudgetType;
+  onAddManualAmount: (categoryId: number, amount: number) => void;
   onDeleteCategoryHandler: (category: BudgetCategory) => void;
 }) {
   const { t } = useTranslation();
   const userSetting = useSelector((state: RootState) => state.userSettings);
 
   const { settings } = userSetting;
+  const isSavings = budgetType === "savings";
 
   return (
     <div className="space-y-2">
@@ -37,60 +39,72 @@ export default function BudgetCategoryList({
             : 0;
         const remaining = category.allocated - category.spent;
 
-        const progressColor =
-          percentUsed > 100
-            ? "bg-red-500"
-            : percentUsed > 90
-            ? "bg-yellow-500"
-            : "bg-green-500";
+        // A savings goal is never "over budget": exceeding it is success,
+        // so only spending categories use the red over-budget treatment.
+        const isOverBudget = !isSavings && percentUsed > 100;
+        const progressColor = isSavings
+          ? "bg-green-500"
+          : percentUsed > 100
+          ? "bg-red-500"
+          : percentUsed > 90
+          ? "bg-yellow-500"
+          : "bg-green-500";
 
-        const targetCurrency = (settings?.currency || "USD") as Currency;
-        // Source currency of `remaining`/`allocated`/`spent` is the
-        // category's own `currency` column (default 'USD' via the
-        // api migration 1800000000004). Reading from `category.currency`
-        // makes the display correct even for newly-created categories
-        // that picked EUR/COP at creation time. `toCurrency` validates
-        // the value at runtime so the formatter never receives garbage.
-        const sourceCurrency = toCurrency(category.currency);
+        const targetCurrency = (settings?.currency || "EUR") as Currency;
 
-        // `remaining` can be negative (over budget). Pass
-        // `Math.abs(remaining)` and `showSign: false` so the
-        // formatted string is always the magnitude (`$50.00`), and
-        // apply the sign in the JSX below (`-$50.00 over budget`
-        // for negatives, `$50.00 remaining` for positives). Same
-        // pattern as `budget-summary.tsx` and `budget-list.tsx` —
-        // avoids the `formatCurrency(showSign: true)` + manual
-        // `stripLeadingPlus` hack and keeps the formatter behavior
-        // consistent across the three budget views.
         const formattedRemaining = currencyService.formatCurrency(
           Math.abs(remaining),
-          sourceCurrency,
           targetCurrency,
           false,
         );
 
         const formattedAllocated = currencyService.formatCurrency(
           category.allocated,
-          sourceCurrency,
           targetCurrency,
           false,
         );
 
         const formattedSpent = currencyService.formatCurrency(
           category.spent,
-          sourceCurrency,
           targetCurrency,
           false,
         );
 
-        const isOverBudget = percentUsed > 100;
+        const progressText = isSavings
+          ? t("budgets.savedOfGoal", {
+              saved: formattedSpent.formatted,
+              goal: formattedAllocated.formatted,
+            })
+          : t("budgets.spentOfAllocated", {
+              spent: formattedSpent.formatted,
+              allocated: formattedAllocated.formatted,
+            });
+
+        const remainingText =
+          remaining >= 0
+            ? isSavings
+              ? t("budgets.goalRemaining", {
+                  amount: formattedRemaining.formatted,
+                })
+              : t("budgets.availableAmount", {
+                  amount: formattedRemaining.formatted,
+                })
+            : isSavings
+            ? t("budgets.goalReached")
+            : t("budgets.amountOverBudget", {
+                amount: `-${formattedRemaining.formatted}`,
+              });
 
         return (
           <OverBudgetContainer key={category.id} isOverBudget={isOverBudget}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <OverBudgetIcon isOverBudget={isOverBudget} size="sm" />
-                <h4 className="font-medium">{category.name}</h4>
+                <h4 className="font-medium">
+                  {t(`categories.${category.name.toLowerCase()}`, {
+                    defaultValue: category.name,
+                  })}
+                </h4>
               </div>
               <div className="flex items-center gap-2">
                 <OverBudgetBadge
@@ -113,32 +127,22 @@ export default function BudgetCategoryList({
             </div>
 
             <div className="mt-2 flex items-center justify-between text-sm">
-              <span>
-                {t("budgets.spentOfAllocated", {
-                  spent: formattedSpent.formatted,
-                  allocated: formattedAllocated.formatted,
-                })}
-              </span>
+              <span>{progressText}</span>
               <span
                 className={
-                  remaining >= 0
+                  remaining >= 0 || isSavings
                     ? "text-green-600 dark:text-green-400"
                     : "text-red-600 dark:text-red-400"
                 }
               >
-                {remaining >= 0
-                  ? t("budgets.availableAmount", {
-                      amount: formattedRemaining.formatted,
-                    })
-                  : t("budgets.amountOverBudget", {
-                      amount: `-${formattedRemaining.formatted}`,
-                    })}
+                {remainingText}
               </span>
             </div>
 
             <EditableBudgetCategory
               category={category}
-              onUpdateSpent={onUpdateSpent}
+              budgetType={budgetType}
+              onAddManualAmount={onAddManualAmount}
               onDeleteCategory={onDeleteCategoryHandler}
             />
           </OverBudgetContainer>

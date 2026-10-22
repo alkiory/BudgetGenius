@@ -83,6 +83,22 @@ describe('TransactionService', () => {
       );
     });
 
+    it('should round a legacy float amount to two decimals before persisting', async () => {
+      const dto = {
+        date: new Date(),
+        description: 'Legacy converted row',
+        category: 'Food',
+        amount: 62.787499999999994,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await service.createTransaction(1, dto);
+
+      const calledWith = (repo.create as jest.Mock).mock.calls[0][0];
+      expect(calledWith.amount).toBe(62.79);
+    });
+
     it('should throw an error when creation fails', async () => {
       repo.create = jest.fn().mockRejectedValue(new Error('DB Error'));
 
@@ -156,6 +172,39 @@ describe('TransactionService', () => {
       // contract kicks in — preserving the existing value).
       const calledArg = (repo.update as jest.Mock).mock.calls[0][0];
       expect('recurrence' in calledArg).toBe(false);
+    });
+
+    it('should forward the selected transaction date to the repository', async () => {
+      const selectedDate = new Date('2026-03-18T00:00:00.000Z');
+      const dto = {
+        id: mockTransaction.id,
+        date: selectedDate,
+        description: 'Salary payment',
+        category: 'Salary',
+        amount: 1000,
+      };
+
+      await service.updateTransaction(1, dto);
+
+      expect(repo.update).toHaveBeenCalledWith(
+        expect.objectContaining({ date: selectedDate }),
+        1,
+      );
+    });
+
+    it('should round the updated amount to two decimals', async () => {
+      const dto = {
+        id: mockTransaction.id,
+        date: new Date(),
+        description: 'Edited row',
+        category: 'Food',
+        amount: 62.787499999999994,
+      };
+
+      await service.updateTransaction(1, dto);
+
+      const calledArg = (repo.update as jest.Mock).mock.calls[0][0];
+      expect(calledArg.amount).toBe(62.79);
     });
 
     it('should clear recurrence when explicit null is provided', async () => {

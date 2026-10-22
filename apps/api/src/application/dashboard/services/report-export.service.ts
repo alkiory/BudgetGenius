@@ -582,10 +582,13 @@ export class ReportExportService {
   }
 
   private formatMoney(value: number): string {
+    // Single-currency app (EUR) and always two decimals in exports.
     const safe = Number(value) || 0;
-    return safe.toLocaleString('en-US', {
+    return safe.toLocaleString('es-ES', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'EUR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     });
   }
 }

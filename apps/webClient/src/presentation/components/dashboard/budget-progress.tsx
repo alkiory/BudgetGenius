@@ -18,7 +18,7 @@ export function BudgetProgress() {
 
   const displayedBudgets = budgets?.slice(-1 * 3) || [];
   const hasOverBudget = displayedBudgets.some(
-    (b) => b.totalSpent > b.totalAllocated,
+    (b) => b.type !== "savings" && b.totalSpent > b.totalAllocated,
   );
 
   return (
@@ -51,20 +51,22 @@ export function BudgetProgress() {
               Math.round((budget.totalSpent / budget.totalAllocated) * 100),
               100,
             );
-            const isOverBudget = budget.totalSpent > budget.totalAllocated;
+            const isSavings = budget.type === "savings";
+            // Savings goals cannot exceed their target; reaching it is
+            // success, so no red over-budget treatment.
+            const isOverBudget =
+              !isSavings && budget.totalSpent > budget.totalAllocated;
 
-            const targetCurrency = (settings?.currency || "USD") as Currency;
+            const targetCurrency = (settings?.currency || "EUR") as Currency;
 
             const formattedSpent = currencyService.formatCurrency(
               budget.totalSpent,
-              "USD" as Currency,
               targetCurrency,
               false,
             );
 
             const formattedAllocated = currencyService.formatCurrency(
               budget.totalAllocated,
-              "USD" as Currency,
               targetCurrency,
               false,
             );
@@ -80,7 +82,9 @@ export function BudgetProgress() {
                 <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-700">
                   <div
                     className={`h-2 rounded-full progress-shim ${
-                      isOverBudget
+                      isSavings
+                        ? "bg-green-500"
+                        : isOverBudget
                         ? "bg-red-500"
                         : getColorBasedOnEndDate(budget.endDate)
                     }`}

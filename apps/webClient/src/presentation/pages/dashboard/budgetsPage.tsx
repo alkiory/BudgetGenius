@@ -37,10 +37,10 @@ export default function BudgetsPage() {
     refetch: refetchBudgets,
   } = useFetchBudgets();
 
-  if (isLoading) {
-    return <BudgetsLoading />;
-  }
-
+  // NOTE: no early return before the hooks below — the loading guard must
+  // stay after every hook or React sees a changing hook order when the
+  // first fetch resolves ("Rendered more hooks than during the previous
+  // render").
   useEffect(() => {
     if (selectedBudget && budgets) {
       const updatedBudget = budgets.find((b) => b.id === selectedBudget.id);
@@ -74,23 +74,27 @@ export default function BudgetsPage() {
       if (selectedBudget?.id === budgetId) {
         setSelectedBudget(undefined);
       }
-      successToast("Budget deleted successfully", 3000, "budget-delete");
+      successToast(t("budgets.deleteSuccess"), 3000, "budget-delete");
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       setIsModalOpen(false);
     },
     onError: () => {
-      errorToast("Failed to delete budget", 3000, "budget-delete");
+      errorToast(t("budgets.deleteError"), 3000, "budget-delete");
     },
   });
 
   const handleDeleteBudget = (budgetId: string | number) => {
-    confirmToast("Are you sure you want to delete this budget?", {
+    confirmToast(t("budgets.deleteConfirm"), {
       onConfirm: () => deleteBudget(Number(budgetId)),
-      labelCancel: "Cancel",
-      labelConfirm: "Delete",
+      labelCancel: t("common.cancel"),
+      labelConfirm: t("common.delete"),
     });
   };
+
+  if (isLoading) {
+    return <BudgetsLoading />;
+  }
 
   return (
     <div className="space-y-6">

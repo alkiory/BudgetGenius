@@ -6,11 +6,12 @@ import { Currency } from "@presentation/utils/currencyService";
 // from `incomes` carry the original Income.recurrence value.
 export type Transaction = {
   id: number;
-  date: Date;
+  date: Date | string;
   description: string;
   category: string;
   amount: number;
-  currency: Currency;
+  /** Optional legacy response metadata; the user's setting controls display currency. */
+  currency?: Currency;
   recurrence: string | null;
 };
 

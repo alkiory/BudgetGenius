@@ -1,5 +1,10 @@
 import { changelog, type ChangelogEntry } from "@presentation/data/changelog";
-import { useMemo } from "react";
+import {
+  isNewerChangelogVersion,
+  markChangelogSeen,
+  readLastSeenChangelogVersion,
+} from "@presentation/utils/changelogSeen";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 /**
@@ -51,6 +56,19 @@ export default function ChangelogPage() {
     [i18n.language],
   );
 
+  // Per-visitor "new" pills. The last version this browser has seen is
+  // read once on mount so the badges don't disappear while the visitor is
+  // reading the page; afterwards the newest version is stamped as seen, so
+  // the next visit is clean and only genuinely newer releases are marked.
+  // The stamp also clears the header dot in this tab.
+  const [lastSeenVersion] = useState<string | null>(
+    readLastSeenChangelogVersion,
+  );
+
+  useEffect(() => {
+    markChangelogSeen();
+  }, []);
+
   return (
     <section
       aria-label={t("landing.changelog.regionAria")}
@@ -75,6 +93,13 @@ export default function ChangelogPage() {
         >
           {changelog.map((entry: ChangelogEntry, idx: number) => {
             const isLast = idx === changelog.length - 1;
+            // First visit (nothing stored yet): only the flagged release
+            // is announced. Afterwards: every version newer than the one
+            // last seen is marked, including releases skipped entirely.
+            const isNew =
+              lastSeenVersion === null
+                ? entry.highlight === true
+                : isNewerChangelogVersion(entry.version, lastSeenVersion);
             // `${entry.version}-${entry.date}` keeps the key stable across
             // bilingual locale switches without forcing a re-mount.
             const key = `${entry.version}-${entry.date}`;
@@ -103,7 +128,7 @@ export default function ChangelogPage() {
                 />
 
                 <div className="flex flex-wrap items-center gap-3">
-                  {entry.highlight && (
+                  {isNew && (
                     <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold uppercase tracking-wider text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
                       {t("landing.changelog.newBadge")}
                     </span>

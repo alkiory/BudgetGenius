@@ -67,16 +67,19 @@ export default function IncomePage() {
         !filters.recurrences ||
         filters.recurrences.length === 0 ||
         filters.recurrences.includes("All") ||
-        (filters.recurrences as readonly string[]).includes(income.recurrence ?? "");
+        (filters.recurrences as readonly string[]).includes(
+          income.recurrence ?? "",
+        );
 
       return dateMatch && categoryMatch && amountMatch && recurrenceMatch;
     });
   }, [normalizedIncomes, filters]);
 
   const totalIncome = useMemo(() => {
-    return filteredIncomeTransactions
-      .reduce((sum, income) => sum + income.amount, 0)
-      .toFixed(2);
+    return filteredIncomeTransactions.reduce(
+      (sum, income) => sum + income.amount,
+      0,
+    );
   }, [filteredIncomeTransactions]);
 
   const incomeByCategory = useMemo(() => {
@@ -89,7 +92,7 @@ export default function IncomePage() {
 
     return Array.from(categoryMap.entries()).map(([category, amount]) => ({
       category,
-      amount: Number(amount.toFixed(2)),
+      amount,
     }));
   }, [filteredIncomeTransactions]);
 
@@ -114,27 +117,22 @@ export default function IncomePage() {
     return count;
   }, [filters]);
 
-  const targetCurrency = (settings?.currency || "USD") as Currency;
+  const targetCurrency = (settings?.currency || "EUR") as Currency;
   const formattedIncome = currencyService.formatCurrency(
-    Number(totalIncome),
-    "USD" as Currency,
+    totalIncome,
     targetCurrency,
     false,
   );
 
   const averageIncome =
     filteredIncomeTransactions.length > 0
-      ? Number(totalIncome) / filteredIncomeTransactions.length
+      ? totalIncome / filteredIncomeTransactions.length
       : null;
   const averageIncomeIsFinite =
     averageIncome !== null && Number.isFinite(averageIncome);
   const totalIncomeToDisplay = averageIncomeIsFinite
-    ? currencyService.formatCurrency(
-      averageIncome,
-      "USD" as Currency,
-      targetCurrency,
-      false,
-    ).formatted
+    ? currencyService.formatCurrency(averageIncome, targetCurrency, false)
+        .formatted
     : t("common.noData");
 
   if (isLoading) {
@@ -186,23 +184,23 @@ export default function IncomePage() {
           </div>
           <p className="mt-2 text-xl font-bold sm:text-2xl">
             {incomeByCategory.length > 0
-              ? `${currencyService.formatCurrency(
-                incomeByCategory[0].amount,
-                "USD" as Currency,
-                targetCurrency,
-                false,
-              ).formatted
-              }
+              ? `${
+                  currencyService.formatCurrency(
+                    incomeByCategory[0].amount,
+                    targetCurrency,
+                    false,
+                  ).formatted
+                }
               `
               : t("common.noData")}
           </p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {incomeByCategory.length > 0
               ? translateCategory(
-                incomeByCategory.sort((a, b) => b.amount - a.amount)[0]
-                  ?.category || "",
-                t,
-              )
+                  incomeByCategory.sort((a, b) => b.amount - a.amount)[0]
+                    ?.category || "",
+                  t,
+                )
               : t("transactions.heading.noIncomeSources")}
           </p>
         </div>

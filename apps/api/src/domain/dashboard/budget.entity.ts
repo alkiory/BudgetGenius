@@ -28,6 +28,17 @@ export class Budget {
   @Column('date')
   endDate: Date;
 
+  /**
+   * Semantic of every category in this budget:
+   * - `spending` — category limits are expense caps; transactions in the
+   *   category during the budget window consume the limit.
+   * - `savings` — category limits are savings goals; money is added
+   *   manually and never linked to expense transactions.
+   * Existing rows predate the concept and default to `spending`.
+   */
+  @Column({ type: 'varchar', length: 16, default: 'spending' })
+  type: 'spending' | 'savings';
+
   @Column('numeric', {
     transformer: {
       to: (value: number) => value,

@@ -1,6 +1,6 @@
 import { expect, test } from "./config/fixtures";
 
-test.describe("Currency conversion", () => {
+test.describe("Currency formatting without conversion", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem("accessToken", "mock-token");
@@ -99,7 +99,7 @@ test.describe("Currency conversion", () => {
     });
   });
 
-  test("should convert USD dashboard values to COP", async ({ page }) => {
+  test("keeps dashboard numbers unchanged when formatted as COP", async ({ page }) => {
     // Set up response promises before navigating
     const overviewResp = page.waitForResponse("**/api/dashboard/overview**", {
       timeout: 20000,
@@ -123,14 +123,12 @@ test.describe("Currency conversion", () => {
     console.log("=== PAGE TEXT ===");
     console.log(bodyText);
 
-    // Check for COP-formatted numbers
-    // 5,000 USD @ 4000 COP/USD = 20,000,000 COP
-    // es-CO locale formats as "20.000.000" (periods as thousands separator, 0 decimals)
-    const hasCOPValue = bodyText.includes("20.000.000");
-    expect(hasCOPValue).toBeTruthy();
+    // Currency preference changes the currency label only; the number stays 5,000.
+    expect(bodyText).toContain("5.000");
+    expect(bodyText).not.toContain("20.000.000");
   });
 
-  test("[T2.7] convertAmount returns identity when a rate is missing", async ({
+  test("currency formatting changes the symbol without converting the amount", async ({
     page,
   }) => {
     await page.goto("/app/dashboard", { waitUntil: "domcontentloaded" });
@@ -144,33 +142,10 @@ test.describe("Currency conversion", () => {
           "@presentation/utils/currencyService"
           );
         const svc = mod.currencyService;
-        return {
-          okMissingFromTo: svc.convertAmount({
-            amount: 100,
-            fromCurrency: "USD",
-            toCurrency: "EUR",
-            // EUR is missing on purpose — pre-wave-2 returned NaN.
-            exchangeRates: { USD: 1, COP: 4000 } as Record<
-              "USD" | "EUR" | "COP",
-              number
-            >,
-          }),
-          okMissingFromUsd: svc.convertAmount({
-            amount: 100,
-            fromCurrency: "EUR",
-            toCurrency: "USD",
-            exchangeRates: { USD: 1, COP: 4000 } as Record<
-              "USD" | "EUR" | "COP",
-              number
-            >,
-          }),
-          okPresent: svc.convertAmount({
-            amount: 100,
-            fromCurrency: "USD",
-            toCurrency: "EUR",
-            exchangeRates: { USD: 1, EUR: 0.93, COP: 4000 },
-          }),
-        };
+        const usd = svc.formatCurrency(100, "USD", false);
+        const eur = svc.formatCurrency(100, "EUR", false);
+        const cop = svc.formatCurrency(100, "COP", false);
+        return { usd, eur, cop };
       } catch (e) {
         return { skippedProd: true, error: String(e) };
       }
@@ -181,52 +156,12 @@ test.describe("Currency conversion", () => {
       return;
     }
 
-    // Missing endpoint returns the original amount unchanged.
-    expect(result.okMissingFromTo).toBe(100);
-    expect(result.okMissingFromUsd).toBe(100);
-    // Present rates still convert normally.
-    expect(result.okPresent).toBeCloseTo(93, 2);
-  });
-
-  test("[T3.4] convertAmountAsync falls back to bundled rates when /currency/convert is unreachable", async ({
-    page,
-  }) => {
-    await page.route("**/api/currency/convert", async (route) => {
-      await route.abort("failed");
-    });
-
-    await page.goto("/app/dashboard", { waitUntil: "domcontentloaded" });
-    await page.waitForSelector("h2", { timeout: 10000 });
-
-    const result = await page.evaluate(async () => {
-      try {
-        const mod = (await import(
-          /* @vite-ignore */ "/src/presentation/utils/currencyService.ts"
-        )) as typeof import(
-          "@presentation/utils/currencyService"
-          );
-        const svc = mod.currencyService;
-        // USD → COP via bundled fallback (4000 COP/USD).
-        const usdToCop = await svc.convertAmountAsync(10, "USD", "COP");
-        const usdToEur = await svc.convertAmountAsync(10, "USD", "EUR");
-        const sameCurrency = await svc.convertAmountAsync(10, "USD", "USD");
-        return { usdToCop, usdToEur, sameCurrency };
-      } catch (e) {
-        return { skippedProd: true, error: String(e) };
-      }
-    });
-
-    if ("skippedProd" in result) {
-      test.skip(true, "currencyService source unreachable in production bundle");
-      return;
-    }
-
-    expect(Number.isFinite(result.usdToCop)).toBe(true);
-    expect(result.usdToCop).toBeCloseTo(40000, 2);
-    expect(Number.isFinite(result.usdToEur)).toBe(true);
-    expect(result.usdToEur).toBeCloseTo(9.3, 2);
-    // Same-currency fast-path must not even hit the network.
-    expect(result.sameCurrency).toBe(10);
+    expect(result.usd.amount).toBe(100);
+    expect(result.eur.amount).toBe(100);
+    expect(result.cop.amount).toBe(100);
+    expect(result.usd.formatted).toContain("$");
+    expect(result.eur.formatted).toContain("€");
+    expect(result.cop.formatted).toContain("$");
   });
 
   test("[T2.7] COP precision rejects fractional cents on AddTransaction", async ({

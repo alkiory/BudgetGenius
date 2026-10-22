@@ -6,6 +6,7 @@ import {
   ValidateNested,
   IsDate,
   IsEnum,
+  IsIn,
 } from 'class-validator';
 import { SupportedCurrency } from '@domain/user/user-settings.entity';
 
@@ -20,6 +21,12 @@ export class UpdateBudgetDto {
   @IsOptional()
   @IsString()
   period?: string;
+
+  @IsOptional()
+  @IsIn(['spending', 'savings'], {
+    message: 'type must be one of spending|savings',
+  })
+  type?: 'spending' | 'savings';
 
   @IsOptional()
   @IsDate()
@@ -56,6 +63,14 @@ export class UpdateBudgetCategoryDto {
   @IsOptional()
   @IsNumber({ allowInfinity: false, allowNaN: false })
   allocated: number;
+
+  /**
+   * New absolute manual baseline. When present this is authoritative and
+   * the API recomputes `spent` as `manualSpent + transaction spending`.
+   */
+  @IsOptional()
+  @IsNumber({ allowInfinity: false, allowNaN: false })
+  manualSpent?: number;
 
   @IsOptional()
   @IsNumber({ allowInfinity: false, allowNaN: false })

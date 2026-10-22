@@ -52,7 +52,7 @@ export class TransactionRepository {
     data: Partial<Transaction> & { id: number },
     userId: number,
   ): Promise<Transaction> {
-    const { id, description, category, amount, recurrence } = data;
+    const { id, date, description, category, amount, recurrence } = data;
     // findOneOrFail with the userId where-clause: throws
     // EntityNotFoundError if the row does not belong to the user — the
     // service layer lets this bubble up wrapped as NotFoundException so
@@ -61,6 +61,9 @@ export class TransactionRepository {
     const transaction = await this.repo.findOneOrFail({
       where: { id, user: { id: userId } },
     });
+    if (date !== undefined) {
+      transaction.date = date;
+    }
     transaction.description = description;
     transaction.category = category;
     transaction.amount = amount;

@@ -10,7 +10,7 @@ import {
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
-import type { Currency } from "@presentation/utils/currencyService";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { errorToast } from "@presentation/utils/toast";
 import { useCallback, useState, useEffect } from "react";
 import type React from "react";
@@ -25,6 +25,18 @@ interface TransactionFormProps {
 
 const ONE_TIME_LABEL = "One-time";
 
+function toDateInputValue(value: Date | string): string {
+  if (typeof value === "string") {
+    const dateOnly = value.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+    if (dateOnly) return dateOnly;
+  }
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function TransactionForm({
   transaction,
   onSubmit,
@@ -32,18 +44,17 @@ export function TransactionForm({
 }: TransactionFormProps) {
   const { t } = useTranslation();
   const userSetting = useSelector((state: RootState) => state.userSettings);
-  const targetCurrency = (userSetting?.settings?.currency || "USD") as Currency;
+  const targetCurrency = (userSetting?.settings?.currency || "EUR") as Currency;
 
   const [transactionType, setTransactionType] = useState<"income" | "expense">(
     "expense",
   );
   const [formData, setFormData] = useState<Transaction>({
     id: 0,
-    date: new Date(),
+    date: toDateInputValue(new Date()),
     category: "Other",
     description: "",
     amount: undefined as unknown as number,
-    currency: "USD",
     recurrence: null,
   });
 
@@ -52,25 +63,29 @@ export function TransactionForm({
     currency: targetCurrency,
   });
 
+  const { setText: setAmountText } = amountInput;
   const seedAmountBuffer = useCallback(
     (raw: number | undefined) => {
       if (raw === undefined) {
-        amountInput.setText("");
+        setAmountText("");
         return;
       }
-      const abs = Math.abs(raw);
-      const precision = amountInput.precision;
-      const rounded = Number(abs.toFixed(precision));
-      amountInput.setText(Number.isFinite(rounded) ? String(rounded) : "");
+      // Round before seeding: legacy rows can hold floats left over from
+      // the old conversion logic (e.g. `62.787499999999994`). The editor
+      // should open with `62.79`, never the binary residue.
+      setAmountText(currencyService.formatAmountInput(raw, targetCurrency));
     },
-    [amountInput],
+    [setAmountText, targetCurrency],
   );
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -86,9 +101,29 @@ export function TransactionForm({
       errorToast(t("transactions.zeroAmountMsg"), 3000, "invalid-amount");
       return;
     }
+    const amountIsUnchanged =
+      absAmount === Math.abs(transaction?.amount ?? NaN);
+    if (
+      !amountIsUnchanged &&
+      !currencyService.validateAmount(absAmount, targetCurrency)
+    ) {
+      errorToast(
+        t("transactions.invalidCurrencyAmount"),
+        3000,
+        "invalid-amount",
+      );
+      return;
+    }
 
-    // Apply sign: expense → negative, income → positive
-    const signedAmount = transactionType === "expense" ? -absAmount : absAmount;
+    // Round to the currency's precision so edits never re-persist a raw
+    // floating-point value (typing more decimals than the currency allows
+    // is still rejected by `validateAmount` above).
+    const roundedAmount = currencyService.roundAmount(
+      absAmount,
+      targetCurrency,
+    );
+    const signedAmount =
+      transactionType === "expense" ? -roundedAmount : roundedAmount;
 
     // Map "One-time" or empty value back to `null` so the backend stores
     // an absent recurrence on a non-recurring transaction.
@@ -99,7 +134,8 @@ export function TransactionForm({
 
     onSubmit({
       id: transaction?.id ?? undefined,
-      date: formData.date,
+      date: new Date(`${formData.date}T00:00:00.000Z`),
+      currency: targetCurrency,
       category: formData.category,
       description: formData.description,
       amount: signedAmount,
@@ -110,25 +146,24 @@ export function TransactionForm({
   const isEditing = !!transaction;
 
   useEffect(() => {
-    if (transaction) {
-      const abs = Math.abs(transaction.amount);
-      setFormData({
-        id: transaction.id,
-        date: transaction.date,
-        category: transaction.category,
-        description: transaction.description,
-        amount: abs,
-        currency: transaction.currency,
-        recurrence: transaction.recurrence ?? null,
-      });
-      // Seed the input buffer with a locale-neutral representation so
-      // existing rows open with a sensible value and edits keep the
-      // exact numeric magnitude.
-      seedAmountBuffer(transaction.amount);
-      // Derive the toggle from the original amount sign
-      setTransactionType(transaction.amount >= 0 ? "income" : "expense");
-    }
-  }, [transaction, seedAmountBuffer]);
+    if (!transaction) return;
+
+    const abs = Math.abs(transaction.amount);
+    setFormData({
+      id: transaction.id,
+      date: toDateInputValue(transaction.date),
+      category: transaction.category,
+      description: transaction.description,
+      amount: currencyService.roundAmount(abs, targetCurrency),
+      recurrence: transaction.recurrence ?? null,
+    });
+    // Amounts are persisted without currency conversion, so seed the
+    // editor with the stored magnitude, rounded to two decimals. Only
+    // reset when switching to a different transaction, not when form
+    // state changes.
+    seedAmountBuffer(abs);
+    setTransactionType(transaction.amount >= 0 ? "income" : "expense");
+  }, [transaction, seedAmountBuffer, targetCurrency]);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -140,10 +175,11 @@ export function TransactionForm({
             type="button"
             data-testid="type-expense"
             onClick={() => setTransactionType("expense")}
-            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${transactionType === "expense"
+            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+              transactionType === "expense"
                 ? "bg-red-500 text-white"
                 : "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-              }`}
+            }`}
           >
             {t("transactions.expense")}
           </button>
@@ -151,24 +187,25 @@ export function TransactionForm({
             type="button"
             data-testid="type-income"
             onClick={() => setTransactionType("income")}
-            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${transactionType === "income"
+            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+              transactionType === "income"
                 ? "bg-green-500 text-white"
                 : "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-              }`}
+            }`}
           >
             {t("transactions.income")}
           </button>
         </div>
       </div>
 
-      <div className="space-y-2 grid">
+      <div className="space-y-2">
         <Label htmlFor="category">{t("transactions.category")}</Label>
         <select
           id="category"
           name="category"
           value={formData.category}
           onChange={handleChange}
-          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+          className="block w-full max-w-full box-border rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
           required
         >
           {" "}
@@ -181,6 +218,18 @@ export function TransactionForm({
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="date">{t("transactions.date")}</Label>
+        <Input
+          id="date"
+          name="date"
+          type="date"
+          value={toDateInputValue(formData.date)}
+          onChange={handleChange}
+          required
+        />
       </div>
 
       <div className="space-y-2">
@@ -236,7 +285,7 @@ export function TransactionForm({
             name="recurrence"
             value={formData.recurrence ?? ONE_TIME_LABEL}
             onChange={handleChange}
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+            className="block w-full max-w-full box-border rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
           >
             <option value={ONE_TIME_LABEL}>{t("transactions.oneTime")}</option>
             {INCOME_RECURRENCES.filter((r) => r !== ONE_TIME_LABEL).map((r) => (
@@ -248,7 +297,10 @@ export function TransactionForm({
         </div>
       )}
 
-      <div className="mt-6 flex justify-end gap-2">
+      {/* Pinned to the bottom of the modal's scroll area so Cancel /
+          Update stay reachable even when the form (including the
+          Recurrence field) is taller than a short viewport. */}
+      <div className="sticky bottom-0 z-10 -mx-1 mt-6 flex justify-end gap-2 border-t border-slate-200/80 bg-slate-50/95 px-1 py-3 backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/95">
         <Button type="button" variant="outline" onClick={onCancel}>
           {t("common.cancel")}
         </Button>

@@ -33,14 +33,9 @@ export default function TrendsTab({
   const { t } = useTranslation();
   const userSetting = useSelector((state: RootState) => state.userSettings);
   const { settings } = userSetting;
-  const targetCurrency = (settings?.currency || "USD") as Currency;
+  const targetCurrency = (settings?.currency || "EUR") as Currency;
   const formatCurrency = (value: number) =>
-    currencyService.formatCurrency(
-      value,
-      "USD" as Currency,
-      targetCurrency,
-      false,
-    ).formatted;
+    currencyService.formatCurrency(value, targetCurrency, false).formatted;
 
   return (
     <div className="space-y-6">

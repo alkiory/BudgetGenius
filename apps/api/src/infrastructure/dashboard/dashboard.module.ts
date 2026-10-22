@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { LoggingService } from '@infrastructure/log/logger.service';
-import { UserSettingsModule } from '@infrastructure/user/user-settings.module';
 import { TransactionController } from '@adapters/dashboard/http/transaction.controller';
 import { TransactionService } from '@application/dashboard/services/transaction.service';
 import { BudgetService } from '@application/dashboard/services/budget.service';
@@ -25,8 +24,6 @@ import { ReportExportService } from '@application/dashboard/services/report-expo
 import { ReportRepository } from '@adapters/dashboard/persistence/reports.repository';
 import { OverviewRepository } from '@adapters/dashboard/persistence/overview.repository';
 import { ExpenseCategoryController } from '@adapters/dashboard/http/expense-category.controller';
-import { CurrencyService } from '@infrastructure/currency/currency.service';
-import { CurrencyModule } from '@infrastructure/currency/currency.module';
 
 @Module({
   imports: [
@@ -38,13 +35,6 @@ import { CurrencyModule } from '@infrastructure/currency/currency.module';
       Overview,
       User,
     ]),
-    // BudgetService.inject(UserSettingsService) needs the user-settings
-    // module's exports. Re-providing locally would create a duplicate
-    // UserSettingsService instance across modules — the canonical NestJS
-    // pattern is to import the module that already provides+exports the
-    // service.
-    UserSettingsModule,
-    CurrencyModule,
   ],
   controllers: [
     TransactionController,

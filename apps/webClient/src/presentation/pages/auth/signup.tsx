@@ -105,24 +105,27 @@ export default function SignupPage() {
   }, [name, surname, email, password, role]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    // No own background here: the AuthLayout's fixed AnimatedBackground
+    // renders behind this page across the entire viewport. The card floats
+    // directly on top of it.
+    <div className="relative w-full py-12">
       {!isNative && (
         <Button
           variant="default"
-          className="absolute left-4 top-[max(env(safe-area-inset-top),1rem)] md:left-8 md:top-8 animate-shake"
+          className="fixed left-4 top-[max(env(safe-area-inset-top),1rem)] md:left-8 md:top-8 animate-shake"
           onClick={() => navigate(RoutePaths.Home)}
         >
           {t("auth.goBack")}
         </Button>
       )}
-      <Card className="w-full max-w-md">
+      <Card className="relative mx-auto w-full max-w-2xl border-white/30 bg-white/95 shadow-2xl shadow-indigo-950/30 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center">
             <div className="rounded-full bg-primary/10 p-2">
               <Wallet className="h-6 w-6 text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">
+          <CardTitle className="text-2xl font-bold text-indigo-950 dark:text-indigo-100">
             {t("auth.createAccount")}
           </CardTitle>
           <CardDescription>{t("auth.startTracking")}</CardDescription>

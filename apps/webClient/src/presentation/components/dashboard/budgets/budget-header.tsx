@@ -1,4 +1,5 @@
 import { useLocale } from "@adapters/hooks/useLocale";
+import { periodTranslationKey } from "@domain/dashboard/budgets/budget.entity";
 import { Button } from "@presentation/components/ui/button";
 import { CalendarIcon, Edit2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -35,7 +36,7 @@ export default function BudgetHeader({
             {new Date(endDate).toLocaleDateString(locale)}
           </span>
           <span className="ml-2 rounded-md bg-slate-100 px-2 py-0.5 text-xs dark:bg-slate-700">
-            {period}
+            {t(`periods.${periodTranslationKey(period)}`)}
           </span>
         </div>
       </div>

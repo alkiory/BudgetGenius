@@ -1,40 +1,21 @@
-import { httpCurrencyClient } from "@adapters/http/currency.client";
-
 export type Currency = "USD" | "EUR" | "COP";
-type ExchangeRates = Record<Currency, number>;
+
+/**
+ * The app is Euro-only: every amount is displayed with the € symbol and
+ * two decimals. The stored `user_settings.currency` value is tolerated
+ * for backward compatibility, but it is never used to change the amount
+ * or the symbol shown to the user.
+ */
+export const APP_CURRENCY: Currency = "EUR";
 
 const SUPPORTED_CURRENCIES: ReadonlyArray<Currency> = ["USD", "EUR", "COP"];
 
-/**
- * Coerce an arbitrary string (e.g. backend-returned currency code, or
- * `undefined` from legacy rows) into one of the three supported
- * `Currency` values. Anything that isn't `"USD" | "EUR" | "COP"` falls
- * back to `"USD"` so the formatter never receives garbage — without
- * this guard a stray GBP, typo, or transport corruption would land in
- * `formatCurrency`'s `convertAmount`, multiply by `undefined`, and
- * render `NaN` strings in the UI.
- *
- * Use this anywhere the codebase reads an externally-sourced currency
- * code (api entity mirrors, `user_settings.currency`, query params,
- * form values). Single source of truth for the "is this a real
- * currency" check — keeps unsupported-value handling consistent across
- * every callsite without each consumer re-implementing the same
- * fallback.
- */
 export function toCurrency(value: string | undefined | null): Currency {
   return SUPPORTED_CURRENCIES.includes(value as Currency)
     ? (value as Currency)
-    : "USD";
+    : APP_CURRENCY;
 }
 
-// Exchange rates defaults (Should be fetched from an API)
-const DEFAULT_EXCHANGE_RATES: ExchangeRates = {
-  USD: 1,
-  EUR: 0.93,
-  COP: 4000,
-};
-
-// Currency Symbols
 const CURRENCY_SYMBOLS: Record<Currency, string> = {
   USD: "$",
   EUR: "€",
@@ -53,13 +34,6 @@ export const CURRENCY_LOCALE_MAP: Record<Currency, string> = {
   COP: "es-CO",
 };
 
-interface CurrencyConversionOptions {
-  amount: number;
-  fromCurrency?: Currency;
-  toCurrency: Currency;
-  exchangeRates?: ExchangeRates;
-}
-
 export interface FormattedCurrency {
   amount: number;
   symbol: string;
@@ -69,15 +43,8 @@ export interface FormattedCurrency {
 
 export class CurrencyService {
   private static instance: CurrencyService;
-  private exchangeRates: ExchangeRates;
 
-  private constructor(exchangeRates: ExchangeRates = DEFAULT_EXCHANGE_RATES) {
-    this.exchangeRates = exchangeRates;
-  }
-
-  private getLocaleForCurrency(currency: Currency): string {
-    return CURRENCY_LOCALE_MAP[currency] || "en-US";
-  }
+  private constructor() {}
 
   public static getInstance(): CurrencyService {
     if (!CurrencyService.instance) {
@@ -86,23 +53,8 @@ export class CurrencyService {
     return CurrencyService.instance;
   }
 
-  public async updateExchangeRates(): Promise<void> {
-    try {
-      const response = await fetch("https://open.er-api.com/v6/latest/USD");
-      const data = await response.json();
-      const rates = data.rates;
-      this.exchangeRates = {
-        ...DEFAULT_EXCHANGE_RATES,
-        ...rates,
-      };
-    } catch (error) {
-      console.error("Error updating exchange rates:", error);
-    }
-  }
-
   public validateAmount(amount: number, currency: Currency): boolean {
-    const decimalPlaces = this.getDecimalPrecision(currency);
-    // When decimalPlaces is 0 (e.g., COP), only allow integers
+    const decimalPlaces = CURRENCY_PRECISION_MAP[currency] ?? 2;
     const pattern =
       decimalPlaces === 0
         ? /^-?\d+$/
@@ -110,68 +62,32 @@ export class CurrencyService {
     return pattern.test(amount.toString());
   }
 
-  private getDecimalPrecision(currency: Currency): number {
-    const precisionMap: Record<Currency, number> = {
-      USD: 2,
-      EUR: 2,
-      COP: 0,
-    };
-    return precisionMap[currency] ?? 2;
-  }
-
-  public convertAmount(options: CurrencyConversionOptions): number {
-    const { amount, fromCurrency = "USD", toCurrency } = options;
-    const rates = options.exchangeRates || this.exchangeRates;
-    const fromRate = fromCurrency === "USD" ? 1 : rates[fromCurrency];
-    const toRate = toCurrency === "USD" ? 1 : rates[toCurrency];
-    if (fromRate === undefined || toRate === undefined) {
-      return amount;
-    }
-
-    // Convert to USD first if not the base currency
-    const amountInUSD = fromCurrency === "USD" ? amount : amount / fromRate;
-
-    // Convert to target currency
-    return toCurrency === "USD" ? amountInUSD : amountInUSD * toRate;
-  }
-
-  public normalizeAmount(amount: number, currency: Currency): number {
-    return this.convertAmount({
-      amount,
-      fromCurrency: currency,
-      toCurrency: "USD",
-    });
-  }
-
+  /** Formats an amount with the selected currency symbol without changing its numeric value. */
   public formatCurrency(
     amount: number,
-    fromCurrency: Currency,
-    toCurrency: Currency,
+    displayCurrency: Currency,
     showSign: boolean = true,
   ): FormattedCurrency {
-    const converted = this.convertAmount({
-      amount: Math.abs(amount),
-      fromCurrency,
-      toCurrency,
-    });
-
-    const symbol = CURRENCY_SYMBOLS[toCurrency] || "$";
+    const magnitude = Math.abs(amount);
     const isPositive = amount >= 0;
     const sign = showSign ? (isPositive ? "+" : "-") : "";
-
-    // Obtener el locale para la moneda de destino
-    const locale = this.getLocaleForCurrency(toCurrency);
-
-    const formatted = converted.toLocaleString(locale, {
-      style: "currency",
-      currency: toCurrency,
-      minimumFractionDigits: this.getDecimalPrecision(toCurrency),
-      maximumFractionDigits: this.getDecimalPrecision(toCurrency),
-    });
+    // Every monetary value is rendered with exactly two decimals. The
+    // formatter rounds (it never truncates or re-scales) so a stored
+    // `1260.2818351105634` displays as `€1.260,28` and `-0.8239` as
+    // `-€0,82`. Nothing is converted here.
+    const formatted = `${
+      CURRENCY_SYMBOLS[displayCurrency] || "$"
+    }${magnitude.toLocaleString(
+      CURRENCY_LOCALE_MAP[displayCurrency] || "en-US",
+      {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      },
+    )}`;
 
     return {
-      amount: converted,
-      symbol,
+      amount: magnitude,
+      symbol: CURRENCY_SYMBOLS[displayCurrency] || "$",
       formatted: `${sign}${formatted}`,
       isPositive,
     };
@@ -185,17 +101,45 @@ export class CurrencyService {
     const trimmed = String(value).trim();
     if (trimmed === "") return Number.NaN;
     const normalized = trimmed.replace(/,/g, ".");
-    // Drop everything that is not a digit, sign, or decimal point.
     const cleaned = normalized.replace(/[^.\d-]/g, "");
     const firstDot = cleaned.indexOf(".");
-    let safe = cleaned;
-    if (firstDot !== -1) {
-      safe =
-        cleaned.slice(0, firstDot + 1) +
-        cleaned.slice(firstDot + 1).replace(/\./g, "");
-    }
+    const safe =
+      firstDot === -1
+        ? cleaned
+        : cleaned.slice(0, firstDot + 1) +
+          cleaned.slice(firstDot + 1).replace(/\./g, "");
     const parsed = parseFloat(safe);
     return Number.isFinite(parsed) ? parsed : Number.NaN;
+  }
+
+  /**
+   * Rounds a raw amount to the currency's decimal precision and returns
+   * clean text for a form input. Used when seeding an editor with a value
+   * read back from storage: historical rows may carry floating-point
+   * residue from the removed conversion logic (`62.787499999999994`), so
+   * the input shows `62.79` instead of the full binary expansion.
+   *
+   * Trailing zeros are dropped (`100.00` → `100`) because this is an input
+   * buffer, not a display value; `formatCurrency` still renders exactly two
+   * decimals.
+   */
+  public formatAmountInput(
+    amount: number | null | undefined,
+    currency: Currency,
+  ): string {
+    if (amount === null || amount === undefined || !Number.isFinite(amount)) {
+      return "";
+    }
+    const precision = CURRENCY_PRECISION_MAP[currency] ?? 2;
+    const fixed = Number(amount).toFixed(precision);
+    return precision > 0 ? fixed.replace(/\.?0+$/, "") : fixed;
+  }
+
+  /** Rounds a numeric amount to the currency's decimal precision. */
+  public roundAmount(amount: number, currency: Currency): number {
+    if (!Number.isFinite(amount)) return amount;
+    const precision = CURRENCY_PRECISION_MAP[currency] ?? 2;
+    return Number(amount.toFixed(precision));
   }
 
   public getSymbol(currency: Currency): string {
@@ -203,36 +147,8 @@ export class CurrencyService {
   }
 
   public getAvailableCurrencies(): Currency[] {
-    return Object.keys(CURRENCY_SYMBOLS) as Currency[];
-  }
-
-  public startExchangeRateUpdater(): void {
-    setInterval(
-      () => {
-        this.updateExchangeRates();
-      },
-      60 * 60 * 1000,
-    ); // update every hour
-  }
-
-  public async convertAmountAsync(
-    amount: number,
-    fromCurrency: Currency,
-    toCurrency: Currency,
-  ): Promise<number> {
-    if (fromCurrency === toCurrency) return amount;
-    try {
-      const rate = await httpCurrencyClient.fetchRate(fromCurrency, toCurrency);
-      return amount * rate;
-    } catch (err) {
-      console.warn(
-        `[currencyService] backend unreachable, falling back to bundled rates for ${fromCurrency}->${toCurrency}`,
-        (err as Error)?.message ?? err,
-      );
-      return this.convertAmount({ amount, fromCurrency, toCurrency });
-    }
+    return [...SUPPORTED_CURRENCIES];
   }
 }
 
-// Singleton instance export
 export const currencyService = CurrencyService.getInstance();

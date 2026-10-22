@@ -4,10 +4,11 @@ import { RootState } from "@adapters/store/rootStore";
 import {
   Budget,
   BudgetCategory,
+  BudgetType,
 } from "@domain/dashboard/budgets/budget.entity";
 import Loader from "@presentation/components/loader";
 import { Button } from "@presentation/components/ui/button";
-import { currencyService } from "@presentation/utils/currencyService";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
 import {
   successToast,
   errorToast,
@@ -49,11 +50,9 @@ export function BudgetDetail({
   const [newCategory, setNewCategory] = useState<{
     name: string;
     allocatedText: string;
-    spentText: string;
   }>({
     name: "",
     allocatedText: "0",
-    spentText: "0",
   });
   const [isAddingCategory, setIsAddingCategory] = useState(false);
 
@@ -76,32 +75,31 @@ export function BudgetDetail({
 
   // Funciones de mutación optimizadas con useCallback
   const handleAddCategorySuccess = useCallback(() => {
-    successToast(
-      "Budget category added successfully",
-      3000,
-      "budget-category-add",
-    );
+    successToast(t("budgets.categoryAdded"), 3000, "budget-category-add");
     // Reset to canonical empty defaults after a successful create.
     setNewCategory({
       name: "",
       allocatedText: "0",
-      spentText: "0",
     });
     invalidate();
     refetchBudgets?.();
     refetchCategories();
-  }, [invalidate, refetchBudgets, refetchCategories, activeBudget]);
+  }, [invalidate, refetchBudgets, refetchCategories, t]);
 
   const handleMutationErrorDetailed = useCallback(
-    (error: any, operation: string) => {
+    (error: unknown, operation: string) => {
+      const err = error as {
+        response?: { data?: { message?: string | string[] } };
+        message?: string;
+      };
       const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        `Failed to ${operation} budget category`;
+        err?.response?.data?.message ||
+        err?.message ||
+        t("budgets.categoryError");
       const errorMsg = Array.isArray(message) ? message[0] : message;
       errorToast(errorMsg, 5000, `budget-category-${operation}`);
     },
-    [],
+    [t],
   );
 
   const { mutate: addBudgetCategory } = useMutation({
@@ -119,10 +117,9 @@ export function BudgetDetail({
   const { mutate: updateBudgetCategory } = useMutation({
     mutationKey: ["update-budget-category"],
     mutationFn: HttpBudgetRepository.updateBudgetCategory,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onSuccess: (_data: any) => {
+    onSuccess: () => {
       successToast(
-        "Budget category updated successfully",
+        t("budgets.categoryUpdated"),
         3000,
         "budget-category-update",
       );
@@ -141,7 +138,7 @@ export function BudgetDetail({
     mutationFn: HttpBudgetRepository.deleteBudgetCategory,
     onSuccess: () => {
       successToast(
-        "Budget category deleted successfully",
+        t("budgets.categoryDeleted"),
         3000,
         "budget-category-delete",
       );
@@ -155,6 +152,14 @@ export function BudgetDetail({
     },
   });
 
+  const budgetType: BudgetType = selectedBudget?.type ?? "spending";
+  const isSavings = budgetType === "savings";
+  const targetCurrency = (userSettings?.settings?.currency ||
+    "EUR") as Currency;
+  const amountLabel = isSavings
+    ? t("budgets.goalLabel")
+    : t("budgets.limitLabel");
+
   // Summary and chart data
   const totalAllocated = selectedBudget?.totalAllocated ?? 0;
   const totalSpent = selectedBudget?.totalSpent ?? 0;
@@ -165,41 +170,61 @@ export function BudgetDetail({
   const chartData = useMemo(
     () =>
       categoryBudgets?.map((c) => ({
-        name: c.name,
+        name: t(`categories.${c.name.toLowerCase()}`, {
+          defaultValue: c.name,
+        }),
         allocated: c.allocated,
         spent: c.spent,
         percentUsed: c.allocated > 0 ? (c.spent / c.allocated) * 100 : 0,
       })) || [],
-    [categoryBudgets],
+    [categoryBudgets, t],
   );
 
-  // Handlers optimizados con useCallback
-  const onUpdateSpent = useCallback(
-    (categoryId: number, spent: number) => {
-      const normalizedSpent = spent;
-
-      // Check if new spent exceeds allocated & show friendly warning
+  // Adds a manual amount on top of the existing manual baseline. For
+  // spending budgets this is an expense adjustment; for savings budgets
+  // it is a deposit toward the goal. Transaction spending is never
+  // mutated here — the API layers it on top at read time.
+  const onAddManualAmount = useCallback(
+    (categoryId: number, amount: number) => {
       const category = categoryBudgets?.find((c) => c.id === categoryId);
-      if (category && normalizedSpent > category.allocated) {
-        const overAmount = normalizedSpent - category.allocated;
+      if (!category) return;
+
+      // Legacy API responses have no manualSpent: derive it from the
+      // displayed total minus the transaction-derived portion.
+      const manualBase = Number(
+        category.manualSpent ??
+          Math.max(
+            Number(category.spent ?? 0) -
+              Number(category.transactionSpent ?? 0),
+            0,
+          ),
+      );
+      const newManual = currencyService.roundAmount(
+        manualBase + amount,
+        targetCurrency,
+      );
+      const projectedTotal = currencyService.roundAmount(
+        Number(category.spent ?? 0) + amount,
+        targetCurrency,
+      );
+
+      if (!isSavings && projectedTotal > category.allocated) {
         warningToast(
           t("budgets.overBudgetCategory", {
             category: category.name,
-            amount: overAmount.toFixed(2),
+            amount: (projectedTotal - category.allocated).toFixed(2),
           }),
           5000,
           "budget-over",
         );
-      } else if (
-        category &&
-        normalizedSpent >= 0 &&
-        normalizedSpent <= category.allocated
-      ) {
+      } else if (isSavings && projectedTotal >= category.allocated) {
+        infoToast(t("budgets.goalReached"), 3000, "budget-goal");
+      } else if (!isSavings) {
         infoToast(t("budgets.budgetHealthy"), 3000, "budget-healthy");
       }
-      updateBudgetCategory({ id: categoryId, spent: normalizedSpent });
+      updateBudgetCategory({ id: categoryId, manualSpent: newManual });
     },
-    [updateBudgetCategory, categoryBudgets, t, userSettings],
+    [updateBudgetCategory, categoryBudgets, t, isSavings, targetCurrency],
   );
 
   const handleAddCategoryClick = useCallback(() => {
@@ -223,21 +248,20 @@ export function BudgetDetail({
     const allocatedNum = currencyService.parseAmountInput(
       newCategory.allocatedText,
     );
-    const spentNum = currencyService.parseAmountInput(newCategory.spentText);
     const allocated = Number.isFinite(allocatedNum)
       ? Math.max(0, allocatedNum)
       : 0;
-    const spent = Number.isFinite(spentNum) ? Math.max(0, spentNum) : 0;
 
-    if (allocated === 0 && spent === 0) return;
+    if (allocated === 0) return;
 
     addBudgetCategory({
       name: categoryName,
       budgetId: activeBudget,
       allocated,
-      spent,
+      manualSpent: 0,
+      spent: 0,
     });
-  }, [user, activeBudget, newCategory, addBudgetCategory, userSettings]);
+  }, [user, activeBudget, newCategory, addBudgetCategory]);
 
   const onDeleteCategoryHandler = useCallback(
     (categoryToDelete: BudgetCategory) => {
@@ -284,10 +308,11 @@ export function BudgetDetail({
         totalSpent={selectedBudget?.totalSpent ?? 0}
         remaining={remaining}
         percentSpent={percentSpent}
+        budgetType={budgetType}
       />
 
-      {/* spending by category */}
-      <BudgetSpendingByCategory chartData={chartData} />
+      {/* spending / savings by category */}
+      <BudgetSpendingByCategory chartData={chartData} budgetType={budgetType} />
 
       {/* budget categories */}
       <div className="space-y-4">
@@ -302,7 +327,9 @@ export function BudgetDetail({
             onClick={handleAddCategoryClick}
           >
             <Plus className="h-4 w-4" />
-            {t("budgets.addCategory")}
+            {isSavings
+              ? t("budgets.addSavingsCategory")
+              : t("budgets.addCategory")}
           </Button>
         </div>
 
@@ -310,7 +337,7 @@ export function BudgetDetail({
           <AddBudgetCategory
             name={newCategory.name}
             allocated={newCategory.allocatedText}
-            spent={newCategory.spentText}
+            amountLabel={amountLabel}
             handleNewCategoryChange={handleNewCategoryChange}
             handleAddCategorySubmit={handleAddCategorySubmit}
           />
@@ -320,7 +347,8 @@ export function BudgetDetail({
         {categoryBudgets && categoryBudgets?.length > 0 ? (
           <BudgetCategoryList
             categoryBudgets={categoryBudgets}
-            onUpdateSpent={onUpdateSpent}
+            budgetType={budgetType}
+            onAddManualAmount={onAddManualAmount}
             onDeleteCategoryHandler={onDeleteCategoryHandler}
           />
         ) : (

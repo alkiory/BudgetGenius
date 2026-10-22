@@ -321,6 +321,20 @@ On first startup, the backend automatically creates two test users:
 
 You can log in with either account immediately.
 
+#### 6. Optional: Load Demo Data
+
+To populate the dev database with realistic data for the dashboard, charts, transaction list and budget progress bars:
+
+```bash
+pnpm seed
+```
+
+This creates (or resets) a demo account with the last three months of income/expense transactions plus a spending budget (€2,000 limit) and a savings goal (€1,000). It is safe to re-run: the existing demo data is replaced, not duplicated.
+
+| Role | Email | Password |
+|------|-------|----------|
+| 🧪 **Demo** | `admin@budgetgenius.com` | `password123` |
+
 ---
 
 ## 💻 Web Development Workflow
@@ -442,6 +456,7 @@ echo $DB_HOST $DB_USER $DB_PASSWORD $REDIS_HOST
 | `pnpm --filter api migration:run` | Run pending migrations |
 | `pnpm --filter api migration:create` | Create new DB migration |
 | `pnpm --filter api migration:revert` | Revert last migration |
+| `pnpm seed` | Load demo data (test user, 3 months of transactions, budgets) |
 
 ### Database Migrations
 

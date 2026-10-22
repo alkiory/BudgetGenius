@@ -37,6 +37,22 @@ export class BudgetCategory {
   })
   allocated: number;
 
+  /**
+   * Manually tracked portion of the amount. For spending budgets this is
+   * the baseline added through "Añadir gasto"; for savings budgets it is
+   * the full amount saved. The effective `spent` exposed by the API is
+   * `manualSpent + transaction spending` (the latter is 0 for savings).
+   * Existing rows migrated their legacy `spent` value into this column.
+   */
+  @Column('numeric', {
+    default: 0,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: number | string) => Number(value),
+    },
+  })
+  manualSpent: number;
+
   @Column('numeric', {
     transformer: {
       to: (value: number) => value,
@@ -46,6 +62,13 @@ export class BudgetCategory {
     },
   })
   spent: number;
+
+  /**
+   * Read-only enrichment: expense transactions summed for this category
+   * within the parent budget's date range. Not persisted; computed by
+   * `BudgetService` on every read so it always reflects the ledger.
+   */
+  transactionSpent?: number;
 
   @CreateDateColumn({ type: 'timestamp', name: 'createdAt' })
   createdAt: Date;

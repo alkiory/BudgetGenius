@@ -1,6 +1,9 @@
 import { ExpenseBreakdown } from "@domain/dashboard/dashboard.entity";
 import { COLORS } from "@presentation/utils/color";
-import { timezoneToLocale } from "@presentation/utils/localeInspector";
+import {
+  APP_CURRENCY,
+  currencyService,
+} from "@presentation/utils/currencyService";
 import { useTranslation } from "react-i18next";
 import {
   PieChart,
@@ -23,11 +26,89 @@ export function ExpenseCategories({
   total,
   byCategory,
   largest,
-  timezone,
   period,
 }: Props) {
   const { t } = useTranslation();
-  const formattedLocale = timezoneToLocale(timezone);
+
+  // Labels sit well outside the donut and are joined to their slice by
+  // an elbow connector line. Tiny slices are skipped so their text can
+  // never collide with a neighbouring label; the legend still lists them.
+  const LABEL_OFFSET = 24;
+  const LABEL_ELBOW = 12;
+  const MIN_LABEL_PERCENT = 0.03;
+  const RADIAN = Math.PI / 180;
+
+  const labelGeometry = (props: {
+    cx: number;
+    cy: number;
+    midAngle: number;
+    outerRadius: number;
+  }) => {
+    const { cx, cy, midAngle, outerRadius } = props;
+    const side = Math.cos(-midAngle * RADIAN) >= 0 ? 1 : -1;
+    const start = {
+      x: cx + outerRadius * Math.cos(-midAngle * RADIAN),
+      y: cy + outerRadius * Math.sin(-midAngle * RADIAN),
+    };
+    const elbow = {
+      x: cx + (outerRadius + LABEL_OFFSET) * Math.cos(-midAngle * RADIAN),
+      y: cy + (outerRadius + LABEL_OFFSET) * Math.sin(-midAngle * RADIAN),
+    };
+    return {
+      side,
+      start,
+      elbow,
+      end: { x: elbow.x + side * LABEL_ELBOW, y: elbow.y },
+    };
+  };
+
+  const renderOutsideLabel = (props: {
+    cx: number;
+    cy: number;
+    midAngle: number;
+    outerRadius: number;
+    percent?: number;
+    name?: string;
+  }) => {
+    const { side, end } = labelGeometry(props);
+    const { percent, name } = props;
+    if (!percent || percent < MIN_LABEL_PERCENT) return null;
+    const label = String(name ?? "");
+    const shortened = label.length > 12 ? `${label.slice(0, 11)}…` : label;
+    return (
+      <text
+        x={end.x + side * 4}
+        y={end.y}
+        fill="currentColor"
+        fontSize="0.7rem"
+        textAnchor={side > 0 ? "start" : "end"}
+        dominantBaseline="central"
+      >
+        {`${shortened} ${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
+
+  const renderLabelLine = (props: {
+    cx: number;
+    cy: number;
+    midAngle: number;
+    outerRadius: number;
+    percent?: number;
+  }) => {
+    const { percent } = props;
+    if (!percent || percent < MIN_LABEL_PERCENT) return <g />;
+    const { start, elbow, end } = labelGeometry(props);
+    return (
+      <polyline
+        points={`${start.x},${start.y} ${elbow.x},${elbow.y} ${end.x},${end.y}`}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1}
+        className="text-slate-400 dark:text-slate-500"
+      />
+    );
+  };
 
   return (
     <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
@@ -40,21 +121,19 @@ export function ExpenseCategories({
         </span>
       </div>
       {byCategory.length > 0 ? (
-        <div className="h-64">
+        <div className="h-64 text-slate-700 dark:text-slate-200">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={byCategory}
                 cx="50%"
                 cy="50%"
-                innerRadius={60}
-                outerRadius={80}
+                innerRadius={46}
+                outerRadius={64}
                 paddingAngle={2}
                 dataKey="value"
-                label={({ name, percent }) =>
-                  `${name} ${(percent * 100).toFixed(0)}%`
-                }
-                labelLine={false}
+                label={renderOutsideLabel}
+                labelLine={renderLabelLine}
               >
                 {byCategory?.map((entry, i) => (
                   <Cell
@@ -66,10 +145,9 @@ export function ExpenseCategories({
               </Pie>
               <Tooltip
                 formatter={(v) => [
-                  `${v.toLocaleString(formattedLocale, {
-                    timeZone: timezone,
-                  })}`,
-                  "Amount",
+                  currencyService.formatCurrency(Number(v), APP_CURRENCY, false)
+                    .formatted,
+                  t("transactions.amount"),
                 ]}
               />
               <Legend />

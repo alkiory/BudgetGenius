@@ -44,7 +44,7 @@ export class UserSeederService {
       // Set default settings for the admin user
       await this.userSettings.updateSettings(adminUserDto.id, {
         timezone: 'UTC',
-        currency: 'USD',
+        currency: 'EUR',
         locale: 'en-US',
       });
 
@@ -72,7 +72,7 @@ export class UserSeederService {
       // Set default settings for the normal user
       await this.userSettings.updateSettings(normalUserDto.id, {
         timezone: 'America/Bogota',
-        currency: 'COP',
+        currency: 'EUR',
         locale: 'es-CO',
       });
 

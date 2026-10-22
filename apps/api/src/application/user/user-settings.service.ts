@@ -18,7 +18,8 @@ export class UserSettingsService {
       settings = this.repo.create({
         user: { id: userId },
         timezone: 'UTC',
-        currency: 'USD',
+        // Euro-only app: new settings rows default to EUR.
+        currency: 'EUR',
         locale: 'en-US',
         // Android APK audit, 2026-06: new rows start in the
         // pre-onboarding state. The migration's `DEFAULT FALSE`

@@ -2,6 +2,7 @@
 import { RootState } from "@adapters/store/rootStore";
 import Loader from "@presentation/components/loader";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
+import { translateCategory } from "@presentation/utils/display-translations";
 import { TrendingUp, ArrowDownUp, PieChartIcon, BarChart3 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
@@ -20,6 +21,21 @@ import {
 } from "recharts";
 import { ChartContainer } from "./inner-componets";
 import SummaryCard from "./summary-card";
+
+const CATEGORY_PALETTE = [
+  "#8b5cf6",
+  "#10b981",
+  "#f59e0b",
+  "#3b82f6",
+  "#ef4444",
+  "#06b6d4",
+  "#ec4899",
+  "#84cc16",
+  "#f97316",
+  "#6366f1",
+  "#14b8a6",
+  "#d946ef",
+];
 
 interface OverviewTabProps {
   isLoadingOverview: boolean;
@@ -55,14 +71,9 @@ export default function OverviewTab({
   const { t } = useTranslation();
   const userSetting = useSelector((state: RootState) => state.userSettings);
   const { settings } = userSetting;
-  const targetCurrency = (settings?.currency || "USD") as Currency;
+  const targetCurrency = (settings?.currency || "EUR") as Currency;
   const formatCurrency = (value: number) =>
-    currencyService.formatCurrency(
-      value,
-      "USD" as Currency,
-      targetCurrency,
-      false,
-    ).formatted;
+    currencyService.formatCurrency(value, targetCurrency, false).formatted;
 
   return (
     <div className="space-y-6">
@@ -138,11 +149,10 @@ export default function OverviewTab({
                 dataKey="amount"
                 nameKey="category"
                 cx="50%"
-                cy="50%"
+                cy="45%"
                 outerRadius={80}
-                label={({ category, percent }) =>
-                  `${category} ${(percent * 100).toFixed(0)}%`
-                }
+                label={false}
+                labelLine={false}
               >
                 {categories?.map(
                   (
@@ -151,13 +161,18 @@ export default function OverviewTab({
                   ) => (
                     <Cell
                       key={`cell-${index}`}
-                      fill={entry.color || "#8b5cf6"}
+                      fill={
+                        entry.color ||
+                        CATEGORY_PALETTE[index % CATEGORY_PALETTE.length]
+                      }
                     />
                   ),
                 )}
               </Pie>
               <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-              <Legend />
+              <Legend
+                formatter={(value) => translateCategory(String(value), t)}
+              />
             </PieChart>
           </ResponsiveContainer>
         </ChartContainer>

@@ -42,6 +42,8 @@ export default defineConfig({
     include: [
       "src/**/__tests__/**/*.spec.ts",
       "src/**/__tests__/**/*.test.ts",
+      "src/**/*.spec.ts",
+      "src/**/*.test.ts",
     ],
     // Explicit imports of describe/it/expect/vi at the call sites —
     // no implicit globals — so the test surface is grep-able.

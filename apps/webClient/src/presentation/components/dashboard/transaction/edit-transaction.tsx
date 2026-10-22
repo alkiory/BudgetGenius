@@ -73,6 +73,7 @@ export function EditTransaction({
         variant={variant}
         size="icon"
         className="h-8 w-8 p-0"
+        data-testid="edit-transaction"
       >
         {children || <Pencil className="h-4 w-4" />}
       </Button>

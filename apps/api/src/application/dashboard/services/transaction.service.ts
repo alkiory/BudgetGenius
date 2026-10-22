@@ -5,6 +5,15 @@ import { UpdateTransactionDto } from '../dto/update-transaction.dto';
 import { User } from '@domain/user/user.entity';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 
+/**
+ * Money is stored with two decimals. Historical rows written by the
+ * removed currency-conversion flow can carry float residue
+ * (`62.787499999999994`), so every write is normalized here rather than
+ * trusting the client to round before sending.
+ */
+const roundToCents = (value: number): number =>
+  Number(Number(value).toFixed(2));
+
 @Injectable()
 export class TransactionService {
   constructor(
@@ -24,6 +33,7 @@ export class TransactionService {
     // (it can be `null`, but not `undefined`).
     const transaction = {
       ...dto,
+      amount: roundToCents(dto.amount),
       recurrence: dto.recurrence ?? null,
       user: { id: user.id } as User,
       createdAt: new Date(),
@@ -78,6 +88,9 @@ export class TransactionService {
     // called with a foreign id, the SQL will refuse it.
     const transaction = {
       ...dto,
+      ...(typeof dto.amount === 'number'
+        ? { amount: roundToCents(dto.amount) }
+        : {}),
       user: { id: userId } as User,
       updatedAt: new Date(),
     };

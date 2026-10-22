@@ -1,25 +1,24 @@
 /**
  * @module onboardingPage
  *
- * Android APK audit, 2026-06: first-login wizard for the three
- * preferences that drive the rest of the app's time / money /
- * language handling.
+ * Android APK audit, 2026-06: first-login wizard for the two
+ * preferences that drive the rest of the app's time / language
+ * handling. Currency is fixed to EUR app-wide and is no longer
+ * asked for here or in the profile settings.
  *
  * Flow:
  *   - Fresh user or returning user with `hasCompletedOnboarding ===
  *     false` lands here after signup / login.
- *   - All three cards pre-fill from device detection
+ *   - Both cards pre-fill from device detection
  *     (`@presentation/utils/deviceCapabilities`), but the user
- *     can override each one. **Currency** stays selection-only
- *     (no preselection) when the device language doesn't match a
- *     known mapping — see `detectBrowserCurrency()`.
+ *     can override each one.
  *   - The form is not skippable (no Skip button). Submit only
- *     enables when all three fields are non-empty.
- *   - On submit we PATCH `/user-settings` with the three values
- *     and `hasCompletedOnboarding: true`, then `<Navigate>` to
- *     `/app/dashboard`. The Dashboard page hydrates Redux from
- *     `useGetSettings()` on mount, so the chosen currency /
- *     language / timezone pick up instantly.
+ *     enables when both fields are non-empty.
+ *   - On submit we PATCH `/user-settings` with the two values
+ *     (plus the fixed EUR currency) and `hasCompletedOnboarding:
+ *     true`, then `<Navigate>` to `/app/dashboard`. The Dashboard
+ *     page hydrates Redux from `useGetSettings()` on mount, so the
+ *     chosen language / timezone pick up instantly.
  *
  * No `useState`-based "settled" race: the page reads directly
  * from React Query so `useGetSettings().data` updates the moment
@@ -34,12 +33,10 @@ import { RootState } from "@adapters/store/rootStore";
 import { updateUserSettings } from "@application/user/user.service";
 import { Button } from "@presentation/components/ui/button";
 import { PageHeader } from "@presentation/components/ui/page-header";
-import { Currency } from "@presentation/utils/currencyService";
+import { APP_CURRENCY } from "@presentation/utils/currencyService";
 import {
   COMMON_TIMEZONES,
-  SUPPORTED_CURRENCIES,
   SUPPORTED_LOCALE_TAGS,
-  detectBrowserCurrency,
   detectBrowserLanguage,
   detectTimezone,
   prefersReducedMotion,
@@ -47,17 +44,11 @@ import {
 import { APP_PATHS } from "@presentation/utils/routes";
 import { errorToast, successToast } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Clock, Coins, Globe } from "lucide-react";
+import { Check, Clock, Globe } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 import { Navigate } from "react-router";
-
-const CURRENCY_LABELS: Record<Currency, string> = {
-  USD: "US Dollar (USD)",
-  EUR: "Euro (EUR)",
-  COP: "Colombian Peso (COP)",
-};
 
 const LOCALE_LABELS: Record<(typeof SUPPORTED_LOCALE_TAGS)[number], string> = {
   "en-US": "English",
@@ -96,8 +87,6 @@ export default function OnboardingPage() {
     () => ({
       timezone: detectTimezone(),
       language: detectBrowserLanguage(),
-      // `null` here means "force the user to pick" — see util docs.
-      currency: detectBrowserCurrency(),
     }),
     [],
   );
@@ -105,7 +94,6 @@ export default function OnboardingPage() {
   // Form state initialised from server > detected > hard fallback.
   // `|| ""` is safe here because <select>s need a string to match.
   const [timezone, setTimezone] = useState("");
-  const [currency, setCurrency] = useState("");
   const [locale, setLocale] = useState("");
   const [feInitialised, setFeInitialised] = useState(false);
 
@@ -115,13 +103,6 @@ export default function OnboardingPage() {
       settings?.timezone && COMMON_TIMEZONES.includes(settings.timezone)
         ? settings.timezone
         : detected.timezone,
-    );
-    // For currency: server value wins if it matches a supported
-    // code; otherwise detected (or empty to force selection).
-    setCurrency(
-      settings?.currency && SUPPORTED_CURRENCIES.includes(settings.currency)
-        ? settings.currency
-        : detected.currency ?? "",
     );
     setLocale(
       settings?.locale && SUPPORTED_LOCALE_TAGS.includes(settings.locale)
@@ -170,7 +151,6 @@ export default function OnboardingPage() {
   // pre-onboarding state. See knowledge.md §6.8.3.
   const canSubmit =
     Boolean(timezone) &&
-    Boolean(currency) &&
     Boolean(locale) &&
     settings?.hasCompletedOnboarding === false &&
     !isSaving;
@@ -180,7 +160,8 @@ export default function OnboardingPage() {
     if (!canSubmit) return;
     saveOnboarding({
       timezone,
-      currency: currency as Currency,
+      // Currency selection is gone; the app is Euro-only.
+      currency: APP_CURRENCY,
       locale,
       hasCompletedOnboarding: true,
     });
@@ -218,10 +199,11 @@ export default function OnboardingPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
       <div
-        className={`transition-all duration-500 ease-out ${headingAnimated
+        className={`transition-all duration-500 ease-out ${
+          headingAnimated
             ? "translate-y-0 opacity-100"
             : "translate-y-3 opacity-0"
-          }`}
+        }`}
       >
         <PageHeader
           title={t("onboarding.title")}
@@ -265,46 +247,6 @@ export default function OnboardingPage() {
           </select>
         </section>
 
-        {/* Currency card */}
-        <section
-          className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-colors dark:border-slate-800 dark:bg-slate-900"
-          aria-labelledby="onb-currency"
-        >
-          <div className="flex items-center gap-3">
-            <span className="rounded-md bg-purple-50 p-2 text-purple-600 dark:bg-slate-800 dark:text-purple-300">
-              <Coins className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <h2
-              id="onb-currency"
-              className="text-base font-semibold text-slate-900 dark:text-slate-100"
-            >
-              {t("onboarding.currency")}
-            </h2>
-          </div>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-            {detected.currency
-              ? t("onboarding.currencyHelpDetected", {
-                currency: detected.currency,
-              })
-              : t("onboarding.currencyHelpUndetected")}
-          </p>
-          <select
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-            required
-            className="mt-3 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-          >
-            <option value="" disabled>
-              {t("onboarding.currencyPlaceholder")}
-            </option>
-            {SUPPORTED_CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {CURRENCY_LABELS[c]}
-              </option>
-            ))}
-          </select>
-        </section>
-
         {/* Language card */}
         <section
           className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-colors dark:border-slate-800 dark:bg-slate-900"
@@ -333,10 +275,11 @@ export default function OnboardingPage() {
                   type="button"
                   onClick={() => setLocale(l)}
                   aria-pressed={active}
-                  className={`flex items-center justify-between rounded-md border px-4 py-3 text-left transition-colors ${active
+                  className={`flex items-center justify-between rounded-md border px-4 py-3 text-left transition-colors ${
+                    active
                       ? "border-purple-500 bg-purple-50 text-purple-700 dark:border-purple-400 dark:bg-purple-900/30 dark:text-purple-200"
                       : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                    }`}
+                  }`}
                 >
                   <span className="text-sm font-medium">
                     {LOCALE_LABELS[l]}

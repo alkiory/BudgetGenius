@@ -3,6 +3,9 @@
     "name": "Budget Genius",
     "tagline": "Gestión inteligente de finanzas personales"
   },
+  "splash": {
+    "loading": "Cargando..."
+  },
   "onboarding": {
     "title": "Configura tus preferencias",
     "subtitle": "¡Hola, {{name}}! Algunas preferencias rápidas para que los informes, la moneda y Finny respondan bien desde el primer día.",
@@ -20,6 +23,7 @@
   },
   "common": {
     "loading": "Cargando...",
+    "add": "Añadir",
     "save": "Guardar",
     "cancel": "Cancelar",
     "delete": "Eliminar",
@@ -170,6 +174,8 @@
     "expense": "Gasto",
     "selectCategory": "Selecciona una categoría",
     "currency": "Moneda",
+    "recurrence": "Recurrencia",
+    "oneTime": "Una vez",
     "idRequired": "El ID de la transacción es requerido",
     "zeroAmountMsg": "El monto no puede ser 0",
     "invalidCurrencyAmount": "Monto inválido para la moneda seleccionada",
@@ -186,12 +192,13 @@
   },
   "budgets": {
     "title": "Presupuestos",
-    "description": "Crea y gestiona tus presupuestos para controlar tus gastos.",
+    "description": "Planifica tus gastos y tus metas de ahorro en un solo lugar.",
     "createBudget": "Crear Presupuesto",
     "editBudget": "Editar Presupuesto",
     "createSuccess": "Presupuesto creado exitosamente",
     "updateSuccess": "Presupuesto actualizado exitosamente",
     "deleteSuccess": "Presupuesto eliminado exitosamente",
+    "deleteError": "No se pudo eliminar el presupuesto",
     "deleteConfirm": "¿Estás seguro de que quieres eliminar este presupuesto?",
     "name": "Nombre",
     "period": "Período",
@@ -234,7 +241,37 @@
     "updateSpentLabel": "Actualizar Monto Gastado",
     "addExpense": "Añadir gasto",
     "addExpenseCurrent": "Actual: {{current}}",
-    "spentLabelAria": "Monto gastado en {{category}}"
+    "spentLabelAria": "Monto gastado en {{category}}",
+    "budgetType": "Tipo de presupuesto",
+    "typeSpending": "Gasto",
+    "typeSavings": "Ahorro",
+    "spendingTypeHint": "Define un límite de gasto. Lo gastado se calcula con tus transacciones de la categoría.",
+    "savingsTypeHint": "Define un objetivo de ahorro y ve depositando dinero hasta alcanzarlo.",
+    "goalLabel": "Objetivo",
+    "totalGoal": "Objetivo Total",
+    "addSavingsCategory": "Añadir objetivo",
+    "addSpendingCategory": "Añadir categoría",
+    "categoryField": "Categoría",
+    "categoryHelp": "Elige la categoría y define su límite u objetivo.",
+    "spendingTotalHint": "El gasto real se suma automáticamente desde tus transacciones.",
+    "savingsTotalHint": "Suma de todos los objetivos de ahorro de este presupuesto.",
+    "removeCategory": "Quitar categoría",
+    "savedLabel": "Ahorrado",
+    "savedOfGoal": "{{saved}} de {{goal}}",
+    "goalRemaining": "Faltan {{amount}}",
+    "goalReached": "¡Objetivo alcanzado!",
+    "hasSaved": "Has ahorrado {{amount}}",
+    "addSaving": "Añadir ahorro",
+    "addSavingCurrent": "Ahorrado actual: {{current}}",
+    "addSavingAria": "Añadir ahorro en {{category}}",
+    "savingsByCategory": "Ahorro por categoría",
+    "spendingByCategory": "Gasto por categoría",
+    "categoriesOverBudget": "{{count}} categorías por encima del presupuesto",
+    "chartOverBy": "⚠ Por encima del presupuesto por {{amount}}",
+    "categoryAdded": "Categoría añadida exitosamente",
+    "categoryUpdated": "Categoría actualizada exitosamente",
+    "categoryDeleted": "Categoría eliminada exitosamente",
+    "categoryError": "No se pudo actualizar la categoría"
   },
   "reports": {
     "title": "Informes Financieros",
@@ -327,7 +364,8 @@
     "freelance": "Freelance",
     "investments": "Inversiones",
     "rental": "Alquiler",
-    "business": "Negocio"
+    "business": "Negocio",
+    "refunds": "Reembolsos"
   },
   "incomeCategories": {
     "all": "Todas",
@@ -348,6 +386,15 @@
     "monthly": "Mensual",
     "quarterly": "Trimestral",
     "yearly": "Anual"
+  },
+  "recurrence": {
+    "One-time": "Una vez",
+    "Daily": "Diario",
+    "Weekly": "Semanal",
+    "Bi-weekly": "Quincenal",
+    "Monthly": "Mensual",
+    "Quarterly": "Trimestral",
+    "Annually": "Anual"
   },
   "routes": {
     "app": {

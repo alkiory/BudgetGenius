@@ -1,4 +1,5 @@
 import { RootState } from "@adapters/store/rootStore";
+import { useChangelogUnseen } from "@presentation/hooks/useChangelogUnseen";
 import { RoutePaths } from "@presentation/utils/routes";
 import { Menu, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -9,6 +10,10 @@ import { LanguageSwitcher } from "../dashboard/language-switcher";
 import { Logo } from "../logo";
 import { ThemeToggle } from "../themeToogle";
 import { Button } from "./button";
+import {
+  ChangelogUnseenDot,
+  ChangelogUnseenDotMark,
+} from "./changelog-unseen-dot";
 
 /**
  * Top navigation bar.
@@ -39,6 +44,9 @@ export default function HeaderComponent() {
   const navigate = useNavigate();
   const headerRef = useRef<HTMLElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Kept in sync by the changelog page (same tab) and other tabs.
+  const hasUnseenChangelog = useChangelogUnseen();
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -124,7 +132,7 @@ export default function HeaderComponent() {
           {/* Hamburger (only < md) */}
           <button
             type="button"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-700 hover:bg-slate-200/60 dark:text-slate-200 dark:hover:bg-slate-700/60 md:hidden"
+            className="relative inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-700 hover:bg-slate-200/60 dark:text-slate-200 dark:hover:bg-slate-700/60 md:hidden"
             aria-label={
               menuOpen
                 ? t("landing.hamburger.close")
@@ -147,6 +155,13 @@ export default function HeaderComponent() {
             ) : (
               <Menu className="h-5 w-5" aria-hidden="true" />
             )}
+            {/* The changelog link only exists inside the drawer on mobile,
+                so surface the unseen state on the trigger itself. */}
+            {hasUnseenChangelog && (
+              <span className="pointer-events-none absolute right-1 top-1">
+                <ChangelogUnseenDotMark />
+              </span>
+            )}
           </button>
 
           {/* Desktop nav (hidden < md) */}
@@ -158,6 +173,7 @@ export default function HeaderComponent() {
               className="text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white"
             >
               {t("landing.changelog.footerLink")}
+              {hasUnseenChangelog && <ChangelogUnseenDot />}
             </Link>
             {user ? (
               <div className="relative ml-3">
@@ -211,6 +227,7 @@ export default function HeaderComponent() {
               className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200/60 dark:text-slate-200 dark:hover:bg-slate-700/60"
             >
               {t("landing.changelog.footerLink")}
+              {hasUnseenChangelog && <ChangelogUnseenDot />}
             </Link>
 
             {user ? (

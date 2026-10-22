@@ -146,5 +146,6 @@ echo "- Start the development workspace: pnpm dev"
 echo "- To run only the API: cd apps/api && pnpm run start:dev"
 echo "- To run only the frontend dev server: cd apps/webClient && pnpm run dev"
 echo "- If you used Docker and need to run migrations: cd apps/api && pnpm run migration:run"
+echo "- To load demo data for testing: pnpm seed (admin@budgetgenius.com / password123)"
 echo
 echo "If anything failed, check the output above and re-run this script."

@@ -39,6 +39,7 @@ export default function Table({ data }: { data: Transaction[] }) {
   const userSetting = useSelector((state: RootState) => state.userSettings);
 
   const { settings } = userSetting;
+  const locale = settings?.locale || "en-US";
 
   const { mutate: deleteAllTransactions } = useMutation({
     mutationKey: ["delete-all-transactions"],
@@ -111,7 +112,18 @@ export default function Table({ data }: { data: Transaction[] }) {
     }),
     columnHelper.accessor("date", {
       header: () => t("transactions.date"),
-      cell: (info) => info.getValue(),
+      cell: (info) => {
+        const value = info.getValue();
+        const date =
+          typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+            ? new Date(`${value}T00:00:00`)
+            : new Date(value);
+        return date.toLocaleDateString(locale, {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        });
+      },
     }),
     columnHelper.accessor("description", {
       header: () => t("transactions.description"),
@@ -125,10 +137,9 @@ export default function Table({ data }: { data: Transaction[] }) {
       header: () => t("transactions.amount"),
       cell: (info) => {
         const transaction = info.row.original;
-        const targetCurrency = (settings?.currency || "USD") as Currency;
+        const targetCurrency = (settings?.currency || "EUR") as Currency;
         const formatted = currencyService.formatCurrency(
           transaction.amount,
-          transaction.currency as Currency,
           targetCurrency,
         );
 

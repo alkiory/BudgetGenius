@@ -20,13 +20,14 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "typeorm": "ts-node -P tsconfig.json -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
-    "migration:generate": "pnpm typeorm migration:generate -d src/data-source.ts src/migrations/InitialMigration",
-    "migration:run": "ts-node -P tsconfig.json -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d src/data-source.ts",
+    "migration:generate": "NODE_ENV=${NODE_ENV:-development} pnpm typeorm migration:generate -d src/data-source.ts src/migrations/InitialMigration",
+    "migration:run": "NODE_ENV=${NODE_ENV:-development} ts-node -P tsconfig.json -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d src/data-source.ts",
     "premigration:run": "ts-node -P tsconfig.json src/setup-db.ts",
-    "migration:show": "pnpm exec typeorm-ts-node-commonjs migration:show -d src/data-source.ts",
+    "migration:show": "NODE_ENV=${NODE_ENV:-development} pnpm typeorm migration:show -d src/data-source.ts",
     "migration:create": "pnpm exec typeorm-ts-node-commonjs migration:create",
-    "migration:revert": "pnpm typeorm migration:revert -d src/data-source.ts",
-    "migration:run:prod": "ts-node -P tsconfig.json -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d dist/src/data-source.js"
+    "migration:revert": "NODE_ENV=${NODE_ENV:-development} pnpm typeorm migration:revert -d src/data-source.ts",
+    "migration:run:prod": "ts-node -P tsconfig.json -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d dist/src/data-source.js",
+    "seed": "NODE_ENV=${NODE_ENV:-development} ts-node -P tsconfig.json -r tsconfig-paths/register src/seed.ts"
   },
   "dependencies": {
     "@nest-lab/throttler-storage-redis": "1.1.0",

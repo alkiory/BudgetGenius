@@ -12,7 +12,10 @@ import { ExpenseCategories } from "@presentation/components/dashboard/expense-ca
 import { OverviewCard } from "@presentation/components/dashboard/overview/overview-card";
 import { RecentTransactions } from "@presentation/components/dashboard/recent-transactions";
 import { PageHeader } from "@presentation/components/ui/page-header";
-import { Currency, currencyService } from "@presentation/utils/currencyService";
+import {
+  APP_CURRENCY,
+  currencyService,
+} from "@presentation/utils/currencyService";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
@@ -29,7 +32,9 @@ export default function DashboardPage() {
   const { data: breackdown, isLoading: isloadingExpenseCat } =
     useFetchExpenseCategories();
 
-  const targetCurrency = (userSettings?.currency || "USD") as Currency;
+  // Euro-only app: the dashboard never reads `userSettings.currency` for
+  // display, so legacy rows can't render a different symbol.
+  const targetCurrency = APP_CURRENCY;
 
   // Shared dashboard-wide locale. Reads `state.userSettings.settings.locale`
   // (BCP-47 tag) via the same `useLocale()` hook used by the four
@@ -40,20 +45,17 @@ export default function DashboardPage() {
 
   const formattedBalance = currencyService.formatCurrency(
     overview?.balance ?? 0,
-    "USD" as Currency,
     targetCurrency,
   );
 
   const formattedExpences = currencyService.formatCurrency(
     overview?.expenses ?? 0,
-    "USD" as Currency,
     targetCurrency,
     false,
   );
 
   const formattedIncome = currencyService.formatCurrency(
     overview?.income ?? 0,
-    "USD" as Currency,
     targetCurrency,
     false,
   );
@@ -77,7 +79,6 @@ export default function DashboardPage() {
   const formattedBreackdown = {
     total: currencyService.formatCurrency(
       breackdown?.total ?? 0,
-      "USD" as Currency,
       targetCurrency,
       false,
     ),
