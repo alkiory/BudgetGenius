@@ -19,6 +19,8 @@ import {
   BudgetCategory,
 } from '@domain/dashboard/budget-category.entity';
 import { User } from '@domain/user/user.entity';
+import { UserSettingsService } from '@application/user/user-settings.service';
+import { SupportedCurrency } from '@domain/user/user-settings.entity';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { QueryFailedError } from 'typeorm';
 
@@ -36,14 +38,28 @@ export class BudgetService {
     private readonly repo: BudgetRepository,
     private readonly categoryRepo: BudgetRepository,
     private readonly userRepo: UserRepositoryImpl,
+    private readonly userSettingsService: UserSettingsService,
     private readonly logger: LoggingService,
   ) {}
+
+  /**
+   * Currency stamped on budget categories that arrive without an
+   * explicit `currency`: the user's saved profile currency, falling
+   * back to EUR when the profile has none (see
+   * `UserSettingsService.getCurrencyForUser`). Never changes the
+   * numeric values — the app stores one currency per category and
+   * never converts.
+   */
+  private async resolveCurrency(userId: number): Promise<SupportedCurrency> {
+    return this.userSettingsService.getCurrencyForUser(userId);
+  }
 
   async createBudget(userId: number, dto: CreateBudgetDto): Promise<Budget> {
     const user = await this.userRepo.findById(userId);
 
     const totalSpent = dto.totalSpent ?? 0;
     const budgetType = dto.type ?? 'spending';
+    const userCurrency = await this.resolveCurrency(userId);
 
     if (user.budgets.find((b) => b.name === dto.name)) {
       throw new BadRequestException(`Budget ${dto.name} already exists`);
@@ -57,12 +73,15 @@ export class BudgetService {
 
     const categories = dto.categories?.map((category) => {
       // A brand-new category starts from its manual baseline (normally 0);
-      // transaction spending is added dynamically on read.
+      // transaction spending is added dynamically on read. Omitted
+      // `currency` falls back to the user's saved profile currency
+      // (EUR when none) instead of the column's legacy USD default.
       const manualSpent = roundMoney(
         category.manualSpent ?? category.spent ?? 0,
       );
       return {
         ...category,
+        currency: category.currency ?? userCurrency,
         manualSpent,
         spent: manualSpent,
       };
@@ -121,6 +140,8 @@ export class BudgetService {
     const manualSpent = roundMoney(dto.manualSpent ?? dto.spent ?? 0);
     const newCategory = {
       ...dto,
+      // Saved profile currency (EUR fallback) when the client omits one.
+      currency: dto.currency ?? (await this.resolveCurrency(userId)),
       manualSpent,
       spent: manualSpent,
       budget: { id: budgetId } as Budget,

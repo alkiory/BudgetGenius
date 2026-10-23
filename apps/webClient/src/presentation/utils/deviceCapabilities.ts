@@ -35,7 +35,7 @@ export type SupportedLocaleTag = (typeof SUPPORTED_LOCALE_TAGS)[number];
  * `bg_public.currency_enum` and the `Currency` type in
  * `@presentation/utils/currencyService`.
  */
-export const SUPPORTED_CURRENCIES = ["USD", "EUR", "COP"] as const;
+export const SUPPORTED_CURRENCIES = ["EUR", "USD", "COP"] as const;
 export type SupportedCurrencyCode = (typeof SUPPORTED_CURRENCIES)[number];
 
 const FALLBACK_TIMEZONE = "UTC";

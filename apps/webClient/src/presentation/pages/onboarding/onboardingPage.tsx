@@ -1,24 +1,23 @@
 /**
  * @module onboardingPage
  *
- * Android APK audit, 2026-06: first-login wizard for the two
- * preferences that drive the rest of the app's time / language
- * handling. Currency is fixed to EUR app-wide and is no longer
- * asked for here or in the profile settings.
+ * Android APK audit, 2026-06: first-login wizard for the three
+ * preferences that drive the rest of the app's time / language /
+ * money formatting.
  *
  * Flow:
  *   - Fresh user or returning user with `hasCompletedOnboarding ===
  *     false` lands here after signup / login.
- *   - Both cards pre-fill from device detection
- *     (`@presentation/utils/deviceCapabilities`), but the user
- *     can override each one.
+ *   - Timezone and language pre-fill from device detection
+ *     (`@presentation/utils/deviceCapabilities`); currency defaults
+ *     to EUR and can be changed to USD or COP.
  *   - The form is not skippable (no Skip button). Submit only
- *     enables when both fields are non-empty.
- *   - On submit we PATCH `/user-settings` with the two values
- *     (plus the fixed EUR currency) and `hasCompletedOnboarding:
- *     true`, then `<Navigate>` to `/app/dashboard`. The Dashboard
- *     page hydrates Redux from `useGetSettings()` on mount, so the
- *     chosen language / timezone pick up instantly.
+ *     enables when all three fields are non-empty.
+ *   - On submit we PATCH `/user-settings` with the three values and
+ *     `hasCompletedOnboarding: true`, then `<Navigate>` to
+ *     `/app/dashboard`. The Dashboard page hydrates Redux from
+ *     `useGetSettings()` on mount, so the chosen currency / language
+ *     / timezone pick up instantly.
  *
  * No `useState`-based "settled" race: the page reads directly
  * from React Query so `useGetSettings().data` updates the moment
@@ -33,9 +32,10 @@ import { RootState } from "@adapters/store/rootStore";
 import { updateUserSettings } from "@application/user/user.service";
 import { Button } from "@presentation/components/ui/button";
 import { PageHeader } from "@presentation/components/ui/page-header";
-import { APP_CURRENCY } from "@presentation/utils/currencyService";
+import { APP_CURRENCY, toCurrency } from "@presentation/utils/currencyService";
 import {
   COMMON_TIMEZONES,
+  SUPPORTED_CURRENCIES,
   SUPPORTED_LOCALE_TAGS,
   detectBrowserLanguage,
   detectTimezone,
@@ -44,7 +44,7 @@ import {
 import { APP_PATHS } from "@presentation/utils/routes";
 import { errorToast, successToast } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Clock, Globe } from "lucide-react";
+import { Check, Clock, Coins, Globe } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
@@ -95,6 +95,8 @@ export default function OnboardingPage() {
   // `|| ""` is safe here because <select>s need a string to match.
   const [timezone, setTimezone] = useState("");
   const [locale, setLocale] = useState("");
+  // Euro is the app-wide default; the user can pick USD or COP here.
+  const [currency, setCurrency] = useState(APP_CURRENCY);
   const [feInitialised, setFeInitialised] = useState(false);
 
   useEffect(() => {
@@ -109,6 +111,7 @@ export default function OnboardingPage() {
         ? settings.locale
         : detected.language,
     );
+    setCurrency(toCurrency(settings?.currency));
     setFeInitialised(true);
   }, [settings, isLoading, detected, feInitialised]);
 
@@ -152,6 +155,7 @@ export default function OnboardingPage() {
   const canSubmit =
     Boolean(timezone) &&
     Boolean(locale) &&
+    Boolean(currency) &&
     settings?.hasCompletedOnboarding === false &&
     !isSaving;
 
@@ -160,8 +164,7 @@ export default function OnboardingPage() {
     if (!canSubmit) return;
     saveOnboarding({
       timezone,
-      // Currency selection is gone; the app is Euro-only.
-      currency: APP_CURRENCY,
+      currency,
       locale,
       hasCompletedOnboarding: true,
     });
@@ -294,6 +297,40 @@ export default function OnboardingPage() {
               );
             })}
           </div>
+        </section>
+
+        {/* Currency card */}
+        <section
+          className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-colors dark:border-slate-800 dark:bg-slate-900"
+          aria-labelledby="onb-currency"
+        >
+          <div className="flex items-center gap-3">
+            <span className="rounded-md bg-purple-50 p-2 text-purple-600 dark:bg-slate-800 dark:text-purple-300">
+              <Coins className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <h2
+              id="onb-currency"
+              className="text-base font-semibold text-slate-900 dark:text-slate-100"
+            >
+              {t("onboarding.currency")}
+            </h2>
+          </div>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            {t("onboarding.currencyHelp")}
+          </p>
+          <select
+            value={currency}
+            onChange={(e) => setCurrency(toCurrency(e.target.value))}
+            required
+            aria-label={t("onboarding.currency")}
+            className="mt-3 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+          >
+            {SUPPORTED_CURRENCIES.map((code) => (
+              <option key={code} value={code}>
+                {t(`onboarding.currencyOptions.${code}`)}
+              </option>
+            ))}
+          </select>
         </section>
 
         <div className="flex justify-end pt-2">

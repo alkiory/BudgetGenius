@@ -1,9 +1,6 @@
 import { ExpenseBreakdown } from "@domain/dashboard/dashboard.entity";
 import { COLORS } from "@presentation/utils/color";
-import {
-  APP_CURRENCY,
-  currencyService,
-} from "@presentation/utils/currencyService";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { useTranslation } from "react-i18next";
 import {
   PieChart,
@@ -18,6 +15,8 @@ interface Props {
   total: string;
   byCategory: ExpenseBreakdown["byCategory"];
   largest: ExpenseBreakdown["largest"];
+  /** User's currency from `/user-settings`; Euro until that resolves. */
+  currency: Currency;
   timezone: string;
   period: string;
 }
@@ -26,6 +25,7 @@ export function ExpenseCategories({
   total,
   byCategory,
   largest,
+  currency,
   period,
 }: Props) {
   const { t } = useTranslation();
@@ -145,7 +145,7 @@ export function ExpenseCategories({
               </Pie>
               <Tooltip
                 formatter={(v) => [
-                  currencyService.formatCurrency(Number(v), APP_CURRENCY, false)
+                  currencyService.formatCurrency(Number(v), currency, false)
                     .formatted,
                   t("transactions.amount"),
                 ]}

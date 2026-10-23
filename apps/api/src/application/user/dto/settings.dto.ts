@@ -1,4 +1,10 @@
-import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { CreateDateColumn, PrimaryGeneratedColumn } from 'typeorm';
 
 export class UserSettingsDto {
@@ -38,7 +44,16 @@ export class UserSettingsUpdateDto {
   @IsOptional()
   timezone?: string;
 
-  @IsString({ message: 'Currency must be a string, e.g. USD' })
+  /**
+   * Must be one of the `currency_enum` values persisted on
+   * `user_settings.currency`. Rejecting anything else with a 400 here
+   * keeps an invalid value from reaching the Postgres enum column,
+   * where it used to surface as a 500 from the driver instead of a
+   * validation error.
+   */
+  @IsIn(['USD', 'EUR', 'COP'], {
+    message: 'Currency must be one of USD|EUR|COP',
+  })
   @IsOptional()
   currency?: string;
 

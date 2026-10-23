@@ -24,9 +24,14 @@ import { ReportExportService } from '@application/dashboard/services/report-expo
 import { ReportRepository } from '@adapters/dashboard/persistence/reports.repository';
 import { OverviewRepository } from '@adapters/dashboard/persistence/overview.repository';
 import { ExpenseCategoryController } from '@adapters/dashboard/http/expense-category.controller';
+import { UserSettingsModule } from '@infrastructure/user/user-settings.module';
 
 @Module({
   imports: [
+    // Budget categories and report exports stamp/format money with the
+    // user's saved profile currency (EUR fallback) — see
+    // `UserSettingsService.getCurrencyForUser`.
+    UserSettingsModule,
     TypeOrmModule.forFeature([
       ExpenseCategory,
       Budget,

@@ -15,6 +15,12 @@
         "currencyHelpDetected": "Detected {{currency}} from your device. Confirm or pick another.",
         "currencyHelpUndetected": "We couldn't guess a currency. Pick the one you'll use most.",
         "currencyPlaceholder": "Select a currency",
+        "currencyHelp": "Used across your dashboard, transactions, and budgets. Defaults to Euro (EUR).",
+        "currencyOptions": {
+            "EUR": "Euro (EUR)",
+            "USD": "US Dollar (USD)",
+            "COP": "Colombian Peso (COP)"
+        },
         "language": "Language",
         "languageHelp": "Choose English or Spanish. Finny and the UI follow this choice.",
         "submit": "Save and continue",

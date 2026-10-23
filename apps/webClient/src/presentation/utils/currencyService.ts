@@ -1,10 +1,10 @@
 export type Currency = "USD" | "EUR" | "COP";
 
 /**
- * The app is Euro-only: every amount is displayed with the € symbol and
- * two decimals. The stored `user_settings.currency` value is tolerated
- * for backward compatibility, but it is never used to change the amount
- * or the symbol shown to the user.
+ * App-wide default currency (Euro), preselected by the onboarding
+ * wizard. The user's saved `user_settings.currency` overrides it for
+ * display; amounts are never converted, only formatted with the chosen
+ * symbol and precision.
  */
 export const APP_CURRENCY: Currency = "EUR";
 

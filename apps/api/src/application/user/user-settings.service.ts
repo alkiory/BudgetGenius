@@ -1,12 +1,23 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { UserSettingsRepository } from '@adapters/user/persistence/user-settings.repository';
-import { UserSettings } from '@domain/user/user-settings.entity';
+import {
+  SupportedCurrency,
+  UserSettings,
+} from '@domain/user/user-settings.entity';
 import {
   UserSettingsDto,
   UserSettingsUpdateDto,
 } from '@application/user/dto/settings.dto';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+
+/**
+ * Fallback currency for every money surface when no usable value is
+ * stored on the profile (legacy row created before the enum, or a row
+ * created by a partial PATCH). Mirrors the app-wide default shown by
+ * the onboarding wizard ("Euro (€)").
+ */
+const DEFAULT_CURRENCY: SupportedCurrency = 'EUR';
 
 @Injectable()
 export class UserSettingsService {
@@ -19,7 +30,7 @@ export class UserSettingsService {
         user: { id: userId },
         timezone: 'UTC',
         // Euro-only app: new settings rows default to EUR.
-        currency: 'EUR',
+        currency: DEFAULT_CURRENCY,
         locale: 'en-US',
         // Android APK audit, 2026-06: new rows start in the
         // pre-onboarding state. The migration's `DEFAULT FALSE`
@@ -35,7 +46,10 @@ export class UserSettingsService {
     return {
       id: settings.id,
       timezone: settings.timezone,
-      currency: settings.currency,
+      // Fallback to EUR so every downstream consumer (transactions,
+      // budgets, dashboard, exports) always receives a usable value
+      // instead of `undefined` from a legacy row.
+      currency: settings.currency ?? DEFAULT_CURRENCY,
       locale: settings.locale,
       // Default to `false` defensively: legacy rows from before
       // migration 1800000000005 (column added) didn't have the
@@ -44,6 +58,17 @@ export class UserSettingsService {
       // `undefined` and `false` identically.
       hasCompletedOnboarding: settings.hasCompletedOnboarding ?? false,
     } as UserSettingsDto;
+  }
+
+  /**
+   * Currency every downstream money operation must read from: the
+   * user's saved profile currency, falling back to EUR when the row
+   * has no usable value. Used by the services that stamp or format
+   * amounts server-side (budgets, report exports).
+   */
+  async getCurrencyForUser(userId: number): Promise<SupportedCurrency> {
+    const settings = await this.getOrCreateSettings(userId);
+    return (settings?.currency as SupportedCurrency) ?? DEFAULT_CURRENCY;
   }
 
   async updateSettings(userId: number, data: UserSettingsUpdateDto) {
@@ -56,8 +81,17 @@ export class UserSettingsService {
     let settings = await this.repo.findByUserId(userId);
 
     if (!settings) {
+      // First write for this user (e.g. a PATCH that only carries
+      // `locale`). Seed the NOT NULL columns with the documented
+      // defaults before applying the patch — otherwise the insert hits
+      // the DB with no `currency`/`timezone`/`locale` and fails.
       settings = this.repo.create({
         user: { id: userId },
+        timezone: 'UTC',
+        currency: DEFAULT_CURRENCY,
+        locale: 'en-US',
+        hasCompletedOnboarding: false,
+        createdAt: new Date(),
         updatedAt: new Date(),
       } as UserSettings);
     }

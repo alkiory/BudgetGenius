@@ -5,53 +5,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import cookieParser from 'cookie-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-
-// CORS - Default origins served for each environment.
-// They are merged with whatever is declared in the FRONTEND_URL env var
-// so deployment-specific domains can be added without code changes.
-const PRODUCTION_DEFAULT_ORIGINS = [
-  'https://budgetgeniusia.web.app',
-  'https://budgetgeniusia.firebaseapp.com',
-  // Capacitor mobile APK origins.
-  //   - https://localhost: Capacitor 4+ with androidScheme: 'https' (current default in
-  //     apps/mobile/capacitor.config.ts). The Android WebView origin is the host loopback.
-  //   - capacitor://localhost: legacy Capacitor 2/3 scheme kept for safety in case a
-  //     future build drops back to it. We deliberately do NOT include the
-  //     cleartext `http://localhost` in production — cleartext traffic is
-  //     disabled in `apps/mobile/capacitor.config.ts` and adding it here would
-  //     let a network observer spoof a cookie-bearing request.
-  'https://localhost',
-  'capacitor://localhost',
-];
-
-const DEV_DEFAULT_ORIGINS = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://localhost:3001',
-  'http://127.0.0.1:3001',
-  // Android emulator → host alias (Capacitor dev mode via server.url)
-  'http://10.0.2.2:5173',
-  // Capacitor dev modes that use the live-reload server. The native
-  // WebView origin is the host loopback under whatever scheme Capacitor
-  // picks via `server.androidScheme` (defaults to https in Capacitor 4+).
-  'https://localhost',
-  'http://localhost',
-  'capacitor://localhost',
-];
-
-/**
- * Trims whitespace and trailing slashes so we can compare origins
- * exactly against the `Origin` header the browser sends.
- */
-const normalizeOrigin = (raw: string): string =>
-  (raw ?? '').trim().replace(/\/+$/, '');
-
-/**
- * FRONTEND_URL may be a single URL or a comma-separated list.
- * Empty entries are dropped; duplicates are de-duplicated by the caller.
- */
-const parseOriginList = (raw: string | undefined | null): string[] =>
-  (raw ?? '').split(',').map(normalizeOrigin).filter(Boolean);
+import { buildAllowedOrigins, buildCorsOptions } from './cors';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -64,45 +18,22 @@ async function bootstrap() {
   app.use(cookieParser());
 
   // ── CORS ───────────────────────────────────────────────────────────────
-  // FRONTEND_URL may be a single URL or a comma-separated list of origins.
-  // Whatever the operator sets is merged with the environment defaults
-  // (production defaults to the Firebase Hosting domains).
-  const frontendOrigins = parseOriginList(process.env.FRONTEND_URL);
-
-  const allowedOrigins = Array.from(
-    new Set(
-      isProduction
-        ? [...PRODUCTION_DEFAULT_ORIGINS, ...frontendOrigins]
-        : [...DEV_DEFAULT_ORIGINS, ...frontendOrigins],
-    ),
+  // Origin list + options live in `./cors` (shared with the preflight
+  // specs). FRONTEND_URL may be a single URL or a comma-separated list
+  // of origins; whatever the operator sets is merged with the
+  // environment defaults (production defaults to the Firebase Hosting
+  // domains + the Capacitor WebView origins, and every environment also
+  // gets the localhost:5173 Vite dev-server origin).
+  const allowedOrigins = buildAllowedOrigins(
+    isProduction,
+    process.env.FRONTEND_URL,
   );
 
   // Requests without an `Origin` header (curl, server-to-server) are
   // allowed. Browser requests need an exact match against the allow-list
-  // after normalization.
-  app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin) {
-        return callback(null, true);
-      }
-      const normalized = normalizeOrigin(origin);
-      if (allowedOrigins.includes(normalized)) {
-        return callback(null, true);
-      }
-      logger.warn(`🛑 CORS: blocking request from origin '${origin}'`);
-      return callback(null, false);
-    },
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'X-Requested-With',
-      'X-Device-Id',
-    ],
-    credentials: true,
-    optionsSuccessStatus: 204,
-    exposedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  });
+  // after normalization. OPTIONS preflights are answered by the cors
+  // middleware with `optionsSuccessStatus: 204` + Allow-Origin headers.
+  app.enableCors(buildCorsOptions(allowedOrigins));
 
   // Global settings
   app.setGlobalPrefix('/api');

@@ -1,4 +1,6 @@
 import { ReportRepository } from '@adapters/dashboard/persistence/reports.repository';
+import { UserSettingsService } from '@application/user/user-settings.service';
+import { SupportedCurrency } from '@domain/user/user-settings.entity';
 import { Injectable, Logger } from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
@@ -46,6 +48,20 @@ function localizeMonthName(
   }
   return enAbbr;
 }
+
+/**
+ * Number-locale per currency for the money strings rendered into the
+ * PDF. EUR keeps the historical `es-ES` rendering (`1.234,56 €`), while
+ * USD / COP follow the same currency → locale mapping the web client
+ * uses (`CURRENCY_LOCALE_MAP` in `currencyService.ts`) so the download
+ * matches what the user sees on screen. Values are never converted —
+ * only the label changes.
+ */
+const CURRENCY_LOCALES: Record<SupportedCurrency, string> = {
+  USD: 'en-US',
+  EUR: 'es-ES',
+  COP: 'es-CO',
+};
 
 /**
  * Section / table / KPI labels. Keyed by ExportLocale so missing
@@ -143,7 +159,10 @@ export interface ExportPayload {
 export class ReportExportService {
   private readonly logger = new Logger(ReportExportService.name);
 
-  constructor(private readonly repo: ReportRepository) {}
+  constructor(
+    private readonly repo: ReportRepository,
+    private readonly userSettingsService: UserSettingsService,
+  ) {}
 
   async export(
     userId: number,
@@ -152,7 +171,13 @@ export class ReportExportService {
     locale: ExportLocale = 'en-US',
   ): Promise<ExportPayload> {
     if (format === 'pdf') {
-      return this.exportPdf(userId, year, locale);
+      // Money labels follow the user's saved profile currency, falling
+      // back to EUR when the profile carries none. The Excel pipeline
+      // writes raw numbers (no symbol), so it doesn't need it.
+      const currency = await this.userSettingsService.getCurrencyForUser(
+        userId,
+      );
+      return this.exportPdf(userId, year, locale, currency);
     }
     return this.exportExcel(userId, year, locale);
   }
@@ -163,6 +188,7 @@ export class ReportExportService {
     userId: number,
     year: number,
     locale: ExportLocale,
+    currency: SupportedCurrency,
   ): Promise<ExportPayload> {
     const [monthly, categories] = await Promise.all([
       this.repo.getMonthlyOverview(year, userId),
@@ -220,6 +246,7 @@ export class ReportExportService {
           safeCategories,
           totals,
           locale,
+          currency,
         );
       } finally {
         doc.end();
@@ -240,6 +267,7 @@ export class ReportExportService {
     categories: { category: string; total: number }[],
     totals: { income: number; expenses: number; net: number },
     locale: ExportLocale,
+    currency: SupportedCurrency,
   ): void {
     const titleColor = '#1f2937';
     const accent = '#7c3aed';
@@ -285,6 +313,7 @@ export class ReportExportService {
       localize('totalIncome', locale),
       totals.income,
       success,
+      currency,
     );
     this.drawKpiTile(
       doc,
@@ -293,6 +322,7 @@ export class ReportExportService {
       localize('totalExpenses', locale),
       totals.expenses,
       danger,
+      currency,
     );
     this.drawKpiTile(
       doc,
@@ -301,6 +331,7 @@ export class ReportExportService {
       localize('netSavings', locale),
       totals.net,
       accent,
+      currency,
     );
     doc.y = kpiY + 80;
     doc.moveDown(1);
@@ -322,10 +353,11 @@ export class ReportExportService {
       ],
       monthly.map((row) => [
         row.month,
-        this.formatMoney(row.income),
-        this.formatMoney(row.expenses),
+        this.formatMoney(row.income, currency),
+        this.formatMoney(row.expenses, currency),
         this.formatMoney(
           (Number(row.income) || 0) - (Number(row.expenses) || 0),
+          currency,
         ),
       ]),
       { startX: 48, columnWidths: [80, 140, 140, 140] },
@@ -345,7 +377,7 @@ export class ReportExportService {
         [localize('category', locale), localize('total', locale)],
         categories.map((row) => [
           row.category,
-          this.formatMoney(Math.abs(Number(row.total) || 0)),
+          this.formatMoney(Math.abs(Number(row.total) || 0), currency),
         ]),
         { startX: 48, columnWidths: [200, 200] },
       );
@@ -367,6 +399,7 @@ export class ReportExportService {
     label: string,
     value: number,
     color: string,
+    currency: SupportedCurrency,
   ): void {
     const width = 160;
     const height = 64;
@@ -384,7 +417,9 @@ export class ReportExportService {
       .fontSize(18)
       .fillColor(color)
       .font('Helvetica-Bold')
-      .text(this.formatMoney(value), x + 12, y + 30, { width: width - 24 });
+      .text(this.formatMoney(value, currency), x + 12, y + 30, {
+        width: width - 24,
+      });
   }
 
   // Phased: simple line-shrink table that fits an A4 width without overflow.
@@ -581,12 +616,13 @@ export class ReportExportService {
     };
   }
 
-  private formatMoney(value: number): string {
-    // Single-currency app (EUR) and always two decimals in exports.
+  private formatMoney(value: number, currency: SupportedCurrency): string {
+    // Label-only: the number is never converted, and exports always
+    // show two decimals regardless of the currency's usual precision.
     const safe = Number(value) || 0;
-    return safe.toLocaleString('es-ES', {
+    return safe.toLocaleString(CURRENCY_LOCALES[currency] ?? 'es-ES', {
       style: 'currency',
-      currency: 'EUR',
+      currency,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });

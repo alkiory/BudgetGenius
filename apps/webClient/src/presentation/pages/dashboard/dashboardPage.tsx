@@ -13,8 +13,8 @@ import { OverviewCard } from "@presentation/components/dashboard/overview/overvi
 import { RecentTransactions } from "@presentation/components/dashboard/recent-transactions";
 import { PageHeader } from "@presentation/components/ui/page-header";
 import {
-  APP_CURRENCY,
   currencyService,
+  toCurrency,
 } from "@presentation/utils/currencyService";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -32,9 +32,10 @@ export default function DashboardPage() {
   const { data: breackdown, isLoading: isloadingExpenseCat } =
     useFetchExpenseCategories();
 
-  // Euro-only app: the dashboard never reads `userSettings.currency` for
-  // display, so legacy rows can't render a different symbol.
-  const targetCurrency = APP_CURRENCY;
+  // The currency chosen during onboarding (EUR by default) drives every
+  // amount on the page, including the expense-breakdown chart. Falls
+  // back to EUR until `/user-settings` resolves.
+  const targetCurrency = toCurrency(userSettings?.currency);
 
   // Shared dashboard-wide locale. Reads `state.userSettings.settings.locale`
   // (BCP-47 tag) via the same `useLocale()` hook used by the four
@@ -126,6 +127,7 @@ export default function DashboardPage() {
             name: rawBreackdownLargest?.largest.name,
             value: rawBreackdownLargest?.largest.value,
           }}
+          currency={targetCurrency}
           timezone={userSettings?.timezone ?? "Europe/Paris"}
           period={breackdown?.period ?? new Date().toLocaleDateString(locale)}
         />

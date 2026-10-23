@@ -1,5 +1,5 @@
 import { UserSettings } from "@domain/user/userSettings";
-import { APP_CURRENCY } from "@presentation/utils/currencyService";
+import { APP_CURRENCY, toCurrency } from "@presentation/utils/currencyService";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 interface UserSettingsState {
@@ -10,9 +10,8 @@ const initialState: UserSettingsState = {
   settings: {
     id: 0,
     timezone: "",
-    // Euro is the only currency the app exposes. The slice is the
-    // app-wide source for the symbol/precision, so forcing it here means
-    // every consumer renders € regardless of legacy DB values.
+    // Euro is the app-wide default until `/user-settings` returns the
+    // user's own choice (set by the onboarding wizard).
     currency: APP_CURRENCY,
     locale: "",
     // Android APK audit, 2026-06: explicit `false` here so the
@@ -32,10 +31,13 @@ export const settingsSlice = createSlice({
   reducers: {
     // Se actualiza el estado tras un login exitoso
     setSettingsAction: (state, action: PayloadAction<UserSettings>) => {
-      // Ignore any legacy non-EUR value coming from the server. The
-      // currency is no longer user-selectable (see AccountSettings /
-      // onboarding), so the UI must always show €.
-      state.settings = { ...action.payload, currency: APP_CURRENCY };
+      // The user's chosen currency (onboarding or a legacy row) is the
+      // app-wide source for the symbol/precision. `toCurrency` keeps an
+      // unknown/missing server value from reaching the formatters.
+      state.settings = {
+        ...action.payload,
+        currency: toCurrency(action.payload.currency),
+      };
     },
     // Se usa cuando el usuario edita su perfil
     updateSettingsAction: (
@@ -46,7 +48,9 @@ export const settingsSlice = createSlice({
         state.settings = {
           ...state.settings,
           ...action.payload,
-          currency: APP_CURRENCY,
+          currency: toCurrency(
+            action.payload.currency ?? state.settings.currency,
+          ),
         };
       }
     },
