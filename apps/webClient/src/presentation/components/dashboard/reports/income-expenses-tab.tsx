@@ -78,18 +78,24 @@ export default function IncomeExpensesTab({
               {t("reports.incomeBreakdown")}
             </h3>
             <div className="space-y-4">
-              {overview?.incomeSources?.map((source: any) => (
-                <div key={source.category}>
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">{source.category}</span>
-                    <span>{formatCurrency(source.amount)}</span>
+              {overview?.incomeSources?.length ? (
+                overview.incomeSources.map((source: any) => (
+                  <div key={source.category}>
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{source.category}</span>
+                      <span>{formatCurrency(source.amount)}</span>
+                    </div>
+                    <ProgressBar
+                      value={totalIncome > 0 ? (source.amount / totalIncome) * 100 : 0}
+                      color="#10b981"
+                    />
                   </div>
-                  <ProgressBar
-                    value={(source.amount / totalIncome) * 100}
-                    color="#10b981"
-                  />
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  {t("common.noData")}
+                </p>
+              )}
             </div>
           </div>
 

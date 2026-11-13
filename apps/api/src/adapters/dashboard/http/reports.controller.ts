@@ -45,10 +45,27 @@ export class ReportsController {
   @Get('overview')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Monthly income vs expenses overview' })
-  @ApiQuery({ name: 'year', required: true, example: 2025 })
+  @ApiQuery({ name: 'year', required: false, example: 2025 })
+  @ApiQuery({ name: 'start', required: false, example: '2026-01-01' })
+  @ApiQuery({ name: 'end', required: false, example: '2027-01-01' })
   @ApiResponse({ status: 200, description: 'Overview data' })
-  getOverview(@Query('year') year: number, @Req() req) {
-    return this.svc.getOverview({ year, userId: req.user.userId });
+  getOverview(
+    @Query('year') year: string,
+    @Query('start') start: string,
+    @Query('end') end: string,
+    @Req() req,
+  ) {
+    if (start || end) {
+      if (!start || !end) throw new BadRequestException('Both start and end are required.');
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || startDate >= endDate) {
+        throw new BadRequestException('Invalid report date range.');
+      }
+      return this.svc.getOverviewForRange({ start: startDate, end: endDate, userId: req.user.userId });
+    }
+    if (!year || !Number.isFinite(Number(year))) throw new BadRequestException('Provide a year or a date range.');
+    return this.svc.getOverview({ year: Number(year), userId: req.user.userId });
   }
 
   @Get('categories')
@@ -68,10 +85,18 @@ export class ReportsController {
   }
 
   @Get('weekly')
-  @ApiOperation({ summary: 'Weekly trend (last 7 days)' })
+  @ApiOperation({ summary: 'Expense trend for a selected period' })
   @ApiResponse({ status: 200 })
-  getWeekly(@Req() req) {
-    return this.svc.getWeekly({ userId: req.user.userId });
+  @ApiQuery({ name: 'start', required: false })
+  @ApiQuery({ name: 'end', required: false })
+  getWeekly(@Query('start') start: string, @Query('end') end: string, @Req() req) {
+    if (Boolean(start) !== Boolean(end)) throw new BadRequestException('Both start and end are required.');
+    const startDate = start ? new Date(start) : undefined;
+    const endDate = end ? new Date(end) : undefined;
+    if (startDate && endDate && (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || startDate >= endDate)) {
+      throw new BadRequestException('Invalid report date range.');
+    }
+    return this.svc.getWeekly({ userId: req.user.userId, start: startDate, end: endDate });
   }
 
   @Get('savings')
@@ -82,24 +107,13 @@ export class ReportsController {
   }
 
   @Get('insights')
-  @ApiOperation({ summary: 'AI-generated insights' })
+  @ApiOperation({ summary: 'Financial metrics calculated from transactions' })
   @ApiQuery({ name: 'year', required: true })
   @ApiResponse({ status: 200, description: 'Text insights' })
   getInsights(@Query('year') year: number, @Req() req) {
-    // TODO: Service temporarily disabled until we pay the bill. When
-    // re-enabled, MUST call `this.svc.getInsights({year, userId: req.user.userId})`
-    // — the service's `getInsights` signature requires `userId` after the
-    // cross-layer permission audit; passing only `{year}` would type-fail
-    // and un-scoped calls would leak aggregated data across users.
-    return {
-      data: {
-        spent: 0,
-        averageAmountExpenses: 0,
-        expenseToIncomeRatio: 0,
-      },
-      year,
-      userId: req.user.userId,
-    };
+    return this.svc
+      .getFinancialMetrics({ year: Number(year), userId: req.user.userId })
+      .then((data) => ({ data, year: Number(year) }));
   }
 
   /**

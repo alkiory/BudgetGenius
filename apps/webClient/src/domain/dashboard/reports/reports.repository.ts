@@ -9,7 +9,7 @@ export type ExportFormat = "pdf" | "excel";
 export type ExportLocale = "en-US" | "es-CO";
 
 export interface ReportsRepository {
-  getOverview: ({ year }: { year: string }) => Promise<any>;
+  getOverview: ({ start, end }: { start: string; end: string }) => Promise<any>;
   getCategories: ({
     start,
     end,
@@ -17,7 +17,7 @@ export interface ReportsRepository {
     start: string;
     end: string;
   }) => Promise<any>;
-  getWeekly: () => Promise<any>;
+  getWeekly: ({ start, end }: { start: string; end: string }) => Promise<any>;
   getSavings: ({ year }: { year: string }) => Promise<any>;
   getInsights: ({ year }: { year: string }) => Promise<any>;
   /**

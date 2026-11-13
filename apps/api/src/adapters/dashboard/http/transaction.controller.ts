@@ -1,4 +1,5 @@
 import { CreateTransactionDto } from '@application/dashboard/dto/create-transaction.dto';
+import { ImportTransactionsDto } from '@application/dashboard/dto/import-transactions.dto';
 import { UpdateTransactionDto } from '@application/dashboard/dto/update-transaction.dto';
 import { TransactionService } from '@application/dashboard/services/transaction.service';
 import { JwtAuthGuard } from '@infrastructure/auth/guards/jwt-auth.guard';
@@ -117,6 +118,16 @@ export class TransactionController {
       message: '📊 Transaction created successfully',
       transaction,
     };
+  }
+
+  @Post('import')
+  @ApiOperation({ summary: 'Import transactions in one request' })
+  @ApiResponse({ status: 201, description: 'Transactions imported' })
+  async importTransactions(@Body() dto: ImportTransactionsDto, @Req() req) {
+    return this.transactionService.importTransactions(
+      req.user.userId,
+      dto.transactions,
+    );
   }
   // #endregion Create Transaction
 

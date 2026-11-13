@@ -39,6 +39,7 @@ import { JwtAuthGuard } from '@infrastructure/auth/guards/jwt-auth.guard';
 import { ExpenseCategoryService } from '@application/dashboard/services/expense-category.service';
 import { ExpenseCategory } from '@domain/dashboard/expense-category.entity';
 import { CreateExpenseDto } from '@application/dashboard/dto/create-expense.dto';
+import { ImportExpenseCategoriesDto } from '@application/dashboard/dto/import-expense-categories.dto';
 import { UpdateExpenseCategoryDto } from '@application/dashboard/dto/update-expense-category.dto';
 import { EntityNotFoundExceptionFilter } from './filters/entity-not-found.filter';
 
@@ -74,6 +75,13 @@ export class ExpenseCategoryController {
   @ApiResponse({ status: 201, type: ExpenseCategory })
   create(@Body() dto: CreateExpenseDto, @Req() req) {
     return this.svc.createExpenseCategory(req.user.userId, dto);
+  }
+
+  @Post('import')
+  @ApiOperation({ summary: 'Import expense categories in one request' })
+  @ApiResponse({ status: 201, description: 'Categories imported' })
+  import(@Body() dto: ImportExpenseCategoriesDto, @Req() req) {
+    return this.svc.importExpenseCategories(req.user.userId, dto.categories);
   }
 
   @Put(':id')

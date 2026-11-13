@@ -14,7 +14,34 @@ export class ReportService {
   }
 
   async getOverview({ year, userId }: { year: number; userId: number }) {
-    return this.repo.getMonthlyOverview(year, userId);
+    const monthly = await this.repo.getMonthlyOverview(year, userId);
+    return monthly.map((row) => ({
+      month: row.month,
+      income: Number(row.income) || 0,
+      expenses: Number(row.expenses) || 0,
+    }));
+  }
+
+  async getOverviewForRange({
+    start,
+    end,
+    userId,
+  }: {
+    start: Date;
+    end: Date;
+    userId: number;
+  }) {
+    const monthly = await this.repo.getMonthlyOverviewForRange(
+      start,
+      end,
+      userId,
+    );
+    return monthly.map((row) => ({
+      month: row.month,
+      monthKey: row.monthKey,
+      income: Number(row.income) || 0,
+      expenses: Number(row.expenses) || 0,
+    }));
   }
 
   async getByCategory({
@@ -26,15 +53,51 @@ export class ReportService {
     end: Date;
     userId: number;
   }) {
-    return this.repo.getCategoryBreakdown(start, end, userId);
+    const rows = await this.repo.getCategoryBreakdowns(start, end, userId);
+    return {
+      expenses: rows
+        .map((row) => ({ category: row.category, total: Number(row.expenses) || 0 }))
+        .filter((row) => row.total > 0),
+      incomeSources: rows
+        .map((row) => ({ category: row.category, amount: Number(row.income) || 0 }))
+        .filter((row) => row.amount > 0),
+    };
   }
 
-  async getWeekly({ userId }: { userId: number }) {
-    return this.repo.getWeeklyTrend(userId);
+  async getWeekly({
+    userId,
+    start,
+    end,
+  }: {
+    userId: number;
+    start?: Date;
+    end?: Date;
+  }) {
+    const weekly = await this.repo.getWeeklyTrend(userId, start, end);
+    return weekly.map((row) => ({ day: row.day, amount: Number(row.amount) || 0 }));
   }
 
   async getSavings({ year, userId }: { year: number; userId: number }) {
     return this.repo.getSavingsGrowth(year, userId);
+  }
+
+  async getFinancialMetrics({ year, userId }: { year: number; userId: number }) {
+    const monthly = await this.getOverview({ year, userId });
+    const income = monthly.reduce((sum, row) => sum + row.income, 0);
+    const expenses = monthly.reduce((sum, row) => sum + row.expenses, 0);
+    const currentYear = new Date().getFullYear();
+    const monthsElapsed =
+      year < currentYear
+        ? 12
+        : year === currentYear
+          ? new Date().getMonth() + 1
+          : 0;
+
+    return {
+      spent: expenses,
+      averageAmountExpenses: monthsElapsed > 0 ? expenses / monthsElapsed : 0,
+      expenseToIncomeRatio: income > 0 ? (expenses / income) * 100 : 0,
+    };
   }
 
   /** AI‑powered insights */

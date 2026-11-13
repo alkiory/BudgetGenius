@@ -26,9 +26,18 @@ import { useSelector } from "react-redux";
 import { EditTransaction } from "../dashboard/transaction/edit-transaction";
 import { Button } from "./button";
 
-export default function Table({ data }: { data: Transaction[] }) {
+export default function Table({
+  data,
+  initialPageSize = 10,
+}: {
+  data: Transaction[];
+  initialPageSize?: number;
+}) {
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
+  const [pagination, setPagination] = useState({
+    pageIndex: 0,
+    pageSize: initialPageSize,
+  });
   const [rowSelection, setRowSelection] = useState({});
   const { t } = useTranslation();
 

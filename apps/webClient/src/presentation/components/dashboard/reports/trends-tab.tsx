@@ -47,7 +47,7 @@ export default function TrendsTab({
               <LineChart data={overview?.monthly || []}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
-                <YAxis />
+                <YAxis domain={[0, "dataMax"]} />
                 <Tooltip
                   formatter={(value) => [formatCurrency(Number(value)), ""]}
                 />

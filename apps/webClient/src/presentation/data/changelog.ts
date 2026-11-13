@@ -63,9 +63,21 @@ export interface ChangelogEntry {
  */
 export const changelog: ChangelogEntry[] = [
   {
+    version: "1.10",
+    date: "2026-11-13",
+    highlight: true,
+    title: {
+      en: "Import your finances and explore clearer reports",
+      es: "Importa tus finanzas y consulta informes más claros",
+    },
+    description: {
+      en: "Bring in transactions and categories from your finance exports, including older formats. Reports now follow the period you select and show clearer income, expense, and savings figures. Dark mode also keeps the dashboard’s balance, income, and expense colors easy to distinguish.",
+      es: "Importa movimientos y categorías desde tus archivos financieros, incluidos formatos antiguos. Los informes ahora respetan el período seleccionado y muestran con más claridad los ingresos, gastos y ahorros. Además, el modo oscuro mantiene bien diferenciados los colores del saldo, los ingresos y los gastos en el panel.",
+    },
+  },
+  {
     version: "1.9",
     date: "2026-10-22",
-    highlight: true,
     title: {
       en: "Budgets for spending and saving",
       es: "Presupuestos para gastar y ahorrar",

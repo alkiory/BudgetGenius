@@ -1,18 +1,18 @@
 import { HttpReportRepository } from "@adapters/http/reports.repository";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-export const useOverview = ({ year }: { year: string }) => {
+export const useOverview = ({ start, end }: { start: string; end: string }) => {
   const queryClient = useQueryClient();
 
   const cancelOverviewQuery = () => {
-    queryClient.cancelQueries({ queryKey: ["reports", "overview", year] });
+    queryClient.cancelQueries({ queryKey: ["reports", "overview", start, end] });
   };
 
   return {
     ...useQuery({
-      queryKey: ["reports", "overview", year],
-      queryFn: () => HttpReportRepository.getOverview({ year }),
-      enabled: year !== undefined,
+      queryKey: ["reports", "overview", start, end],
+      queryFn: () => HttpReportRepository.getOverview({ start, end }),
+      enabled: Boolean(start && end),
       retry: 2,
       staleTime: 1000 * 60,
       gcTime: 1000 * 60 * 5,
@@ -32,13 +32,13 @@ export const useCategoryBreakdown = ({
 
   const cancelCategoryBreakdownQuery = () => {
     queryClient.cancelQueries({
-      queryKey: ["reports", "categories", start, end],
+      queryKey: ["reports", "categories", "income-expense", start, end],
     });
   };
 
   return {
     ...useQuery({
-      queryKey: ["reports", "categories", start, end],
+      queryKey: ["reports", "categories", "income-expense", start, end],
       queryFn: () => HttpReportRepository.getCategories({ start, end }),
       enabled: start !== undefined && end !== undefined,
       retry: 2,
@@ -49,17 +49,17 @@ export const useCategoryBreakdown = ({
   };
 };
 
-export const useWeeklyTrend = () => {
+export const useWeeklyTrend = ({ start, end }: { start: string; end: string }) => {
   const queryClient = useQueryClient();
 
   const cancelWeeklyTrendQuery = () => {
-    queryClient.cancelQueries({ queryKey: ["reports", "weekly"] });
+    queryClient.cancelQueries({ queryKey: ["reports", "weekly", start, end] });
   };
 
   return {
     ...useQuery({
-      queryKey: ["reports", "weekly"],
-      queryFn: HttpReportRepository.getWeekly,
+      queryKey: ["reports", "weekly", start, end],
+      queryFn: () => HttpReportRepository.getWeekly({ start, end }),
       retry: 2,
       staleTime: 1000 * 60,
       gcTime: 1000 * 60 * 5,

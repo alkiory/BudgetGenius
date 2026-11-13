@@ -25,6 +25,9 @@ export interface TransactionRepository {
   }: {
     dto: NewTransactionInput;
   }): Promise<Transaction>;
+  importTransactions(
+    transactions: NewTransactionInput[],
+  ): Promise<{ created: number }>;
   updateTransaction({
     dto,
   }: {

@@ -1,4 +1,5 @@
 import { useDecimalInput } from "@adapters/hooks/useDecimalInput";
+import { HttpExpenseCategoryRepository } from "@adapters/http/expense-category.repository";
 import { RootState } from "@adapters/store/rootStore";
 import {
   NewTransactionInput,
@@ -10,6 +11,7 @@ import { Label } from "@presentation/components/ui/label";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { errorToast } from "@presentation/utils/toast";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 
@@ -37,6 +39,17 @@ export default function AddTransactionForm({
   const { t } = useTranslation();
   const userSetting = useSelector((state: RootState) => state.userSettings);
   const userCurrency = (userSetting?.settings?.currency || "EUR") as Currency;
+  const { data: importedCategories = [] } = useQuery({
+    queryKey: ["user-expense-categories"],
+    queryFn: HttpExpenseCategoryRepository.getAll,
+    staleTime: 60_000,
+  });
+  const categoryOptions = Array.from(
+    new Set([
+      ...TRANSACTION_CATEGORIES.filter((category) => category !== "All"),
+      ...importedCategories.map((category) => category.name),
+    ]),
+  );
 
   const [transactionType, setTransactionType] = useState<"income" | "expense">(
     "expense",
@@ -140,11 +153,11 @@ export default function AddTransactionForm({
           required
         >
           <option value="Other">{t("categories.other")}</option>
-          {TRANSACTION_CATEGORIES.filter(
-            (category) => category !== "All" && category !== "Todos",
-          ).map((category) => (
+          {categoryOptions.filter((category) => category !== "Todos").map((category) => (
             <option key={category} value={category}>
-              {t(`categories.${category.toLowerCase()}`)}
+              {t(`categories.${category.toLowerCase()}`, {
+                defaultValue: category,
+              })}
             </option>
           ))}
         </select>

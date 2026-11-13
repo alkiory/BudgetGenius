@@ -4,6 +4,7 @@ import { CreateExpenseDto } from '../dto/create-expense.dto';
 import { UpdateExpenseDTO } from '../dto/update-expense.dto';
 import { TransactionRepository } from '@adapters/dashboard/persistence/transaction.repository';
 import { ExpenseCategoryRepository } from '@adapters/dashboard/persistence/expense-category.repository';
+import { ImportExpenseCategoryItemDto } from '../dto/import-expense-categories.dto';
 
 @Injectable()
 export class ExpenseCategoryService {
@@ -26,6 +27,34 @@ export class ExpenseCategoryService {
       user: user,
     };
     return this.expenseCategoryRepo.create(category);
+  }
+  async importExpenseCategories(
+    userId: number,
+    items: ImportExpenseCategoryItemDto[],
+  ) {
+    const user = await this.userRepo.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+
+    const existing = await this.expenseCategoryRepo.findByUser(userId);
+    const knownNames = new Set(
+      existing.map((category) => category.name.trim().toLocaleLowerCase()),
+    );
+    const newCategories = [];
+    let skipped = 0;
+
+    for (const item of items) {
+      const name = item.name.trim();
+      const key = name.toLocaleLowerCase();
+      if (!name || knownNames.has(key)) {
+        skipped++;
+        continue;
+      }
+      knownNames.add(key);
+      newCategories.push({ name, value: item.value, user });
+    }
+
+    await this.expenseCategoryRepo.createMany(newCategories);
+    return { created: newCategories.length, skipped };
   }
   async getExpenseCategoriesByUser(userId: number) {
     return this.expenseCategoryRepo.findByUser(userId);

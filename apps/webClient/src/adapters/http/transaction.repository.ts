@@ -24,6 +24,11 @@ export const HttpTransactionRepository: TransactionRepository = {
     return response.data;
   },
 
+  async importTransactions(transactions) {
+    const response = await api.post("/transactions/import", { transactions });
+    return response.data;
+  },
+
   async updateTransaction({ dto }: { dto: TransactionPatch }) {
     const response = await api.put("/transactions", dto);
     return response.data;

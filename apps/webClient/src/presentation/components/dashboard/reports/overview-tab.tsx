@@ -147,7 +147,7 @@ export default function OverviewTab({
               <Pie
                 data={categories || []}
                 dataKey="amount"
-                nameKey="category"
+                nameKey="name"
                 cx="50%"
                 cy="45%"
                 outerRadius={80}

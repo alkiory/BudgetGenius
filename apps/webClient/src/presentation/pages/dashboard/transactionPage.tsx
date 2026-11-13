@@ -1,4 +1,12 @@
 import { useFetchTransactions } from "@adapters/query/dashboard";
+import { HttpTransactionRepository } from "@adapters/http/transaction.repository";
+import { HttpExpenseCategoryRepository } from "@adapters/http/expense-category.repository";
+import { RootState } from "@adapters/store/rootStore";
+import {
+  readCategorySpreadsheet,
+  readTransactionSpreadsheet,
+} from "@infrastructure/transactionSpreadsheetImport";
+import { useQueryClient } from "@tanstack/react-query";
 import { AddTransactionModal } from "@presentation/components/dashboard/transaction/add-transaction-modal";
 import {
   FilterCriteria,
@@ -8,15 +16,27 @@ import TransactionsLoading from "@presentation/components/dashboard/transactions
 import { Button } from "@presentation/components/ui/button";
 import { PageHeader } from "@presentation/components/ui/page-header";
 import { warningToast } from "@presentation/utils/toast";
-import { Filter } from "lucide-react";
-import { useMemo, useState } from "react";
+import { FileUp, Filter, Loader2 } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { useSelector } from "react-redux";
+import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import Table from "../../components/ui/table";
 
 export default function TransactionsPage() {
   const { t } = useTranslation();
-  const [offset] = useState(0);
-  const limit = 50;
+  const queryClient = useQueryClient();
+  const currency = useSelector(
+    (state: RootState) => state.userSettings?.settings?.currency || "EUR",
+  );
+  const importInput = useRef<HTMLInputElement>(null);
+  const categoryImportInput = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  // The API defaults to 50 rows. A spreadsheet import can contain up to
+  // 1,000 transactions, so load that supported import size for the table's
+  // own client-side pagination and filters.
+  const offset = 0;
+  const limit = 1000;
 
   const {
     data: transactions,
@@ -35,6 +55,71 @@ export default function TransactionsPage() {
 
   const handleApplyFilters = (newFilters: FilterCriteria) => {
     setFilters(newFilters);
+  };
+
+  const handleImport = async (file?: File) => {
+    if (!file) return;
+    setIsImporting(true);
+    try {
+      const rows = await readTransactionSpreadsheet(
+        file,
+        currency as "EUR" | "USD" | "COP",
+      );
+      let importedCategories: Awaited<ReturnType<typeof readCategorySpreadsheet>> = [];
+      try {
+        importedCategories = await readCategorySpreadsheet(file);
+      } catch (error) {
+        if (!(error instanceof Error) || !error.message.includes("No se encontró una tabla de categorías")) {
+          throw error;
+        }
+      }
+      const categoryMap = new Map(
+        importedCategories.map((category) => [category.name.toLocaleLowerCase(), category]),
+      );
+      for (const row of rows) {
+        const key = row.category.trim().toLocaleLowerCase();
+        if (!categoryMap.has(key)) categoryMap.set(key, { name: row.category, value: 0 });
+      }
+      await HttpExpenseCategoryRepository.importMany([...categoryMap.values()]);
+      const result = await HttpTransactionRepository.importTransactions(rows);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["transactions"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["recent-summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["user-expense-categories"] }),
+      ]);
+      toast.success(t("transactions.importSpreadsheetSuccess", { count: result.created }));
+    } catch (error) {
+      console.error("Transaction import failed:", error);
+      const errorCode = error instanceof Error ? error.message : "";
+      toast.error(
+        errorCode === "CATEGORY_SUMMARY_NOT_TRANSACTION_ROWS"
+          ? t("transactions.categorySummaryNotTransactionRows")
+          : errorCode === "TRANSACTION_COLUMNS_NOT_FOUND"
+            ? t("transactions.transactionColumnsNotFound")
+            : errorCode || t("transactions.importSpreadsheetError"),
+      );
+    } finally {
+      setIsImporting(false);
+      if (importInput.current) importInput.current.value = "";
+    }
+  };
+
+  const handleCategoryImport = async (file?: File) => {
+    if (!file) return;
+    setIsImporting(true);
+    try {
+      const imported = await readCategorySpreadsheet(file);
+      const result = await HttpExpenseCategoryRepository.importMany(imported);
+      await queryClient.invalidateQueries({ queryKey: ["user-expense-categories"] });
+      toast.success(t("transactions.importCategoriesSuccess", result));
+    } catch (error) {
+      console.error("Category import failed:", error);
+      toast.error(error instanceof Error ? error.message : t("transactions.importSpreadsheetError"));
+    } finally {
+      setIsImporting(false);
+      if (categoryImportInput.current) categoryImportInput.current.value = "";
+    }
   };
 
   const filteredTransactions = useMemo(() => {
@@ -121,6 +206,46 @@ export default function TransactionsPage() {
             above, the title row gets its own line on mobile instead
             of being squeezed to 0 width by the full-width buttons. */}
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+          <input
+            ref={importInput}
+            type="file"
+            accept=".xlsx,.xlsm,.xls,.xlsb,.ods,.xml,.csv,.tsv"
+            className="hidden"
+            aria-label="Importar movimientos desde archivo"
+            onChange={(event) => void handleImport(event.target.files?.[0])}
+          />
+          <Button
+            variant="outline"
+            disabled={isImporting}
+            onClick={() => importInput.current?.click()}
+            className="w-full sm:w-auto"
+          >
+            {isImporting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <FileUp className="mr-2 h-4 w-4" />
+            )}
+            {isImporting
+              ? t("transactions.importingSpreadsheet")
+              : t("transactions.importSpreadsheet")}
+          </Button>
+          <input
+            ref={categoryImportInput}
+            type="file"
+            accept=".xlsx,.xlsm,.xls,.xlsb,.ods,.xml,.csv,.tsv"
+            className="hidden"
+            aria-label={t("transactions.importCategories")}
+            onChange={(event) => void handleCategoryImport(event.target.files?.[0])}
+          />
+          <Button
+            variant="outline"
+            disabled={isImporting}
+            onClick={() => categoryImportInput.current?.click()}
+            className="w-full sm:w-auto"
+          >
+            <FileUp className="mr-2 h-4 w-4" />
+            {t("transactions.importCategories")}
+          </Button>
           <button
             onClick={() => setIsFilterModalOpen(true)}
             className="inline-flex w-full items-center gap-1 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 sm:w-auto"
@@ -145,7 +270,7 @@ export default function TransactionsPage() {
       </div>
 
       {isSuccess && filteredTransactions?.length > 0 ? (
-        <Table data={filteredTransactions} />
+        <Table data={filteredTransactions} initialPageSize={50} />
       ) : (
         <div className="flex flex-col items-center justify-center gap-4 p-8 text-center border border-dashed rounded-lg border-slate-200 dark:border-slate-700">
           <p className="text-slate-500 dark:text-slate-400">

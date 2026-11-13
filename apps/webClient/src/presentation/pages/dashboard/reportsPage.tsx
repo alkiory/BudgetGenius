@@ -3,8 +3,6 @@ import {
   useOverview,
   useCategoryBreakdown,
   useWeeklyTrend,
-  useSavingsGrowth,
-  useInsights,
 } from "@adapters/query/reports/reportsQuery";
 import type {
   ExportFormat,
@@ -40,6 +38,26 @@ const FILENAME_BY_FORMAT: Record<ExportFormat, string> = {
   excel: "budget-report-{year}.xlsx",
 };
 
+function dateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function getDateRange(timeframe: string, today = new Date()) {
+  const start = new Date(today.getFullYear(), today.getMonth(), 1);
+  if (timeframe === "quarter") start.setMonth(Math.floor(today.getMonth() / 3) * 3, 1);
+  if (timeframe === "year") start.setMonth(0, 1);
+  if (timeframe === "all") start.setFullYear(1900, 0, 1);
+  const endExclusive = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  return { start: dateKey(start), end: dateKey(endExclusive) };
+}
+
+function countMonthsInclusive(start: string, end: string) {
+  const from = new Date(`${start}T00:00:00`);
+  const until = new Date(`${end}T00:00:00`);
+  if (!Number.isFinite(from.getTime()) || !Number.isFinite(until.getTime())) return 0;
+  return Math.max(0, (until.getFullYear() - from.getFullYear()) * 12 + until.getMonth() - from.getMonth() + (until.getDate() > 1 ? 1 : 0));
+}
+
 export default function ReportsPage() {
   // `i18n` is exposed by react-i18next so we can pass the active UI locale
   // to the export endpoint and let the server localize month labels in
@@ -49,63 +67,73 @@ export default function ReportsPage() {
   const [timeframe, setTimeframe] = useState("year");
   const [isExporting, setIsExporting] = useState<ExportFormat | null>(null);
   const currentYear = new Date().getFullYear();
+  const dateRange = getDateRange(timeframe);
 
   // Consultas de datos
   const { data: overviewMonthly, isLoading: isLoadingOverview } = useOverview({
-    year: String(currentYear),
+    ...dateRange,
   });
   const { data: categoryRows, isLoading: isLoadingCategories } =
     useCategoryBreakdown({
-      start: `${currentYear}-01-01`,
-      end: `${currentYear}-12-31`,
+      ...dateRange,
     });
-  const { data: weeklyTrend, isLoading: isLoadingTrend } = useWeeklyTrend();
-  const { data: savingsMonthly, isLoading: isLoadingSavings } =
-    useSavingsGrowth({ year: String(currentYear) });
-  const { data: insights, isLoading: isLoadingInsights } = useInsights({
-    year: String(currentYear),
-  });
+  const { data: weeklyTrend, isLoading: isLoadingTrend } = useWeeklyTrend(dateRange);
 
-  if (isLoadingOverview || isLoadingCategories || isLoadingSavings) {
+  if (isLoadingOverview || isLoadingCategories) {
     return <ReportsLoading />;
   }
 
   // The tabs expect envelope shapes ({monthly, ...}). The backend returns
   // raw arrays, so wrap them here and remap fields. This is the only place
   // in the app that consumes /reports/* responses.
-  const overview = { monthly: overviewMonthly ?? [] };
-  const savings = { monthly: savingsMonthly ?? [] };
-  const categories = (categoryRows ?? []).map(
+  const rawMonthly = Array.isArray(overviewMonthly) ? overviewMonthly : [];
+  const safeMonthly = rawMonthly.map(
+    (row: { month: string; monthKey?: string; income: number | string; expenses: number | string }) => ({
+      month: row.month,
+      monthKey: row.monthKey,
+      income: Number(row.income) || 0,
+      expenses: Number(row.expenses) || 0,
+    }),
+  );
+  const incomeSources = Array.isArray(categoryRows?.incomeSources)
+    ? categoryRows.incomeSources
+    : [];
+  const overview = { monthly: safeMonthly, incomeSources };
+  const savings = { monthly: safeMonthly.map((row) => ({ month: row.month, savings: row.income - row.expenses })) };
+  const categories = (categoryRows?.expenses ?? []).map(
     (row: { category: string; total: number | string }) => ({
       category: row.category,
+      name: row.category,
       amount: Number(row.total) || 0,
     }),
   );
 
   // Datos procesados
-  const safeMonthly: {
-    month: string;
-    income: number | string;
-    expenses: number | string;
-  }[] = Array.isArray(overview.monthly)
-      ? (overview.monthly as {
-        month: string;
-        income: number | string;
-        expenses: number | string;
-      }[])
-      : [];
   const totalIncome = safeMonthly.reduce(
-    (acc, row) => acc + (Number(row?.income) || 0),
+    (acc, row) => acc + row.income,
     0,
   );
   const totalExpenses = safeMonthly.reduce(
-    (acc, row) => acc + (Number(row?.expenses) || 0),
+    (acc, row) => acc + row.expenses,
     0,
   );
   const savingsAmount = totalIncome - totalExpenses;
+  let monthsElapsed = countMonthsInclusive(dateRange.start, dateRange.end);
+  if (timeframe === "all" && safeMonthly.length) {
+    const keys = safeMonthly.map((row) => row.monthKey).filter((key): key is string => Boolean(key)).sort();
+    if (keys.length) monthsElapsed = countMonthsInclusive(`${keys[0]}-01`, `${keys[keys.length - 1]}-15`);
+  }
+  const insights = {
+    data: {
+      spent: totalExpenses,
+      averageAmountExpenses: monthsElapsed ? totalExpenses / monthsElapsed : 0,
+      expenseToIncomeRatio: totalIncome ? (totalExpenses / totalIncome) * 100 : 0,
+    },
+  };
+  const isLoadingInsights = false;
   const savingsRate =
     totalIncome > 0
-      ? Math.max(0, Math.round((savingsAmount / totalIncome) * 100))
+      ? Math.round((savingsAmount / totalIncome) * 100)
       : 0;
 
   const topCategory =
@@ -115,7 +143,7 @@ export default function ReportsPage() {
   const highestSpendingMonth =
     safeMonthly.length > 0
       ? [...safeMonthly].sort(
-        (a, b) => (Number(b?.expenses) || 0) - (Number(a?.expenses) || 0),
+            (a, b) => b.expenses - a.expenses,
       )[0]
       : undefined;
 

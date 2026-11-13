@@ -25,6 +25,28 @@ export class TransactionRepository {
     return this.repo.save(newTransaction);
   }
 
+  async createMany(
+    transactions: Array<{
+      date: Date;
+      description: string;
+      category: string;
+      amount: number;
+      recurrence: string | null;
+    }>,
+    userId: number,
+  ): Promise<void> {
+    if (!transactions.length) return;
+    const now = new Date();
+    await this.repo.insert(
+      transactions.map((transaction) => ({
+        ...transaction,
+        user: { id: userId },
+        createdAt: now,
+        updatedAt: now,
+      })),
+    );
+  }
+
   async findByUser(userId: number): Promise<User> {
     const userRepo = this.repo.manager.getRepository(User);
     const user = await userRepo.findOne({

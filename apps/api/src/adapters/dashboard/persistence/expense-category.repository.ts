@@ -16,6 +16,19 @@ export class ExpenseCategoryRepository {
     const newExpenseCategory = this.repo.create(expenseCategory);
     return this.repo.save(newExpenseCategory);
   }
+  async createMany(
+    categories: Array<Pick<ExpenseCategory, 'name' | 'value' | 'user'>>,
+  ): Promise<void> {
+    if (!categories.length) return;
+    const now = new Date();
+    await this.repo.insert(
+      categories.map((category) => ({
+        ...category,
+        createdAt: now,
+        updatedAt: now,
+      })),
+    );
+  }
   async findByUser(userId: number): Promise<ExpenseCategory[]> {
     return this.repo.find({ where: { user: { id: userId } } });
   }

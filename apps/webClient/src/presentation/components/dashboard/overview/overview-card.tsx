@@ -43,7 +43,7 @@ export function OverviewCard({
         </span>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-lg bg-purple-50 p-4 dark:bg-slate-700">
+        <div className="rounded-lg bg-purple-50 p-4 dark:border dark:border-purple-800/60 dark:bg-purple-950/40">
           <div className="flex items-center gap-2">
             <div className="rounded-full bg-purple-100 p-2 dark:bg-purple-900">
               <DollarSign className="h-5 w-5 text-purple-600 dark:text-purple-400" />
@@ -52,7 +52,7 @@ export function OverviewCard({
           </div>
           <p className="mt-2 text-2xl font-bold">{balance}</p>
         </div>
-        <div className="rounded-lg bg-green-50 p-4 dark:bg-slate-700">
+        <div className="rounded-lg bg-green-50 p-4 dark:border dark:border-green-800/60 dark:bg-green-950/40">
           <div className="flex items-center gap-2">
             <div className="rounded-full bg-green-100 p-2 dark:bg-green-900">
               <ArrowUpRight className="h-5 w-5 text-green-600 dark:text-green-400" />
@@ -61,11 +61,11 @@ export function OverviewCard({
               {t("dashboard.summaryIncome")}
             </span>
           </div>
-          <p className="mt-2 text-2xl font-bold text-green-600 dark:text-green-400">
+          <p className="mt-2 text-2xl font-bold text-green-600 dark:text-green-300">
             {income}
           </p>
         </div>
-        <div className="rounded-lg bg-red-50 p-4 dark:bg-slate-700">
+        <div className="rounded-lg bg-red-50 p-4 dark:border dark:border-red-800/60 dark:bg-red-950/40">
           <div className="flex items-center gap-2">
             <div className="rounded-full bg-red-100 p-2 dark:bg-red-900">
               <ArrowDownRight className="h-5 w-5 text-red-600 dark:text-red-400" />
@@ -74,7 +74,7 @@ export function OverviewCard({
               {t("dashboard.totalExpenses")}
             </span>
           </div>
-          <p className="mt-2 text-2xl font-bold text-red-600 dark:text-red-400">
+          <p className="mt-2 text-2xl font-bold text-red-600 dark:text-red-300">
             {expenses}
           </p>
         </div>

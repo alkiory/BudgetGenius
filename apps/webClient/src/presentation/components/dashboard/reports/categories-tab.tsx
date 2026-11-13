@@ -142,7 +142,7 @@ export default function CategoryTab({
                   <Pie
                     data={categories}
                     dataKey="amount"
-                    nameKey="category"
+                    nameKey="name"
                     cx="50%"
                     cy="46%"
                     outerRadius={58}

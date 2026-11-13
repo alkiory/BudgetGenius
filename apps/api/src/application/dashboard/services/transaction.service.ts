@@ -4,6 +4,7 @@ import { TransactionRepository } from '@adapters/dashboard/persistence/transacti
 import { UpdateTransactionDto } from '../dto/update-transaction.dto';
 import { User } from '@domain/user/user.entity';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
+import { ImportTransactionItemDto } from '../dto/import-transactions.dto';
 
 /**
  * Money is stored with two decimals. Historical rows written by the
@@ -41,6 +42,19 @@ export class TransactionService {
     };
 
     return this.transactionRepo.create(transaction);
+  }
+
+  async importTransactions(userId: number, items: ImportTransactionItemDto[]) {
+    const user = await this.userRepo.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+    const normalized = items.map((item) => ({
+      ...item,
+      date: new Date(item.date),
+      amount: roundToCents(item.amount),
+      recurrence: item.recurrence ?? null,
+    }));
+    await this.transactionRepo.createMany(normalized, userId);
+    return { created: normalized.length };
   }
 
   async getTransactionsByUser({

@@ -6,8 +6,8 @@ import {
 import api from "@infrastructure/api.config";
 
 export const HttpReportRepository: ReportsRepository = {
-  getOverview: async ({ year }: { year: string }) => {
-    const response = await api.get("/reports/overview", { params: { year } });
+  getOverview: async ({ start, end }: { start: string; end: string }) => {
+    const response = await api.get("/reports/overview", { params: { start, end } });
     return response.data;
   },
 
@@ -17,8 +17,8 @@ export const HttpReportRepository: ReportsRepository = {
     });
     return response.data;
   },
-  getWeekly: async () => {
-    const response = await api.get("/reports/weekly");
+  getWeekly: async ({ start, end }: { start: string; end: string }) => {
+    const response = await api.get("/reports/weekly", { params: { start, end } });
     return response.data;
   },
   getSavings: async ({ year }: { year: string }) => {
