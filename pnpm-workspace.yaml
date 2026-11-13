@@ -6,3 +6,15 @@ packages:
 # https://pnpm.io/settings#workspace-overrides for the new home.
 overrides:
   '@firebasegen/default-connector': link:dataconnect-generated/js/default-connector
+
+# pnpm 12 blocks dependency lifecycle scripts unless explicitly approved.
+# Firebase util generates its runtime config stub, SWC and esbuild install
+# their platform binaries; other scripts reported by CI are informational
+# or telemetry and stay disabled.
+allowBuilds:
+  '@firebase/util': true
+  '@nestjs/core': false
+  '@scarf/scarf': false
+  '@swc/core': true
+  esbuild: true
+  protobufjs: false

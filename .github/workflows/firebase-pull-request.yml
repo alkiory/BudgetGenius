@@ -19,7 +19,7 @@ jobs:
           node-version: "22"
 
       - name: Install pnpm
-        run: npm install -g pnpm
+        run: npm install -g pnpm@12.18.0
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile

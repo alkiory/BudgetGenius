@@ -18,7 +18,7 @@ jobs:
         run: echo "version=$(git describe --tags --always --dirty 2>/dev/null || git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Install pnpm
-        run: npm install -g pnpm
+        run: npm install -g pnpm@12.18.0
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
