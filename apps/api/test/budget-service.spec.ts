@@ -171,6 +171,7 @@ describe('BudgetService', () => {
         {
           provide: UserSettingsService,
           useValue: {
+            getCurrencyForUser: jest.fn().mockResolvedValue('USD'),
             getOrCreateSettings: jest.fn().mockResolvedValue({
               id: 1,
               timezone: 'UTC',
