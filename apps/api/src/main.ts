@@ -50,43 +50,36 @@ async function bootstrap() {
   //     script-execution risk CSP is defending here.
   //   - `connect-src` includes the CORS allow-list so a same-origin copy
   //     of the SPA served by this API can still reach the API origin.
-  const cspDirectives = {
-    defaultSrc: ["'self'"],
-    baseUri: ["'self'"],
-    fontSrc: ["'self'", 'data:'],
-    formAction: ["'self'"],
-    frameAncestors: ["'none'"],
-    imgSrc: ["'self'", 'data:', 'blob:'],
-    objectSrc: ["'none'"],
-    scriptSrc: ["'self'"],
-    styleSrc: ["'self'", "'unsafe-inline'"],
-    connectSrc: ["'self'", ...allowedOrigins],
-    ...(isProduction ? {} : { upgradeInsecureRequests: null }),
-  };
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          baseUri: ["'self'"],
+          fontSrc: ["'self'", 'data:'],
+          formAction: ["'self'"],
+          frameAncestors: ["'none'"],
+          imgSrc: ["'self'", 'data:', 'blob:'],
+          objectSrc: ["'none'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          connectSrc: ["'self'", ...allowedOrigins],
+          ...(isProduction ? {} : { upgradeInsecureRequests: null }),
+        },
+      },
+      // Firebase Hosting / the APK fetch fonts and images cross-origin;
+      // `same-origin` (the helmet default) would block those no-cors reads.
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
 
-  const helmetBase = {
-    contentSecurityPolicy: { directives: cspDirectives },
-    // Firebase Hosting / the APK fetch fonts and images cross-origin;
-    // `same-origin` (the helmet default) would block those no-cors reads.
-    crossOriginResourcePolicy: { policy: 'cross-origin' as const },
-  };
-
-  const secureHeaders = helmet(helmetBase);
-  const secureHeadersWithoutCsp = helmet({
-    ...helmetBase,
-    contentSecurityPolicy: false,
-  });
-
-  // Paths whose HTML needs inline scripts (see the CSP comment above).
-  const CSP_EXEMPT_PATHS = ['/docs', '/api/auth/google-callback'];
-
-  app.use((req, res, next) => {
-    const url = req.originalUrl || req.url || '';
-    const isExempt = CSP_EXEMPT_PATHS.some(
-      (path) =>
-        url === path || url.startsWith(`${path}/`) || url.startsWith(`${path}?`),
-    );
-    return (isExempt ? secureHeadersWithoutCsp : secureHeaders)(req, res, next);
+  // Swagger UI and the Google-OAuth custom-scheme shim ship inline
+  // <script> blocks, so they need the CSP off. Helmet already set the
+  // header on the response by the time this runs; dropping it for those
+  // two paths is cheaper than a second helmet instance per request.
+  app.use(['/docs', '/api/auth/google-callback'], (_req, res, next) => {
+    res.removeHeader('Content-Security-Policy');
+    next();
   });
 
   // Global settings

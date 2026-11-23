@@ -55,7 +55,7 @@ const PROXY_UNAVAILABLE_CODES = [502, 503, 504];
 //   1. **Response interceptor** — on every successful auth response,
 //      keep `data.accessToken` + `data.refreshToken` in module memory
 //      for the rest of the page's lifetime. QA-0.5: they are NO LONGER
-//      written to `localStorage` on the web — see `persistTokens`.
+//      written to `localStorage` on the web — see `saveTokens`.
 //   2. **Request interceptor** — attach `Authorization: Bearer
 //      <in-memory token>` so the backend's auth pipeline works even if
 //      cookies were dropped. Backend already allowlists
@@ -97,51 +97,53 @@ const STORAGE_KEY_REFRESH = "refreshToken";
  * interceptor's 401 handler declines to recurse (it falls into
  * `Promise.reject(error)`), the outer `await refreshToken()` rejects,
  * and the parent request's `catch (refreshError)` block runs as
- * designed: clears localStorage, fires the "sesión expirada" toast.
+ * designed: clears the token copies, fires the "sesión expirada" toast.
  */
 const RETRY_GUARD = { _retry: true } as AxiosRequestConfig & {
   _retry?: boolean;
 };
 
 /**
- * In-memory token holder.
+ * Token storage.
  *
- * QA-0.5 — JWTs are no longer persisted to `localStorage` in a browser.
- * Web Storage is readable by any script on the origin, so one XSS (or
- * one compromised dependency) walks away with a 7-day refresh token.
- * The web SPA authenticates through the server's `HttpOnly; Secure;
- * SameSite=None` cookies instead; the in-memory copy exists only so the
- * same tab can send `Authorization: Bearer` right after login and so
- * `/auth/refresh` can replay the token in its body.
+ * QA-0.5 — a browser no longer persists JWTs to `localStorage`: Web
+ * Storage is readable by any script on the origin, so one XSS (or one
+ * compromised dependency) walks away with a 7-day refresh token. The web
+ * SPA authenticates through the server's `HttpOnly; Secure;
+ * SameSite=None` cookies; the copy below just lets the same tab send
+ * `Authorization: Bearer` and replay the refresh token in the
+ * `/auth/refresh` body until the next reload.
  *
- * The Capacitor WebView is the one runtime that still needs a durable
- * copy: Android System WebView drops cross-origin `Set-Cookie`, so the
- * APK has no cookie channel and would lose the session on every cold
- * start. Persistence there is gated behind `isNativePlatform()`.
+ * The Capacitor WebView is the one runtime that needs a durable copy:
+ * Android System WebView drops cross-origin `Set-Cookie`, so the APK has
+ * no cookie channel and would lose the session on every cold start.
  *
- * Why no JS-side `document.cookie` write: the server's response sets
- * the cookie via `Set-Cookie`; a JS-side `SameSite=Lax` cookie for the
- * same name would create a SameSite desync where the browser keeps one
- * cookie and ignores the other.
+ * Why no JS-side `document.cookie` write: the server sets the cookie via
+ * `Set-Cookie`; a JS-side `SameSite=Lax` cookie for the same name would
+ * desync it (the browser keeps one and ignores the other).
  */
-let inMemoryTokens: {
+const persistsTokens = isNativePlatform();
+
+let tokens: {
   accessToken: string | null;
   refreshToken: string | null;
 } = { accessToken: null, refreshToken: null };
 
-function persistTokens(accessToken: string, refreshToken: string): void {
-  inMemoryTokens = { accessToken, refreshToken };
-
-  // Drop anything left behind by an older build so a browser session
-  // cannot keep using a stale, script-readable copy of the tokens.
+// Leftovers from builds that stored the pair here. Dropped once at boot;
+// nothing below reads them on the web any more.
+if (!persistsTokens) {
   try {
     window.localStorage.removeItem(STORAGE_KEY_ACCESS);
     window.localStorage.removeItem(STORAGE_KEY_REFRESH);
   } catch {
     // localStorage may throw in incognito / sandboxed contexts.
   }
+}
 
-  if (!isNativePlatform()) {
+function saveTokens(accessToken: string, refreshToken: string): void {
+  tokens = { accessToken, refreshToken };
+
+  if (!persistsTokens) {
     return;
   }
 
@@ -149,44 +151,33 @@ function persistTokens(accessToken: string, refreshToken: string): void {
     window.localStorage.setItem(STORAGE_KEY_ACCESS, accessToken);
     window.localStorage.setItem(STORAGE_KEY_REFRESH, refreshToken);
   } catch {
-    // WebView storage unavailable — the body channel still works.
+    // WebView storage unavailable — the in-memory copy still works.
   }
 }
 
-/**
- * Pull the tokens back out for the Authorization header +
- * /auth/refresh request body: memory first, `localStorage` only on
- * native (see `persistTokens`). In a browser this returns nulls once the
- * page is reloaded and the `HttpOnly` cookies carry the session.
- */
-function readPersistedTokens(): {
+function loadTokens(): {
   accessToken: string | null;
   refreshToken: string | null;
 } {
-  if (inMemoryTokens.accessToken || inMemoryTokens.refreshToken) {
-    return { ...inMemoryTokens };
+  // Cold start on native: the in-memory pair is empty, the cookie channel
+  // is broken, so the persisted copy is the only session left.
+  if (persistsTokens && !tokens.accessToken && !tokens.refreshToken) {
+    try {
+      tokens = {
+        accessToken: window.localStorage.getItem(STORAGE_KEY_ACCESS),
+        refreshToken: window.localStorage.getItem(STORAGE_KEY_REFRESH),
+      };
+    } catch {
+      // ignore — stay on the empty in-memory pair
+    }
   }
 
-  if (!isNativePlatform()) {
-    return { accessToken: null, refreshToken: null };
-  }
-
-  try {
-    return {
-      accessToken: window.localStorage.getItem(STORAGE_KEY_ACCESS),
-      refreshToken: window.localStorage.getItem(STORAGE_KEY_REFRESH),
-    };
-  } catch {
-    return { accessToken: null, refreshToken: null };
-  }
+  return tokens;
 }
 
-/**
- * Clears both token channels. Called on logout, on delete-account and on
- * an unrecoverable refresh failure.
- */
+/** Clears both channels: logout, delete-account, unrecoverable refresh. */
 export function clearPersistedTokens(): void {
-  inMemoryTokens = { accessToken: null, refreshToken: null };
+  tokens = { accessToken: null, refreshToken: null };
 
   try {
     window.localStorage.removeItem(STORAGE_KEY_ACCESS);
@@ -199,10 +190,8 @@ export function clearPersistedTokens(): void {
 // ── Request interceptor: attach Authorization + X-Device-Id ────────
 //
 // Registered BEFORE the response interceptor so every outbound
-// request picks up the headers. The `_retry` flag suppresses the
-// Authorization header when retrying a request that already failed
-// (the request headers are computed fresh from current localStorage
-// state, so a successful _retry_ doesn't re-emit a stale token).
+// request picks up the headers. Headers are computed fresh per request,
+// so a retry never re-emits a token that was cleared in the meantime.
 api.interceptors.request.use((config) => {
   try {
     // v1.3.0 (mobile-cookies-persistence review-note §6): skip the
@@ -217,16 +206,15 @@ api.interceptors.request.use((config) => {
     // and (c) collide with the `refreshToken()` function below which
     // explicitly puts the refresh token in the body. The refresh
     // contract is body-first; the interceptor defers.
-    const url = config.url || "";
-    const isRefresh = url.includes("/auth/refresh");
-    if (!isRefresh) {
-      const { accessToken } = readPersistedTokens();
+    config.headers = config.headers ?? {};
+
+    if (!config.url?.includes("/auth/refresh")) {
+      const { accessToken } = loadTokens();
       if (accessToken) {
-        config.headers = config.headers ?? {};
         config.headers["Authorization"] = `Bearer ${accessToken}`;
       }
     }
-    config.headers = config.headers ?? {};
+
     config.headers["X-Device-Id"] = getDeviceId();
   } catch {
     // ignore — let the request proceed without auth headers
@@ -235,37 +223,14 @@ api.interceptors.request.use((config) => {
 });
 
 const refreshToken = async (): Promise<void> => {
-  // v1.3.0 — send the refresh token in the BODY. The backend reads
-  // `req.body.refreshToken` as a fallback when the cookie path was
-  // blocked by Android WebView's third-party cookie policy. For
-  // browser-side the cookie path still works (browser forwards
-  // `refreshToken` cookie alongside the body), so backend-priority
-  // cookie wins; the body fallback covers the broken-cookie case.
-  const { refreshToken } = readPersistedTokens();
-
-  // v1.3.1 — DIAGNOSTIC. When the body is empty, log the exact origin
-  // of the call so we can reconcile why `localStorage.refreshToken` is
-  // null at this moment. The most common upstream cause is a cold-start
-  // race: a dashboard fetch fires (and 401s) BEFORE the response
-  // interceptor of an in-flight `/auth/firebase-login` has had the
-  // chance to call `persistTokens`. Without this log line the cascade
-  // had no breadcrumb — the user only saw the infinite-loop curl
-  // trace with `--data-raw '{}'` and no hint of the trigger. Cap at
-  // `console.warn` (not `error`) so it doesn't slamm dev consoles
-  // and doesn't get picked up by Sentry as a fault.
-  if (!refreshToken) {
-    console.warn(
-      "[v1.3.1] /auth/refresh POSTing with empty body — no refresh token " +
-      "in memory or (native) storage at this moment. In a browser the " +
-      "HttpOnly refreshToken cookie is expected to carry the session. " +
-      "With the _retry: true guard below the cascade is bounded to one " +
-      "call before clearing auth state.",
-    );
-  }
+  // A browser authenticates with the HttpOnly refreshToken cookie, so an
+  // empty body is the normal case there. Native sends the token in the
+  // body because Android's WebView dropped that cookie.
+  const { refreshToken: stored } = loadTokens();
 
   await api.post(
     "/auth/refresh",
-    refreshToken ? { refreshToken } : {},
+    stored ? { refreshToken: stored } : {},
     // v1.3.1 — see RETRY_GUARD docblock above.
     RETRY_GUARD,
   );
@@ -281,7 +246,7 @@ api.interceptors.response.use(
       | { accessToken?: string; refreshToken?: string }
       | undefined;
     if (data?.accessToken && data?.refreshToken) {
-      persistTokens(data.accessToken, data.refreshToken);
+      saveTokens(data.accessToken, data.refreshToken);
     }
     return response;
   },
@@ -363,10 +328,6 @@ api.interceptors.response.use(
   },
 );
 
-// Re-export the storage key constants so callers (e.g. tests) can
-// assert on them without re-declaring the magic strings.
-export const ACCESS_TOKEN_STORAGE_KEY = STORAGE_KEY_ACCESS;
-export const REFRESH_TOKEN_STORAGE_KEY = STORAGE_KEY_REFRESH;
 export const X_DEVICE_ID_HEADER = "X-Device-Id";
 
 export default api;
