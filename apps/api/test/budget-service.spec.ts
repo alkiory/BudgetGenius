@@ -7,10 +7,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { LoggingService } from '@infrastructure/log/logger.service';
-import { UserSettingsService } from '@application/user/user-settings.service';
 import { QueryFailedError } from 'typeorm';
 import { BUDGET_CATEGORY_UNIQUE_CONSTRAINT_NAME } from '@domain/dashboard/budget-category.entity';
-import { SupportedCurrency } from '@domain/user/user-settings.entity';
 
 // Full mock User object matching the User entity
 const mockUser = {
@@ -99,7 +97,6 @@ const mockCategoryShape = {
   allocated: 550,
   spent: 250,
   manualSpent: 250,
-  currency: 'USD' as SupportedCurrency,
   createdAt: new Date(),
   updatedAt: new Date(),
   budget: { ...categoryBudget },
@@ -166,18 +163,6 @@ describe('BudgetService', () => {
             log: jest.fn(),
             warn: jest.fn(),
             error: jest.fn(),
-          },
-        },
-        {
-          provide: UserSettingsService,
-          useValue: {
-            getCurrencyForUser: jest.fn().mockResolvedValue('USD'),
-            getOrCreateSettings: jest.fn().mockResolvedValue({
-              id: 1,
-              timezone: 'UTC',
-              currency: 'USD',
-              locale: 'en-US',
-            }),
           },
         },
       ],
@@ -908,8 +893,8 @@ describe('BudgetService', () => {
     });
   });
 
-  describe('single-currency budget totals', () => {
-    it('sums mixed-currency entries unchanged when listing budgets', async () => {
+  describe('single-currency budget totals (D1)', () => {
+    it('sums every category at face value under one account currency', async () => {
       const mixedBudget = buildBudget({
         id: 1,
         totalSpent: 0,
@@ -921,15 +906,12 @@ describe('BudgetService', () => {
             spent: 50,
             allocated: 50,
           }),
-          {
-            ...buildCategory({
-              id: 2,
-              name: 'Sweets',
-              spent: 200000,
-              allocated: 200000,
-            }),
-            currency: 'COP',
-          },
+          buildCategory({
+            id: 2,
+            name: 'Sweets',
+            spent: 200000,
+            allocated: 200000,
+          }),
         ],
       });
       repo.findByUser.mockResolvedValue([mixedBudget]);
@@ -941,7 +923,7 @@ describe('BudgetService', () => {
       const result = await service.getBudgets(1);
 
       expect(result).toHaveLength(1);
-      // Switching currency does not alter the source numeric values.
+      // No conversion is applied: totals are the plain sum of stored values.
       expect(result[0].totalSpent).toBe(200050);
       expect(result[0].totalAllocated).toBe(200050);
     });
@@ -969,18 +951,15 @@ describe('BudgetService', () => {
       expect(result[0].totalAllocated).toBe(550);
     });
 
-    it('keeps category values unchanged even when their currency differs from the user setting', async () => {
+    it('keeps category values unchanged and exposes no per-category currency', async () => {
       const copBudget = buildBudget({
         id: 1,
         categories: [
-          {
-            ...buildCategory({
-              id: 1,
-              spent: 50,
-              allocated: 50,
-            }),
-            currency: 'COP' as SupportedCurrency,
-          },
+          buildCategory({
+            id: 1,
+            spent: 50,
+            allocated: 50,
+          }),
         ],
       });
       repo.findByUser.mockResolvedValue([copBudget]);
@@ -993,18 +972,17 @@ describe('BudgetService', () => {
 
       expect(result[0].totalSpent).toBe(50);
       expect(result[0].totalAllocated).toBe(50);
+      // D1: the column is gone, so the API contract no longer leaks it.
+      expect(result[0].categories?.[0]).not.toHaveProperty('currency');
     });
 
-    it('recalculates mixed-currency category totals without conversion', async () => {
-      const copCategory = {
-        ...buildCategory({
-          id: 1,
-          spent: 200000,
-          allocated: 200000,
-          budget: { ...categoryBudget, id: 1 },
-        }),
-        currency: 'COP' as SupportedCurrency,
-      };
+    it('recalculates category totals without conversion', async () => {
+      const copCategory = buildCategory({
+        id: 1,
+        spent: 200000,
+        allocated: 200000,
+        budget: { ...categoryBudget, id: 1 },
+      });
       const copBudget = buildBudget({
         id: 1,
         totalSpent: 0,
@@ -1024,7 +1002,6 @@ describe('BudgetService', () => {
         name: 'Sweets',
         allocated: 200000,
         spent: 200000,
-        currency: 'COP',
       } as any);
 
       expect(repo.updateBudget).toHaveBeenCalledTimes(1);

@@ -21,4 +21,27 @@ export class UserSettingsRepository {
   save(settings: UserSettings) {
     return this.repo.save(settings);
   }
+
+  /**
+   * D1: rows that would be silently re-labelled (not converted) if the
+   * profile currency changed. A transaction or a budget stores a bare
+   * amount, so `PATCH /user-settings { currency }` after money exists
+   * reinterprets every historical number. One round-trip with two
+   * sub-selects because this runs on every PATCH that carries a currency.
+   *
+   * Tables are schema-qualified on purpose: `manager.query` bypasses
+   * TypeORM's `schema: 'bg_public'` qualification.
+   */
+  async countFinancialHistory(userId: number): Promise<number> {
+    const rows: Array<{ count: number }> = await this.repo.manager.query(
+      `SELECT (
+         (SELECT count(*) FROM "bg_public"."transactions"
+           WHERE "userId" = $1)
+         + (SELECT count(*) FROM "bg_public"."budgets"
+             WHERE "userId" = $1)
+       )::int AS count`,
+      [userId],
+    );
+    return Number(rows?.[0]?.count ?? 0);
+  }
 }

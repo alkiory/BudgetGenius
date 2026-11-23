@@ -8,24 +8,18 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Budget } from './budget.entity';
-import { SupportedCurrency } from '@domain/user/user-settings.entity';
 
 @Entity('budget_categories')
 export class BudgetCategory {
   @PrimaryGeneratedColumn()
   id: number;
 
+  /**
+   * No per-category currency: D1 makes `user_settings.currency` the single
+   * money unit of the account (migration 1800000000011 dropped the copy).
+   */
   @Column()
   name: string;
-
-  @Column({
-    type: 'enum',
-    enum: ['USD', 'EUR', 'COP'],
-    enumName: 'currency_enum',
-    nullable: false,
-    default: 'USD',
-  })
-  currency: SupportedCurrency;
 
   @Column('numeric', {
     transformer: {

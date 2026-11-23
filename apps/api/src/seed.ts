@@ -348,28 +348,24 @@ async function seed(): Promise<void> {
           categories: [
             {
               name: 'Rent',
-              currency: CURRENCY,
               allocated: 900,
               manualSpent: 0,
               spent: 0,
             },
             {
               name: 'Groceries',
-              currency: CURRENCY,
               allocated: 500,
               manualSpent: 0,
               spent: 0,
             },
             {
               name: 'Transportation',
-              currency: CURRENCY,
               allocated: 350,
               manualSpent: 0,
               spent: 0,
             },
             {
               name: 'Food',
-              currency: CURRENCY,
               allocated: 250,
               manualSpent: 0,
               spent: 0,
@@ -392,7 +388,6 @@ async function seed(): Promise<void> {
           categories: [
             {
               name: 'Transportation',
-              currency: CURRENCY,
               allocated: SAVINGS_GOAL,
               manualSpent: SAVED_AMOUNT,
               spent: SAVED_AMOUNT,
