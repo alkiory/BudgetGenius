@@ -602,8 +602,19 @@ export class AuthController {
       await this.authService.refreshToken(userId, token);
 
       // ... generar nuevo accessToken y setearlo en cookie
+      //
+      // Claims explícitos, NO `{ ...payload }`: el token de refresco ya
+      // trae `iat`/`exp`, y jsonwebtoken rechaza `expiresIn` cuando el
+      // payload los incluye ("Bad options.expiresIn option the payload
+      // already has an exp property"). Ese throw caía en el catch de
+      // abajo, así que /auth/refresh devolvía 401 con cualquier token
+      // válido y ninguna sesión podía rotar tras los 30 min de la cookie.
       const newAccessToken = this.jwtService.sign(
-        { ...payload },
+        {
+          id: payload['id'],
+          email: payload['email'],
+          role: payload['role'],
+        },
         { expiresIn: '1h' },
       );
 
@@ -619,31 +630,14 @@ export class AuthController {
       // re-emit it. See rpi/mobile-cookies-persistence/.
       return { success: true, accessToken: newAccessToken };
     } catch (error) {
+      // Breadcrumb for the flat 401 below: the client only ever sees
+      // "Invalid refresh token", which is indistinguishable from an
+      // expired/revoked session, a signature mismatch or a Redis outage.
+      this.logger.warn(
+        `🔒 /auth/refresh rejected: ${(error as Error)?.message ?? error}`,
+      );
       throw new UnauthorizedException('Invalid refresh token');
     }
-  }
-
-  @Post('set-cookies')
-  @ApiOperation({
-    summary: 'Establecer cookies JWT desde el WebView de Capacitor',
-  })
-  @ApiResponse({ status: 200, description: 'Cookies seteadas correctamente' })
-  async setCookies(
-    @Body() body: { accessToken: string; refreshToken: string },
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    if (!body.accessToken || !body.refreshToken) {
-      throw new UnauthorizedException(
-        'Access token and refresh token are required',
-      );
-    }
-
-    this.cookieService.setCookie(res, 'accessToken', body.accessToken);
-    this.cookieService.setCookie(res, 'refreshToken', body.refreshToken, {
-      maxAge: REFRESH_COOKIE_MAX_AGE,
-    });
-
-    return { success: true, message: 'Cookies set successfully' };
   }
 
 }

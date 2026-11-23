@@ -20,9 +20,12 @@ RUN pnpm install --frozen-lockfile
 # 5. Copiar el resto del código fuente
 COPY . .
 
-# 6. Manejo flexible de variables de entorno
-# El '*' hace que el comando no falle si el archivo no existe
-COPY apps/api/.env.production .env
+# 6. Las variables de entorno NO se copian a la imagen.
+# El archivo apps/api/.env.production se horneaba aquí (`COPY ... .env`),
+# lo que dejaba JWT_SECRET, DB_PASS y las claves de Firebase legibles en
+# cualquier capa de la imagen. Ahora el entorno llega en runtime
+# (docker-compose.prod.yml → env_file / environment). `.dockerignore`
+# excluye los .env para que ni siquiera `COPY . .` los arrastre.
 
 # 7. Build usando Turborepo
 # Usamos el comando de pnpm pero nos aseguramos de estar en la carpeta correcta

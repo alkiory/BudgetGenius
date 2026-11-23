@@ -18,6 +18,9 @@ services:
       - DB_NAME=budgetgenius_prod
       - DB_USER=postgres_admin_prod
       - DB_PASS=${DB_PASSWORD}
+      # QA-0.6 — Redis exige AUTH. RedisService y el ThrottlerModule
+      # leen esta misma variable.
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     networks:
       - app-network
       - npm_network
@@ -48,12 +51,29 @@ services:
     image: redis:7.2-alpine
     container_name: bg-redis-prod
     restart: always
+    # QA-0.6 — sin `--requirepass`, cualquier contenedor de la red
+    # (o cualquiera que alcance el 6379 publicado) podía leer y escribir
+    # los refresh tokens y los contadores del throttle. La interpolación
+    # con `:?` hace fallar el `up` si la variable no está definida, en vez
+    # de arrancar Redis abierto en silencio.
+    command:
+      - redis-server
+      - --requirepass
+      - "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     networks:
       - app-network
     volumes:
       - redisdata_prod:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      # `redis-cli ping` a secas devuelve NOAUTH y el contenedor nunca
+      # llegaría a healthy (el backend no arrancaría por depends_on).
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG",
+        ]
       interval: 5s
       timeout: 3s
       retries: 5

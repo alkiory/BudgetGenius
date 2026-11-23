@@ -240,7 +240,7 @@ api.interceptors.response.use(
   (response) => {
     // Persist tokens from successful auth responses so the next
     // request's request-interceptor can pick them up. Fires on
-    // /auth/{login,signup,firebase-login,refresh,set-cookies}
+    // /auth/{login,signup,firebase-login,refresh}
     // responses and any other endpoint that returns the token pair.
     const data = response.data as
       | { accessToken?: string; refreshToken?: string }
