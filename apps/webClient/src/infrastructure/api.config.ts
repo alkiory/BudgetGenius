@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 // Internal imports grouped in alphabetical order per the
 // project's `import/order` eslint rule.
 import { getDeviceId } from "./device-id";
+import { isNativePlatform } from "./native";
 import { enqueueRequest, registerOnlineListener } from "./offline-queue";
 import { requestQueue } from "./request-queue";
 
@@ -52,15 +53,13 @@ const PROXY_UNAVAILABLE_CODES = [502, 503, 504];
 // JWT strategy in `apps/api/src/infrastructure/config/strategy/jwt.strategy.ts`).
 // The mirror here is:
 //   1. **Response interceptor** — on every successful auth response,
-//      persist `data.accessToken` + `data.refreshToken` to BOTH
-//      `localStorage` (web storage; survives reloads) AND the
-//      browser's cookie jar via `document.cookie` (so the same-site
-//      cookie path keeps working on web SPA and the Capacitor path
-//      that hasn't blocked cookies yet).
+//      keep `data.accessToken` + `data.refreshToken` in module memory
+//      for the rest of the page's lifetime. QA-0.5: they are NO LONGER
+//      written to `localStorage` on the web — see `persistTokens`.
 //   2. **Request interceptor** — attach `Authorization: Bearer
-//      ${localStorage.accessToken}` so the backend's auth pipeline
-//      works even if cookies were dropped. Backend already allowlists
-//      `Authorization` in CORS (`apps/api/src/main.ts:99`).
+//      <in-memory token>` so the backend's auth pipeline works even if
+//      cookies were dropped. Backend already allowlists
+//      `Authorization` in CORS (`apps/api/src/cors.ts`).
 //   3. **`X-Device-Id`** — emit a per-install stable id (generated
 //      on first load via `crypto.randomUUID` or `getRandomValues`,
 //      persisted in `localStorage.bgDeviceId`). Backend's
@@ -105,45 +104,96 @@ const RETRY_GUARD = { _retry: true } as AxiosRequestConfig & {
 };
 
 /**
- * Persist the token pair to localStorage only.
+ * In-memory token holder.
  *
- * Why no JS-side `document.cookie` write: the server's response ALSO
- * sets the cookie via `Set-Cookie` with the prod shape
- * (`HttpOnly; Secure; SameSite=None`); a JS-side `SameSite=Lax`
- * cookie for the same name would create a SameSite desync where the
- * browser keeps one cookie and ignores the other. Since v1.3.1, the
- * server is the single source of truth for the cookie channel;
- * localStorage is the source of truth for the body / Authorization
- * channel. Trying to write both from the JS side is a bug magnet.
+ * QA-0.5 — JWTs are no longer persisted to `localStorage` in a browser.
+ * Web Storage is readable by any script on the origin, so one XSS (or
+ * one compromised dependency) walks away with a 7-day refresh token.
+ * The web SPA authenticates through the server's `HttpOnly; Secure;
+ * SameSite=None` cookies instead; the in-memory copy exists only so the
+ * same tab can send `Authorization: Bearer` right after login and so
+ * `/auth/refresh` can replay the token in its body.
+ *
+ * The Capacitor WebView is the one runtime that still needs a durable
+ * copy: Android System WebView drops cross-origin `Set-Cookie`, so the
+ * APK has no cookie channel and would lose the session on every cold
+ * start. Persistence there is gated behind `isNativePlatform()`.
+ *
+ * Why no JS-side `document.cookie` write: the server's response sets
+ * the cookie via `Set-Cookie`; a JS-side `SameSite=Lax` cookie for the
+ * same name would create a SameSite desync where the browser keeps one
+ * cookie and ignores the other.
  */
+let inMemoryTokens: {
+  accessToken: string | null;
+  refreshToken: string | null;
+} = { accessToken: null, refreshToken: null };
+
 function persistTokens(accessToken: string, refreshToken: string): void {
+  inMemoryTokens = { accessToken, refreshToken };
+
+  // Drop anything left behind by an older build so a browser session
+  // cannot keep using a stale, script-readable copy of the tokens.
+  try {
+    window.localStorage.removeItem(STORAGE_KEY_ACCESS);
+    window.localStorage.removeItem(STORAGE_KEY_REFRESH);
+  } catch {
+    // localStorage may throw in incognito / sandboxed contexts.
+  }
+
+  if (!isNativePlatform()) {
+    return;
+  }
+
   try {
     window.localStorage.setItem(STORAGE_KEY_ACCESS, accessToken);
     window.localStorage.setItem(STORAGE_KEY_REFRESH, refreshToken);
   } catch {
-    // localStorage may throw in incognito / sandboxed contexts —
-    // the server's Set-Cookie still covers the same-site browser
-    // path; nothing else we can do here at boot time.
+    // WebView storage unavailable — the body channel still works.
   }
 }
 
 /**
- * Pull the persisted tokens back out for the Authorization header +
- * /auth/refresh request body.
+ * Pull the tokens back out for the Authorization header +
+ * /auth/refresh request body: memory first, `localStorage` only on
+ * native (see `persistTokens`). In a browser this returns nulls once the
+ * page is reloaded and the `HttpOnly` cookies carry the session.
  */
 function readPersistedTokens(): {
   accessToken: string | null;
   refreshToken: string | null;
 } {
-  let accessToken: string | null = null;
-  let refreshToken: string | null = null;
-  try {
-    accessToken = window.localStorage.getItem(STORAGE_KEY_ACCESS);
-    refreshToken = window.localStorage.getItem(STORAGE_KEY_REFRESH);
-  } catch {
-    // ignore — see persistTokens() comment
+  if (inMemoryTokens.accessToken || inMemoryTokens.refreshToken) {
+    return { ...inMemoryTokens };
   }
-  return { accessToken, refreshToken };
+
+  if (!isNativePlatform()) {
+    return { accessToken: null, refreshToken: null };
+  }
+
+  try {
+    return {
+      accessToken: window.localStorage.getItem(STORAGE_KEY_ACCESS),
+      refreshToken: window.localStorage.getItem(STORAGE_KEY_REFRESH),
+    };
+  } catch {
+    return { accessToken: null, refreshToken: null };
+  }
+}
+
+/**
+ * Clears both token channels. Called on logout, on delete-account and on
+ * an unrecoverable refresh failure.
+ */
+export function clearPersistedTokens(): void {
+  inMemoryTokens = { accessToken: null, refreshToken: null };
+
+  try {
+    window.localStorage.removeItem(STORAGE_KEY_ACCESS);
+    window.localStorage.removeItem(STORAGE_KEY_REFRESH);
+  } catch {
+    // incognito / sandboxed contexts
+  }
 }
 
 // ── Request interceptor: attach Authorization + X-Device-Id ────────
@@ -205,10 +255,11 @@ const refreshToken = async (): Promise<void> => {
   // and doesn't get picked up by Sentry as a fault.
   if (!refreshToken) {
     console.warn(
-      "[v1.3.1] /auth/refresh POSTing with empty body — " +
-      "localStorage.refreshToken is null at this moment. " +
-      "With the _retry: true guard below the cascade is now " +
-      "bounded to one call before clearing auth state.",
+      "[v1.3.1] /auth/refresh POSTing with empty body — no refresh token " +
+      "in memory or (native) storage at this moment. In a browser the " +
+      "HttpOnly refreshToken cookie is expected to carry the session. " +
+      "With the _retry: true guard below the cascade is bounded to one " +
+      "call before clearing auth state.",
     );
   }
 
@@ -254,12 +305,7 @@ api.interceptors.response.use(
       } catch (refreshError) {
         requestQueue.process(refreshError);
 
-        try {
-          window.localStorage.removeItem(STORAGE_KEY_REFRESH);
-          window.localStorage.removeItem(STORAGE_KEY_ACCESS);
-        } catch {
-          // ignore
-        }
+        clearPersistedTokens();
 
         // v1.3.0 (T3.3) — surface a toast and leave the redirect to
         // the next mount. Avoiding the immediate `window.location.href`

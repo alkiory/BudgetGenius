@@ -1,8 +1,5 @@
 import { logoutAction } from "@adapters/slices/auth/authSlice";
-import {
-  ACCESS_TOKEN_STORAGE_KEY,
-  REFRESH_TOKEN_STORAGE_KEY,
-} from "@infrastructure/api.config";
+import { clearPersistedTokens } from "@infrastructure/api.config";
 import type { QueryClient } from "@tanstack/react-query";
 
 /**
@@ -41,13 +38,11 @@ const SPLASH_SHOWN_SESSION_KEY = "mobile.splash.shown";
  * Side-effect ORDER is load-bearing and codified in `knowledge.md
  * §6.8.5`:
  *
- *   1. `localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY, REFRESH_TOKEN_STORAGE_KEY)`
+ *   1. `clearPersistedTokens()` (in-memory + native-only storage)
  *      — must run BEFORE anything else. The api.config.ts response
- *        interceptor persists tokens to localStorage on every successful
- *        auth response. A background response that lands AFTER the
- *        helper runs would otherwise re-persist them while the cache
- *        is being cleared. We try/catch because incognito / sandboxed
- *        contexts throw on `removeItem`.
+ *        interceptor stores tokens on every successful auth response.
+ *        A background response that lands AFTER the helper runs would
+ *        otherwise re-populate them while the cache is being cleared.
  *
  *   2. `sessionStorage.removeItem(SPLASH_SHOWN_SESSION_KEY)` — so the
  *      next mount re-shows the splash as a clean boot. try/catch.
@@ -96,14 +91,10 @@ export function clearAuthAndStateForLogout(
     );
   }
 
-  // Side-effect 1: long-lived tokens in localStorage. try/catch for
-  // incognito / sandboxed contexts where `removeItem` throws.
-  try {
-    window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-    window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
-  } catch {
-    /* incognito / sandboxed contexts */
-  }
+  // Side-effect 1: the in-memory token copy plus anything a native
+  // (Capacitor) build persisted. `clearPersistedTokens` owns both
+  // channels; callers must not pop `localStorage` keys on their own.
+  clearPersistedTokens();
 
   // Side-effect 2: per-session splash flag. try/catch for the same
   // reason.

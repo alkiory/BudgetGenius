@@ -7,6 +7,8 @@ import {
   UseGuards,
   Req,
   Res,
+  ForbiddenException,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
@@ -32,6 +34,7 @@ import { LoginDto } from '@application/auth/dto/login.dto';
 import { CookieService } from '@infrastructure/config/cookie.service';
 import { AuthGuard } from '@nestjs/passport';
 import { User } from '@domain/user/user.entity';
+import { toPublicUser } from '@application/user/public-user';
 
 /** 7 días en milisegundos — coincide con el JWT expiry del refreshToken. */
 const REFRESH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
@@ -205,7 +208,9 @@ export class AuthController {
         // successful auth response. See rpi/mobile-cookies-persistence/.
         accessToken,
         refreshToken,
-        user: userEntity,
+        // QA-0.2 — never echo the raw entity: it carries the bcrypt
+        // `password` hash and the hashed `refreshToken`.
+        user: toPublicUser(userEntity),
       };
     } catch (error) {
       this.logger.error(`🚨 Falló el login con Firebase: ${error.message}`);
@@ -274,7 +279,7 @@ export class AuthController {
     return {
       accessToken,
       refreshToken,
-      user,
+      user: toPublicUser(user),
       isNewUser,
       message: isNewUser
         ? '🪪 Successfully signed up and logged in'
@@ -282,7 +287,35 @@ export class AuthController {
     };
   }
 
+  /**
+   * Session probe consumed by `useRestoreSession` on every app boot.
+   *
+   * Declared BEFORE `@Get(':email')` on purpose: Nest/Express register
+   * routes in declaration order, so the catch-all `:email` param used to
+   * match `GET /auth/verify` first and answer the probe with a 200 +
+   * `null` body instead of running `JwtAuthGuard`. Every boot then read
+   * "login succeeded" from a public endpoint — the session seemed valid
+   * while the token was not.
+   */
+  @Get('verify')
+  @UseGuards(JwtAuthGuard)
+  async getCurrentUser(@Req() req) {
+    // `JwtStrategy.validate` exposes only `{ userId, email, role }` —
+    // no password hash, no refresh token.
+    return {
+      isValid: true,
+      user: req.user,
+    };
+  }
+
+  /**
+   * Profile lookup by email. Was public (no guard, raw entity): anyone
+   * could enumerate accounts and read the bcrypt hash + hashed refresh
+   * token. Now authenticated, self-only (admins may read any), and
+   * projected through `toPublicUser`.
+   */
   @Get(':email')
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Obtener información de un usuario por correo electrónico',
@@ -301,9 +334,26 @@ export class AuthController {
       },
     },
   })
+  @ApiResponse({ status: 401, description: 'No autenticado' })
+  @ApiResponse({
+    status: 403,
+    description: 'Solo el propio usuario (o un admin) puede consultarlo',
+  })
   @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
-  findOne(@Param('email') email: string) {
-    return this.authService.findOne(email);
+  async findOne(@Param('email') email: string, @Req() req) {
+    if (req.user?.email !== email && req.user?.role !== 'admin') {
+      this.logger.warn(
+        `Auth lookup blocked: ${req.user?.email} tried to read ${email}`,
+      );
+      throw new ForbiddenException('⛔ You can only read your own profile');
+    }
+
+    const user = await this.authService.findOne(email);
+    if (!user) {
+      throw new NotFoundException('⚠️ User not found');
+    }
+
+    return toPublicUser(user);
   }
 
   @Post('login')
@@ -372,7 +422,7 @@ export class AuthController {
       // set above for same-site browsers. See rpi/mobile-cookies-persistence/.
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
-      user: result.user,
+      user: toPublicUser(result.user),
       message: '🔓 Login successful',
     };
   }
@@ -596,12 +646,4 @@ export class AuthController {
     return { success: true, message: 'Cookies set successfully' };
   }
 
-  @Get('verify')
-  @UseGuards(JwtAuthGuard)
-  async getCurrentUser(@Req() req) {
-    return {
-      isValid: true,
-      user: req.user,
-    };
-  }
 }
