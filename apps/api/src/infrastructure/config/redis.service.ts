@@ -56,10 +56,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         this.logger.log('🐳 Configurando conexión para Redis Local (Docker)');
       }
 
-      // QA-0.6 — un Redis con `--requirepass` necesita AUTH también sin
-      // TLS, y `REDIS_URL` no tiene por qué llevar el secreto embebido:
-      // ioredis acepta la password como opción. Es la misma variable que
-      // ya lee el ThrottlerModule en app.module.ts.
+      // QA-0.6 — Redis con `--requirepass` exige AUTH también sin TLS, y
+      // `REDIS_URL` no lleva el secreto: misma variable que ya lee el
+      // ThrottlerModule en app.module.ts.
       if (process.env.REDIS_PASSWORD) {
         redisConfig.password = process.env.REDIS_PASSWORD;
       }

@@ -51,11 +51,9 @@ services:
     image: redis:7.2-alpine
     container_name: bg-redis-prod
     restart: always
-    # QA-0.6 — sin `--requirepass`, cualquier contenedor de la red
-    # (o cualquiera que alcance el 6379 publicado) podía leer y escribir
-    # los refresh tokens y los contadores del throttle. La interpolación
-    # con `:?` hace fallar el `up` si la variable no está definida, en vez
-    # de arrancar Redis abierto en silencio.
+    # QA-0.6 — AUTH obligatorio: sin esto cualquier contenedor de la red
+    # podía leer/escribir refresh tokens y contadores del throttle. El
+    # `:?` aborta el `up` si falta la variable en vez de arrancar abierto.
     command:
       - redis-server
       - --requirepass
@@ -67,8 +65,8 @@ services:
     volumes:
       - redisdata_prod:/data
     healthcheck:
-      # `redis-cli ping` a secas devuelve NOAUTH y el contenedor nunca
-      # llegaría a healthy (el backend no arrancaría por depends_on).
+      # `ping` a secas da NOAUTH: el contenedor nunca sería healthy y el
+      # backend no arrancaría (depends_on: service_healthy).
       test:
         [
           "CMD-SHELL",
