@@ -11,6 +11,7 @@ import {
   Body,
   Req,
   UseGuards,
+  UseFilters,
   Put,
   Delete,
   BadRequestException,
@@ -25,10 +26,14 @@ import {
   ApiBody,
   ApiQuery,
 } from '@nestjs/swagger';
+import { EntityNotFoundExceptionFilter } from './filters/entity-not-found.filter';
 
 @ApiTags('Transactions')
 @Controller('transactions')
 @UseGuards(JwtAuthGuard)
+// Repos here use `findOneOrFail`, whose `EntityNotFoundError` would otherwise
+// surface as a 500 on a foreign/unknown id instead of a 404.
+@UseFilters(EntityNotFoundExceptionFilter)
 export class TransactionController {
   constructor(
     private readonly transactionService: TransactionService,
@@ -272,7 +277,8 @@ export class TransactionController {
   })
   async updateTransaction(@Body() dto: UpdateTransactionDto, @Req() req) {
     const userId = req.user.userId;
-    this.transactionService.updateTransaction(userId, dto);
+    // Awaited so a failed write is an error, not a silent 200 (audit I1 / T0.7).
+    await this.transactionService.updateTransaction(userId, dto);
     return {
       message: '📈 Transaction updated successfully',
       transaction: dto,
@@ -292,20 +298,20 @@ export class TransactionController {
       },
     },
   })
-  async deleteAllTransactions(@Req() req, @Body() transactionId: number[]) {
+  async deleteAllTransactions(
+    @Req() req,
+    @Body() body: { transactions?: number[] },
+  ) {
     const userId = req.user.userId;
-    try {
-      await this.transactionService.deleteAllTransactions(
-        userId,
-        transactionId,
-      );
-      return {
-        message: '🗑️ All transactions deleted successfully',
-      };
-    } catch (error) {
-      this.logger.error('Error deleting all transactions', error);
-      throw new Error('Error deleting all transactions');
-    }
+    // Single wire shape: the web client — and the Capacitor WebView, which
+    // bundles the same build — always sends `{ transactions: [...] }`.
+    await this.transactionService.deleteAllTransactions(
+      userId,
+      body?.transactions ?? [],
+    );
+    return {
+      message: '🗑️ All transactions deleted successfully',
+    };
   }
 
   // #endregion Delete Transactions

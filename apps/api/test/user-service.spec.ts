@@ -292,10 +292,31 @@ describe('UserSeederService - seeder', () => {
     expect(userSeederService).toBeDefined();
   });
 
-  it('should create a default user', async () => {
+  it('should create a default user in development', async () => {
+    // QA-0.1: the seeder is a no-op outside `development`, and Jest runs as
+    // `test`, so the case that exercises creation has to opt in explicitly.
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
     jest.spyOn(bcrypt, 'hash').mockResolvedValue('hashed_password' as never);
 
-    await userSeederService.createDefaultUsers();
-    expect(userRepository.save).toHaveBeenCalledTimes(2);
+    try {
+      await userSeederService.createDefaultUsers();
+      expect(userRepository.save).toHaveBeenCalledTimes(2);
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
+  });
+
+  it('does not touch the database outside development (audit S1)', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+
+    try {
+      await userSeederService.createDefaultUsers();
+      expect(userRepository.createUser).not.toHaveBeenCalled();
+      expect(userRepository.save).not.toHaveBeenCalled();
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+    }
   });
 });

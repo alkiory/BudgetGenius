@@ -118,6 +118,7 @@
         "resetLinkSent": "We've sent a password reset link to your email address",
         "checkSpamFolder": "If you don't see the email in your inbox, please check your spam folder. The link will expire in 24 hours.",
         "returnToLogin": "Return to login",
+        "emailInUse": "That email already belongs to an account. Sign in with your password, or use a different address.",
         "accountReauth": {
             "title": "Google sign-in needs the SHA-1 to be registered",
             "body": "Your APK can't complete Google sign-in because the keystore SHA-1 isn't registered in Firebase / Google Cloud. Follow these steps to register it:",

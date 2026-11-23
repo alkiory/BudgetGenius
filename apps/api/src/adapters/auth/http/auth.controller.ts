@@ -10,6 +10,8 @@ import {
   ForbiddenException,
   NotFoundException,
   UnauthorizedException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthService } from '@application/auth/auth.service';
@@ -122,10 +124,22 @@ export class AuthController {
       const frontendUrl =
         this.configService.get<string>('FRONTEND_URL')?.split(',')[0]?.trim() ||
         fallbackUrl;
-      return res.redirect(
-        301,
-        `${frontendUrl}/auth/login?error=google_auth_failed`,
-      );
+
+      // This handler is a browser navigation (Chrome Custom Tab), so a JSON
+      // 409 body would be useless to the client. The conflict of a concurrent
+      // Google signup — UNIQUE index on LOWER(email), see
+      // `AuthService.validateOAuthUser` — is forwarded as a distinguishable
+      // error code instead, so the login screen can point at email/password.
+      //
+      // 302 and NOT 301: a permanent redirect is cached by the browser and
+      // would replay this failure on every later attempt, even after the
+      // cause is gone.
+      const errorCode =
+        error instanceof HttpException && error.getStatus() === HttpStatus.CONFLICT
+          ? 'email_in_use'
+          : 'google_auth_failed';
+
+      return res.redirect(302, `${frontendUrl}/auth/login?error=${errorCode}`);
     }
   }
 
@@ -214,6 +228,12 @@ export class AuthController {
       };
     } catch (error) {
       this.logger.error(`🚨 Falló el login con Firebase: ${error.message}`);
+      // This is the path the web Google button uses (Firebase ID token), and
+      // it hits the same UNIQUE-index race as `/auth/signup`: flattening that
+      // 409 into "Token inválido" told the user their credential was bad when
+      // the real cause was the email. Any deliberate HttpException keeps its
+      // status; only unexpected failures become a 401.
+      if (error instanceof HttpException) throw error;
       throw new UnauthorizedException('Token inválido');
     }
   }

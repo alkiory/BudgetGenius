@@ -12,7 +12,12 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { RedisService } from '@infrastructure/config/redis.service';
-import { User, UserRole, BCRYPT_COST } from '@domain/user/user.entity';
+import {
+  User,
+  UserRole,
+  BCRYPT_COST,
+  normalizeEmail,
+} from '@domain/user/user.entity';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { PasswordResetRepository } from '@adapters/auth/persistence/password-reset.repository';
 import { ForgotPasswordDto } from '@application/auth/dto/forgot-password.dto';
@@ -47,6 +52,24 @@ const RESET_TIMING_JITTER_MS_HI = 120;
 
 /** Wait a small randomised interval to flatten out timing oracles. */
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Postgres `unique_violation`, raised by the UNIQUE index on `LOWER(email)`. */
+const PG_UNIQUE_VIOLATION = '23505';
+
+/** Single message for both signup paths (email + Google) on the same race. */
+const EMAIL_ALREADY_IN_USE = '⚠️ Email already in use';
+
+/**
+ * TypeORM wraps driver errors in `QueryFailedError`; the SQLSTATE lives both on
+ * the wrapper and on `driverError` depending on the path, so check both.
+ */
+function isUniqueViolation(error: unknown): boolean {
+  const err = error as { code?: string; driverError?: { code?: string } };
+  return (
+    err?.code === PG_UNIQUE_VIOLATION ||
+    err?.driverError?.code === PG_UNIQUE_VIOLATION
+  );
+}
 
 @Injectable()
 export class AuthService {
@@ -152,15 +175,26 @@ export class AuthService {
     // current implementation calls userRepository.save() a second time after
     // createUser() resolved, which is a no-op at best and can mask silent
     // failures at worst. Persisting once via the repository is enough.
-    const newUser = await this.userRepository.createUser({
-      name: dto.name,
-      surname: dto.surname,
-      email: dto.email,
-      password: dto.password,
-      role: dto.role,
-      authProvider: dto.authProvider,
-      refreshToken: null,
-    });
+    let newUser: User;
+    try {
+      newUser = await this.userRepository.createUser({
+        name: dto.name,
+        surname: dto.surname,
+        email: dto.email,
+        password: dto.password,
+        role: dto.role,
+        authProvider: dto.authProvider,
+        refreshToken: null,
+      });
+    } catch (error) {
+      // Two signups of the same address can both pass `findByEmail` above; the
+      // UNIQUE index on LOWER(email) makes the loser fail here instead of
+      // storing a duplicate account. Same 409 as the sequential path.
+      if (isUniqueViolation(error)) {
+        throw new ConflictException(EMAIL_ALREADY_IN_USE);
+      }
+      throw error;
+    }
 
     const payload = {
       id: newUser.id,
@@ -328,7 +362,7 @@ export class AuthService {
     try {
       // Buscar usuario existente dentro de la transacción
       const existingUser = await queryRunner.manager.findOne(User, {
-        where: { email: profile.email },
+        where: { email: normalizeEmail(profile.email) },
       });
 
       if (existingUser) {
@@ -341,7 +375,7 @@ export class AuthService {
         const newUser = queryRunner.manager.create(User, {
           name,
           surname,
-          email: profile.email,
+          email: normalizeEmail(profile.email),
           authProvider: 'google',
           role: UserRole.USER,
           password: null,
@@ -370,6 +404,13 @@ export class AuthService {
         }
       }
       this.logger.error('Google OAuth failed', error.stack);
+      // Same race as `/auth/signup`: two concurrent Google logins of one address
+      // both miss the lookup above and both INSERT; the UNIQUE index on
+      // LOWER(email) makes the loser fail here. 409 keeps both signup paths
+      // telling the client the same thing.
+      if (isUniqueViolation(error)) {
+        throw new ConflictException(EMAIL_ALREADY_IN_USE);
+      }
       throw new UnauthorizedException('Google authentication failed');
     } finally {
       // Liberar el QueryRunner. Same defense-in-depth pattern: never

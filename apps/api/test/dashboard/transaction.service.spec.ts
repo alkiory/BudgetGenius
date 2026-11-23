@@ -34,6 +34,7 @@ describe('TransactionService', () => {
             findOne: jest.fn().mockResolvedValue(mockTransaction),
             update: jest.fn().mockResolvedValue(mockTransaction),
             delete: jest.fn().mockResolvedValue(true),
+            deleteAllTransactions: jest.fn().mockResolvedValue(undefined),
           },
         },
         {
@@ -304,9 +305,7 @@ describe('TransactionService', () => {
 
       // Caller asks to delete both — but only userATxId is in the user's
       // ownership list, so userBTxId is silently dropped.
-      await service.deleteAllTransactions(userAId, {
-        transactions: [userATxId, userBTxId],
-      });
+      await service.deleteAllTransactions(userAId, [userATxId, userBTxId]);
 
       // The repo's `delete` was called only for the owned id.
       const deletedIds = (repo.delete as jest.Mock).mock.calls.map((c) => c[0]);
@@ -315,6 +314,21 @@ describe('TransactionService', () => {
       for (const call of (repo.delete as jest.Mock).mock.calls) {
         expect(call[1]).toBe(userAId);
       }
+    });
+
+    it('deleteAllTransactions: a same-size payload of foreign ids does not wipe the history', async () => {
+      // The old `requested.length === owned.length` shortcut deleted everything
+      // from a payload made only of ids the user does not own.
+      (repo.findByUser as jest.Mock).mockResolvedValue({
+        id: userAId,
+        email: 'a@test.com',
+        transactions: [{ id: 42 }, { id: 43 }],
+      });
+
+      const result = await service.deleteAllTransactions(userAId, [98, 99]);
+
+      expect(result).toEqual({ message: 'No transactions to delete' });
+      expect(repo.deleteAllTransactions).not.toHaveBeenCalled();
     });
   });
 });

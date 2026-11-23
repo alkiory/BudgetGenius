@@ -21,6 +21,18 @@ import { UserSettings } from './user-settings.entity';
  *  silently drift. */
 export const BCRYPT_COST = 10;
 
+/**
+ * Canonical form of an email: trimmed and lowercased.
+ *
+ * Emails are case-insensitive in practice, and the UNIQUE index on
+ * `LOWER(email)` (migration 1800000000009) rejects a second signup that only
+ * differs in casing. Every write and every lookup must therefore agree on this
+ * form — otherwise the index blocks `Foo@x.com` while a login with that casing
+ * cannot find the account stored as `foo@x.com`.
+ */
+export const normalizeEmail = (email: string): string =>
+  email.trim().toLowerCase();
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn()

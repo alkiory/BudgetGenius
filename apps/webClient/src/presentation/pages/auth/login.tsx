@@ -19,13 +19,24 @@ import { useMutation } from "@tanstack/react-query";
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch } from "react-redux";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 
 export default function LoginPage() {
   const { t } = useTranslation();
+  // The Google OAuth callback is a browser navigation, so the 409 of a
+  // concurrent signup reaches the SPA as `?error=email_in_use`
+  // (`AuthController.googleCallback`). Surface it instead of dropping the user
+  // on a silent login form.
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  // Derived on every render instead of seeded into state: a language switch
+  // re-translates the banner, and a failed submit takes precedence over the
+  // stale query parameter.
+  const oauthError =
+    searchParams.get("error") === "email_in_use" ? t("auth.emailInUse") : null;
+  const error = formError ?? oauthError;
   const [loading, setLoading] = useState(false);
 
   const dispatch = useDispatch();
@@ -57,9 +68,9 @@ export default function LoginPage() {
       const status = error.response?.status;
 
       if (status === 401) {
-        setError(serverMessage || "Credenciales incorrectas");
+        setFormError(serverMessage || "Credenciales incorrectas");
       } else {
-        setError(JSON.stringify(error));
+        setFormError(JSON.stringify(error));
       }
 
       setLoading(false);

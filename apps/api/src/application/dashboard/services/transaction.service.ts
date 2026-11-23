@@ -121,17 +121,30 @@ export class TransactionService {
     return this.transactionRepo.delete(transactionId, userId);
   }
 
-  async deleteAllTransactions(userId: number, transactions: any) {
+  /**
+   * Deletes the requested transactions; ids the user does not own are ignored.
+   * The bulk path is taken only when the request covers the whole owned set
+   * (a same-size payload of foreign ids used to wipe the history).
+   */
+  async deleteAllTransactions(userId: number, transactionIds: number[]) {
     const user = await this.transactionRepo.findByUser(userId);
+    const owned = user.transactions;
+    const requested = new Set(transactionIds);
 
-    if (transactions.length === user.transactions.length) {
+    const coversAllOwned =
+      owned.length > 0 &&
+      requested.size === owned.length &&
+      owned.every((transaction) => requested.has(transaction.id));
+
+    if (coversAllOwned) {
       await this.transactionRepo.deleteAllTransactions(userId);
       return {
         message: 'All transactions deleted successfully',
       };
     }
-    const transactionsToDelete = user.transactions.filter(
-      (transaction) => transactions?.transactions.includes(transaction.id),
+
+    const transactionsToDelete = owned.filter((transaction) =>
+      requested.has(transaction.id),
     );
 
     if (transactionsToDelete.length === 0) {
