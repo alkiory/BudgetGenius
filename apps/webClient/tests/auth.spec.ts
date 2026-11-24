@@ -286,3 +286,98 @@ test("v1.3.1 — caps /auth/refresh at exactly one call when refresh itself 401s
   expect(tokensAfter.accessToken).toBeNull();
   expect(tokensAfter.refreshToken).toBeNull();
 });
+
+// Session loss while the SPA is mounted (cookies/session data deleted in
+// another tab, refresh token revoked server-side, etc.).
+//
+// Regression: the old 401 handler only cleared the in-memory tokens and
+// fired a toast per failed request. `authSlice` stayed authenticated, so
+// `<AuthGuard>` never redirected, the dashboard stayed mounted and its
+// `useQuery({ retry: 3 })` hooks kept hammering the dead session — each
+// 401 stacking another "session expired" toast (even after navigating
+// to the public landing).
+//
+// The first unrecoverable 401 must now: pause the query storm (cache
+// cleared), log the user out, redirect to /auth/login and notify once.
+test("session lost — first unrecoverable 401 redirects to login with a single toast", async ({
+  page,
+}) => {
+  const refreshCalls: Array<unknown> = [];
+  const protectedCalls: string[] = [];
+
+  await page.route("**/api/auth/refresh", async (route) => {
+    refreshCalls.push(route.request().postDataJSON() ?? null);
+    await route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ message: "Invalid refresh token" }),
+    });
+  });
+
+  // Session restore succeeds, so the protected route renders and its
+  // data queries are the ones that discover the dead session.
+  await page.route("**/api/auth/verify", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ isValid: true }),
+    });
+  });
+  await page.route("**/api/user/profile", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        id: 1,
+        name: "Lapsed",
+        surname: "User",
+        email: "lapsed@user.com",
+        isPremium: false,
+      }),
+    });
+  });
+  await page.route("**/api/user-settings**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        timezone: "America/New_York",
+        currency: "USD",
+        locale: "en-US",
+        hasCompletedOnboarding: true,
+      }),
+    });
+  });
+
+  // Every protected data endpoint is unauthorized (deleted session).
+  await page.route(
+    /\/api\/(dashboard|budgets|expense-categories|transactions|saving-goals)/,
+    async (route) => {
+      protectedCalls.push(route.request().url());
+      await route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "Unauthorized" }),
+      });
+    },
+  );
+
+  await page.goto("/app/dashboard", { waitUntil: "domcontentloaded" });
+
+  // Immediate redirect: no user-driven navigation is needed.
+  await expect(page).toHaveURL(/\/auth\/login$/, { timeout: 10000 });
+  await expect(
+    page.getByText("Tu sesión ha expirado por inactividad"),
+  ).toHaveCount(1);
+
+  // Parallel 401s share one refresh attempt and stop after logout: no
+  // retry storm, no repeated refresh POSTs, no toast stacking.
+  const callsAfterRedirect = protectedCalls.length;
+  await page.waitForTimeout(1500);
+
+  expect(refreshCalls.length).toBe(1);
+  expect(protectedCalls.length).toBe(callsAfterRedirect);
+  await expect(
+    page.getByText("Tu sesión ha expirado por inactividad"),
+  ).toHaveCount(1);
+});

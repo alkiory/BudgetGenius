@@ -1,3 +1,5 @@
+import { logoutAction } from "@adapters/slices/auth/authSlice";
+import { store } from "@adapters/store/rootStore";
 import axios from "axios";
 import type { AxiosRequestConfig, AxiosResponse } from "axios";
 import toast from "react-hot-toast";
@@ -6,11 +8,15 @@ import toast from "react-hot-toast";
 import { getDeviceId } from "./device-id";
 import { isNativePlatform } from "./native";
 import { enqueueRequest, registerOnlineListener } from "./offline-queue";
+import { queryClient } from "./queryClient";
 import { requestQueue } from "./request-queue";
 
 interface ApiError {
   config: AxiosRequestConfig & {
+    /** Caller opt-out: never attempt a token refresh for this request. */
     _retry?: boolean;
+    /** Set by this interceptor once the request has consumed a refresh. */
+    _sessionRetry?: boolean;
     _retryCount?: number;
   };
   response?: AxiosResponse;
@@ -187,6 +193,59 @@ export function clearPersistedTokens(): void {
   }
 }
 
+/**
+ * Route prefix of the authenticated area. The session-expired toast is
+ * only meaningful there — public pages must stay silent.
+ */
+const APP_ROUTE_PREFIX = "/app";
+
+/**
+ * Set while the local session is known to be dead, so the parallel 401s
+ * of one lost session run the cleanup exactly once and never start
+ * another refresh. Reset by any successful `/auth/*` round-trip.
+ */
+let sessionExpired = false;
+
+/**
+ * Ends the local session after a 401 that refreshing cannot recover.
+ *
+ * Before this, the handler only cleared the in-memory tokens and showed
+ * a toast: `authSlice` kept the user marked as authenticated, so
+ * `<AuthGuard>` never redirected, the dashboard stayed mounted, and its
+ * `useQuery({ retry: 3 })` hooks kept hitting the dead session. Every
+ * failed request (and every retry) fired its own toast — hence the
+ * endless stack of "Tu sesión ha expirado por inactividad", which also
+ * kept appearing after the user had navigated to the public landing.
+ *
+ * Now the first unrecoverable 401:
+ *   1. clears the token copies,
+ *   2. clears the React Query cache (cancels the retry loops that
+ *      produced the toast storm),
+ *   3. dispatches `logoutAction`, which makes `<AuthGuard>` navigate any
+ *      `/app/*` route to `/auth/login` on the same render,
+ *   4. shows one toast, only on the authenticated area and always under
+ *      the same toast id so it can never stack.
+ */
+function endSession(): void {
+  if (sessionExpired) {
+    return;
+  }
+  sessionExpired = true;
+
+  clearPersistedTokens();
+  queryClient.clear();
+  store.dispatch(logoutAction());
+
+  if (
+    typeof window !== "undefined" &&
+    window.location.pathname.startsWith(APP_ROUTE_PREFIX)
+  ) {
+    toast.error("Tu sesión ha expirado por inactividad", {
+      id: "session-expired",
+    });
+  }
+}
+
 // ── Request interceptor: attach Authorization + X-Device-Id ────────
 //
 // Registered BEFORE the response interceptor so every outbound
@@ -222,7 +281,11 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-const refreshToken = async (): Promise<void> => {
+/**
+ * Actual refresh round-trip. Kept separate from the dedupe wrapper so
+ * the single-flight promise below stays trivial.
+ */
+const performRefresh = async (): Promise<void> => {
   // A browser authenticates with the HttpOnly refreshToken cookie, so an
   // empty body is the normal case there. Native sends the token in the
   // body because Android's WebView dropped that cookie.
@@ -234,6 +297,30 @@ const refreshToken = async (): Promise<void> => {
     // v1.3.1 — see RETRY_GUARD docblock above.
     RETRY_GUARD,
   );
+};
+
+let inflightRefresh: Promise<void> | null = null;
+
+/**
+ * Single-flight refresh.
+ *
+ * A page can mount several protected queries at once (dashboard +
+ * budgets + recent summary + settings). When the session dies they all
+ * 401 in the same tick; previously each one POSTed `/auth/refresh`, so
+ * the server saw a burst and the UI got one failure per query. Sharing
+ * the in-flight promise collapses that burst into exactly one refresh
+ * attempt, and every caller observes the same outcome.
+ */
+const refreshToken = (): Promise<void> => {
+  if (inflightRefresh) {
+    return inflightRefresh;
+  }
+
+  inflightRefresh = performRefresh().finally(() => {
+    inflightRefresh = null;
+  });
+
+  return inflightRefresh;
 };
 
 api.interceptors.response.use(
@@ -248,42 +335,55 @@ api.interceptors.response.use(
     if (data?.accessToken && data?.refreshToken) {
       saveTokens(data.accessToken, data.refreshToken);
     }
+
+    // Any successful auth round-trip (login, refresh, verify) means the
+    // local session is alive again: allow the next unrecoverable 401 to
+    // notify the user. Without this reset, a re-login after an expiry
+    // would leave the handler thinking the session had already ended.
+    if (response.config.url?.includes("/auth/")) {
+      sessionExpired = false;
+    }
+
     return response;
   },
   async (error: ApiError) => {
     const originalRequest = error.config;
+    const requestUrl = originalRequest.url ?? "";
 
-    if (
-      error.response?.status === 401 &&
-      (originalRequest.url?.includes("/auth/login") ||
-        originalRequest.url?.includes("/auth/refresh"))
-    ) {
-      return Promise.reject(error);
-    }
+    if (error.response?.status === 401) {
+      // Auth endpoints answer for themselves: a failed login, refresh or
+      // logout must reach its caller unchanged, never through a refresh.
+      if (requestUrl.includes("/auth/")) {
+        return Promise.reject(error);
+      }
 
-    // Lógica para el resto de rutas protegidas
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
+      // The session was already ended by another request: reject without
+      // refreshing again (and without another toast).
+      if (sessionExpired) {
+        return Promise.reject(error);
+      }
+
+      // Callers such as `useRestoreSession` mark `_retry` to opt out of
+      // the refresh path — their 401 means "no session yet", not
+      // "session expired", and must stay silent.
+      if (originalRequest._retry) {
+        return Promise.reject(error);
+      }
+
+      // Already refreshed once and still 401: the session is unusable,
+      // so do not start a second refresh — end it now.
+      if (originalRequest._sessionRetry) {
+        endSession();
+        return Promise.reject(error);
+      }
+
+      originalRequest._sessionRetry = true;
       try {
         await refreshToken();
         return api(originalRequest);
       } catch (refreshError) {
         requestQueue.process(refreshError);
-
-        clearPersistedTokens();
-
-        // v1.3.0 (T3.3) — surface a toast and leave the redirect to
-        // the next mount. Avoiding the immediate `window.location.href`
-        // assignment prevents the "blanco con 429" symptom from the
-        // user's trace (where the redirect races the toast duration
-        // and ends up on an entirely blank page). The session-expired
-        // UI now shows the toast and the next user-driven navigation
-        // picks up the cleared auth state.
-        toast.error("Tu sesión ha expirado por inactividad");
-
-        // Don't hard-redirect; let React Router's redirect-on-render
-        // pick up the cleared auth state via `useRestoreSession`'s
-        // `setAuthReady` -> `ProtectedRoute` re-evaluation.
+        endSession();
         return Promise.reject(refreshError);
       }
     }

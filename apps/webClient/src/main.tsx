@@ -3,9 +3,10 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import { Provider } from "react-redux";
 import { BrowserRouter } from "react-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import App from "./App";
+import { queryClient } from "./infrastructure/queryClient";
 import { ThemeProvider } from "@adapters/hooks/themeContext";
 import { store } from "@adapters/store/rootStore";
 import "./infrastructure/i18n/i18n";
@@ -17,8 +18,6 @@ import { app, analytics } from "@infrastructure/firebaseConfig";
 // fallback in `@infrastructure/platform` kicks in (URL + UA heuristics) which
 // works but is less robust than querying `Capacitor.isNativePlatform()`.
 import "@capacitor/core";
-
-const queryClient = new QueryClient();
 
 // Opcional: Para verificar que Firebase se inicializó correctamente
 console.debug("Firebase App initialized:", app);
