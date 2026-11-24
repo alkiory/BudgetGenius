@@ -1,9 +1,13 @@
 import { HttpBudgetRepository } from "@adapters/http/budget.repository";
-import { useFetchBudgets } from "@adapters/query/dashboard";
+import {
+  useFetchBudgets,
+  useFetchReconciliation,
+} from "@adapters/query/dashboard";
 import { Budget } from "@domain/dashboard/budgets/budget.entity";
 import { BudgetDetail } from "@presentation/components/dashboard/budgets/budget-detail";
 import { BudgetList } from "@presentation/components/dashboard/budgets/budget-list";
 import { BudgetModal } from "@presentation/components/dashboard/budgets/budget-modal";
+import { BudgetReconciliationModal } from "@presentation/components/dashboard/budgets/budget-reconciliation-modal";
 import BudgetsLoading from "@presentation/components/dashboard/budgets/budgets-loading";
 import { Button } from "@presentation/components/ui/button";
 import { PageHeader } from "@presentation/components/ui/page-header";
@@ -13,13 +17,14 @@ import {
   successToast,
 } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { ListChecks, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 export default function BudgetsPage() {
   const { t } = useTranslation();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isReconcileOpen, setIsReconcileOpen] = useState(false);
   const [editSelectedBudget, setEditSelectedBudget] = useState<
     Budget | undefined
   >(undefined);
@@ -36,6 +41,7 @@ export default function BudgetsPage() {
     isRefetching,
     refetch: refetchBudgets,
   } = useFetchBudgets();
+  const { data: reconciliation } = useFetchReconciliation();
 
   // NOTE: no early return before the hooks below — the loading guard must
   // stay after every hook or React sees a changing hook order when the
@@ -102,6 +108,18 @@ export default function BudgetsPage() {
         title={t("budgets.title")}
         description={t("budgets.description")}
       >
+        {reconciliation && reconciliation.total > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => setIsReconcileOpen(true)}
+            className="gap-1"
+          >
+            <ListChecks className="h-4 w-4" />
+            {t("budgets.reconcileWithCount", {
+              total: reconciliation.total,
+            })}
+          </Button>
+        )}
         <Button
           variant="primary"
           onClick={handleCreateBudget}
@@ -141,6 +159,11 @@ export default function BudgetsPage() {
         onClose={() => setIsModalOpen(false)}
         budget={editSelectedBudget}
         refetchBudgets={refetchBudgets}
+      />
+
+      <BudgetReconciliationModal
+        isOpen={isReconcileOpen}
+        onClose={() => setIsReconcileOpen(false)}
       />
     </div>
   );

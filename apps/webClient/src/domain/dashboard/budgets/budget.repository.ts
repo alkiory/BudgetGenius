@@ -1,4 +1,8 @@
-import { Budget, BudgetCategory } from "./budget.entity";
+import {
+  Budget,
+  BudgetCategory,
+  ReconciliationQueue,
+} from "./budget.entity";
 
 export type QueryParam = {
   budgetId?: number;
@@ -19,4 +23,9 @@ export interface BudgetRepository {
     category: Partial<BudgetCategory>,
   ) => Promise<BudgetCategory>;
   deleteBudgetCategory: (categoryId: number) => Promise<void>;
+  getReconciliation: () => Promise<ReconciliationQueue>;
+  reconcileExpense: (
+    transactionId: number,
+    budgetCategoryId: number,
+  ) => Promise<{ id: number; budgetCategoryId: number }>;
 }

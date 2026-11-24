@@ -54,6 +54,17 @@ export const useFetchBudgets = () => {
   });
 };
 
+export const useFetchReconciliation = (enabled = true) => {
+  return useQuery({
+    queryKey: ["budget-reconciliation"],
+    queryFn: HttpBudgetRepository.getReconciliation,
+    retry: 3,
+    enabled,
+    staleTime: STALE_TIME_MS,
+    gcTime: GC_TIME_MS,
+  });
+};
+
 export const useFetchBudgetCategories = ({ budgetId, name }: QueryParam) => {
   const query = { budgetId, name };
   return useQuery({

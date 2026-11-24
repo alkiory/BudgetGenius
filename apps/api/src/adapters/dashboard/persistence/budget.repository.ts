@@ -1,14 +1,21 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  LessThanOrEqual,
-  MoreThanOrEqual,
-  Not,
-  Repository,
-} from 'typeorm';
+import { Repository } from 'typeorm';
 import { Budget } from '@domain/dashboard/budget.entity';
 import { BudgetCategory } from '@domain/dashboard/budget-category.entity';
 import { Transaction } from '@domain/dashboard/transaction.entity';
+
+export type ReconciliationRow = {
+  id: number | string;
+  date: string;
+  description: string;
+  category: string;
+  amount: number | string;
+  budgetId: number | string;
+  budgetName: string;
+  categoryId: number | string | null;
+  categoryName: string | null;
+};
 
 @Injectable()
 export class BudgetRepository {
@@ -23,43 +30,6 @@ export class BudgetRepository {
 
   async countByUser(userId: number): Promise<number> {
     return this.repo.count({ where: { user: { id: userId } } });
-  }
-
-  /**
-   * D2.1: first budget of the user **of the given type** whose date window
-   * intersects `[startDate, endDate]`, or `null`. Both ends are inclusive,
-   * matching the `BETWEEN` used to attribute transactions — two spending
-   * budgets that share a single day would count the same expense twice.
-   *
-   * The type scope is what keeps savings goals usable: they are manual
-   * targets that never consume transactions, so they may share a window
-   * with a spending budget (or with another goal) without double counting.
-   *
-   * `excludeBudgetId` lets an update ignore the row being edited, so a
-   * budget never conflicts with itself. No relations are loaded: the
-   * caller only needs to know whether a conflict exists.
-   */
-  async findOverlapping(
-    userId: number,
-    startDate: Date,
-    endDate: Date,
-    type: Budget['type'],
-    excludeBudgetId?: number,
-  ): Promise<Budget | null> {
-    const [overlapping] = await this.repo.find({
-      where: {
-        user: { id: userId },
-        type,
-        startDate: LessThanOrEqual(endDate),
-        endDate: MoreThanOrEqual(startDate),
-        ...(excludeBudgetId !== undefined
-          ? { id: Not(excludeBudgetId) }
-          : {}),
-      },
-      order: { startDate: 'ASC' },
-      take: 1,
-    });
-    return overlapping ?? null;
   }
 
   async createBudget(budget: Omit<Budget, 'id'>): Promise<Budget> {
@@ -108,27 +78,37 @@ export class BudgetRepository {
       .addGroupBy('LOWER(bc.name)')
       .getRawMany<{ budgetId: string; category: string; total: string }>();
 
-    const legacy = await this.transactionRepo
-      .createQueryBuilder('t')
-      // Quote the camelCase FK/date columns explicitly: QueryBuilder's
-      // property replacer does not know `userId` (it is not a mapped
-      // property on Transaction) and unquoted `startDate`/`endDate` would
-      // fold to lowercase in Postgres and fail.
-      .innerJoin(
-        Budget,
-        'b',
-        'b."userId" = t."userId" AND t.date BETWEEN b."startDate" AND b."endDate"',
-      )
-      .select('b.id', 'budgetId')
-      .addSelect('LOWER(t.category)', 'category')
-      .addSelect('SUM(ABS(t.amount))', 'total')
-      .where('t."userId" = :userId', { userId })
-      .andWhere('t.amount < 0')
-      .andWhere('t."budgetCategoryId" IS NULL')
-      .andWhere("b.type = 'spending'")
-      .groupBy('b.id')
-      .addGroupBy('LOWER(t.category)')
-      .getRawMany<{ budgetId: string; category: string; total: string }>();
+    // Overlapping spending budgets are allowed since D2.2. An unlinked row
+    // must still belong to exactly one of them, otherwise the legacy branch
+    // would count it twice. `DISTINCT ON` picks the most specific budget:
+    // narrowest window first (a monthly budget beats a yearly one), then the
+    // most recent start, then the lowest id — deterministic regardless of
+    // row order.
+    const legacy = (await this.transactionRepo.query(
+      `WITH attributed AS (
+         SELECT DISTINCT ON (t."id", lower(t.category))
+                t."id" AS transaction_id,
+                b."id" AS budget_id,
+                lower(t.category) AS category,
+                t.amount
+           FROM "bg_public"."transactions" AS t
+           JOIN "bg_public"."budgets" AS b
+             ON b."userId" = t."userId"
+            AND b."type" = 'spending'
+            AND t."date" BETWEEN b."startDate" AND b."endDate"
+          WHERE t."userId" = $1
+            AND t."amount" < 0
+            AND t."budgetCategoryId" IS NULL
+          ORDER BY t."id", lower(t.category),
+                   (b."endDate" - b."startDate") ASC,
+                   b."startDate" DESC,
+                   b."id" ASC
+       )
+       SELECT budget_id AS "budgetId", category, SUM(ABS(amount)) AS total
+         FROM attributed
+        GROUP BY budget_id, category`,
+      [userId],
+    )) as Array<{ budgetId: string; category: string; total: string }>;
 
     const totals = new Map<
       string,
@@ -269,6 +249,120 @@ export class BudgetRepository {
    */
   async deleteBudgetCategory(id: number): Promise<void> {
     await this.categoryRepo.delete({ id });
+  }
+
+  /**
+   * Historical reconciliation: unlinked expenses that fall inside at least
+   * one spending-budget window. When windows overlap, the same deterministic
+   * ranking used by the legacy attribution picks the winning budget
+   * (narrowest window, then latest start, then lowest id), so the caller
+   * gets one row per expense and a single, valid set of candidate
+   * categories. Rows with a category name that already matches are still
+   * returned; the service filters them out because they are already
+   * attributed by the legacy fallback.
+   */
+  async findReconciliationRows(
+    userId: number,
+    transactionId?: number,
+  ): Promise<ReconciliationRow[]> {
+    return this.transactionRepo.query(
+      `WITH ranked AS (
+         SELECT t."id" AS transaction_id,
+                to_char(t."date", 'YYYY-MM-DD') AS date,
+                t."description" AS description,
+                t."category" AS category,
+                t."amount" AS amount,
+                b."id" AS budget_id,
+                b."name" AS budget_name,
+                ROW_NUMBER() OVER (
+                  PARTITION BY t."id"
+                  ORDER BY (b."endDate" - b."startDate") ASC,
+                           b."startDate" DESC,
+                           b."id" ASC
+                ) AS rn
+           FROM "bg_public"."transactions" AS t
+           JOIN "bg_public"."budgets" AS b
+             ON b."userId" = t."userId"
+            AND b."type" = 'spending'
+            AND t."date" BETWEEN b."startDate" AND b."endDate"
+          WHERE t."userId" = $1
+            AND t."amount" < 0
+            AND t."budgetCategoryId" IS NULL
+            AND ($2::int IS NULL OR t."id" = $2)
+       )
+       SELECT r.transaction_id AS "id",
+              r.date,
+              r.description,
+              r.category,
+              r.amount,
+              r.budget_id AS "budgetId",
+              r.budget_name AS "budgetName",
+              bc."id" AS "categoryId",
+              bc."name" AS "categoryName"
+         FROM ranked r
+         LEFT JOIN "bg_public"."budget_categories" AS bc
+           ON bc."budgetId" = r.budget_id
+        WHERE r.rn = 1
+        ORDER BY r.date DESC, r.transaction_id DESC, bc."name" ASC`,
+      [userId, transactionId ?? null],
+    );
+  }
+
+  /**
+   * Freezes one reconciliation decision. The WHERE clause re-checks owner,
+   * expense sign and "still unlinked" so a stale modal can never rewrite an
+   * attribution that another request already made.
+   */
+  async setTransactionBudgetCategory(
+    userId: number,
+    transactionId: number,
+    budgetCategoryId: number,
+  ): Promise<boolean> {
+    const result = await this.transactionRepo
+      .createQueryBuilder()
+      .update(Transaction)
+      .set({
+        budgetCategoryId,
+        updatedAt: () => 'now()',
+      })
+      .where('"id" = :transactionId', { transactionId })
+      .andWhere('"userId" = :userId', { userId })
+      .andWhere('"amount" < 0')
+      .andWhere('"budgetCategoryId" IS NULL')
+      .execute();
+    return (result.affected ?? 0) === 1;
+  }
+
+  /**
+   * D2.2 assisted resolution — freeze the attribution of every still-unlinked
+   * expense that matches `categoryName` inside the budget window. Called
+   * before renaming a spending category so the historical rows keep counting
+   * for it afterwards. Only negative amounts are linked: incomes never
+   * consume a budget. Returns the number of rows linked.
+   */
+  async linkUnlinkedTransactionsToCategory(
+    userId: number,
+    budgetId: number,
+    categoryName: string,
+    categoryId: number,
+  ): Promise<number> {
+    const rows: Array<{ id: number }> = await this.transactionRepo.query(
+      `UPDATE "bg_public"."transactions" AS t
+          SET "budgetCategoryId" = $4
+        WHERE t."userId" = $1
+          AND t."amount" < 0
+          AND t."budgetCategoryId" IS NULL
+          AND lower(t.category) = lower($3)
+          AND t."date" BETWEEN
+              (SELECT b."startDate" FROM "bg_public"."budgets" AS b
+                WHERE b."id" = $2 AND b."userId" = $1)
+              AND
+              (SELECT b."endDate" FROM "bg_public"."budgets" AS b
+                WHERE b."id" = $2 AND b."userId" = $1)
+        RETURNING t."id" AS id`,
+      [userId, budgetId, categoryName, categoryId],
+    );
+    return rows.length;
   }
 
   /**

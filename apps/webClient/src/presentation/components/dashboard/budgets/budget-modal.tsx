@@ -6,34 +6,16 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { BudgetForm } from "./budget-form";
 
-/**
- * Stable API message for D2.1 (`BUDGET_WINDOW_OVERLAP` in
- * apps/api/src/application/dashboard/services/budget.service.ts). It is a
- * client-mappable identifier, like `email_in_use` on the auth redirect:
- * changing it on either side is a breaking change.
- */
-const BUDGET_WINDOW_OVERLAP_MESSAGE =
-  "Budget dates overlap an existing budget";
-
-/**
- * Translates the known 409 into the localized explanation and falls back
- * to the API/transport message for anything else.
- */
+/** Extracts the API/transport message, falling back to a localized one. */
 const budgetErrorMessage = (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   error: any,
-  overlapMessage: string,
   fallback: string,
 ): string => {
   const data = error?.response?.data;
   const apiMessage = Array.isArray(data?.message)
     ? data.message[0]
     : data?.message;
-
-  if (error?.response?.status === 409 && apiMessage === BUDGET_WINDOW_OVERLAP_MESSAGE) {
-    return overlapMessage;
-  }
-
   const message = apiMessage || error?.message || fallback;
   return Array.isArray(message) ? message[0] : message;
 };
@@ -76,11 +58,7 @@ export function BudgetModal({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       errorToast(
-        budgetErrorMessage(
-          error,
-          t("budgets.windowOverlap"),
-          t("budgets.createError"),
-        ),
+        budgetErrorMessage(error, t("budgets.createError")),
         5000,
         "budget-create",
       );
@@ -109,11 +87,7 @@ export function BudgetModal({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       errorToast(
-        budgetErrorMessage(
-          error,
-          t("budgets.windowOverlap"),
-          t("budgets.updateError"),
-        ),
+        budgetErrorMessage(error, t("budgets.updateError")),
         5000,
         "budget-update",
       );

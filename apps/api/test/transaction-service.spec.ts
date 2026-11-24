@@ -1,4 +1,8 @@
-import { NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { TransactionService } from '@application/dashboard/services/transaction.service';
 
 /**
@@ -12,8 +16,10 @@ const makeTransactionRepo = () => ({
     .fn()
     .mockImplementation(async (transaction) => ({ id: 99, ...transaction })),
   createMany: jest.fn().mockResolvedValue(undefined),
-  linkUnambiguousBudgetCategories: jest.fn().mockResolvedValue(0),
-  findUniqueBudgetCategoryId: jest.fn().mockResolvedValue(null),
+  linkBudgetCategories: jest.fn().mockResolvedValue(0),
+  findImportReceipt: jest.fn().mockResolvedValue(null),
+  insertImportWithReceipt: jest.fn().mockResolvedValue(0),
+  findBestBudgetCategoryId: jest.fn().mockResolvedValue(null),
   findOwnedBudgetCategoryId: jest.fn().mockResolvedValue(null),
   update: jest.fn().mockImplementation(async (transaction) => transaction),
 });
@@ -41,12 +47,12 @@ describe('TransactionService — D2.2 attribution', () => {
     );
   });
 
-  it('links an expense when exactly one spending category matches', async () => {
-    transactionRepo.findUniqueBudgetCategoryId.mockResolvedValue(5);
+  it('links an expense to the best spending category', async () => {
+    transactionRepo.findBestBudgetCategoryId.mockResolvedValue(5);
 
     await service.createTransaction(1, expenseDto as never);
 
-    expect(transactionRepo.findUniqueBudgetCategoryId).toHaveBeenCalledWith({
+    expect(transactionRepo.findBestBudgetCategoryId).toHaveBeenCalledWith({
       userId: 1,
       day: '2026-11-10',
       category: 'Restaurantes',
@@ -56,8 +62,8 @@ describe('TransactionService — D2.2 attribution', () => {
     );
   });
 
-  it('leaves an expense unlinked when the match is ambiguous or absent', async () => {
-    transactionRepo.findUniqueBudgetCategoryId.mockResolvedValue(null);
+  it('leaves an expense unlinked when no spending category matches', async () => {
+    transactionRepo.findBestBudgetCategoryId.mockResolvedValue(null);
 
     await service.createTransaction(1, expenseDto as never);
 
@@ -74,7 +80,7 @@ describe('TransactionService — D2.2 attribution', () => {
     } as never);
 
     expect(transactionRepo.findOwnedBudgetCategoryId).not.toHaveBeenCalled();
-    expect(transactionRepo.findUniqueBudgetCategoryId).not.toHaveBeenCalled();
+    expect(transactionRepo.findBestBudgetCategoryId).not.toHaveBeenCalled();
     expect(transactionRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({ budgetCategoryId: null, amount: 1500 }),
     );
@@ -92,7 +98,7 @@ describe('TransactionService — D2.2 attribution', () => {
       7,
       1,
     );
-    expect(transactionRepo.findUniqueBudgetCategoryId).not.toHaveBeenCalled();
+    expect(transactionRepo.findBestBudgetCategoryId).not.toHaveBeenCalled();
     expect(transactionRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({ budgetCategoryId: 7 }),
     );
@@ -111,7 +117,7 @@ describe('TransactionService — D2.2 attribution', () => {
   });
 
   it('re-resolves the link when an expense is edited', async () => {
-    transactionRepo.findUniqueBudgetCategoryId.mockResolvedValue(4);
+    transactionRepo.findBestBudgetCategoryId.mockResolvedValue(4);
 
     await service.updateTransaction(1, {
       id: 3,
@@ -119,7 +125,7 @@ describe('TransactionService — D2.2 attribution', () => {
       amount: -10,
     } as never);
 
-    expect(transactionRepo.findUniqueBudgetCategoryId).toHaveBeenCalledWith({
+    expect(transactionRepo.findBestBudgetCategoryId).toHaveBeenCalledWith({
       userId: 1,
       day: '2026-11-10',
       category: 'Restaurantes',
@@ -137,7 +143,7 @@ describe('TransactionService — D2.2 attribution', () => {
       amount: 99,
     } as never);
 
-    expect(transactionRepo.findUniqueBudgetCategoryId).not.toHaveBeenCalled();
+    expect(transactionRepo.findBestBudgetCategoryId).not.toHaveBeenCalled();
     expect(transactionRepo.update).toHaveBeenCalledWith(
       expect.objectContaining({ budgetCategoryId: null }),
       1,
@@ -155,9 +161,98 @@ describe('TransactionService — D2.2 attribution', () => {
     ] as never);
 
     expect(transactionRepo.createMany).toHaveBeenCalledTimes(1);
-    expect(
-      transactionRepo.linkUnambiguousBudgetCategories,
-    ).toHaveBeenCalledWith(1);
-    expect(result).toEqual({ created: 1 });
+    expect(transactionRepo.linkBudgetCategories).toHaveBeenCalledWith(1);
+    expect(result).toEqual({
+      created: 1,
+      skippedDuplicates: 0,
+      replayed: false,
+    });
+  });
+
+  it('replays the stored outcome for the same key and payload', async () => {
+    const items = [
+      {
+        date: '2026-11-10',
+        description: 'Cena',
+        category: 'Restaurantes',
+        amount: -12,
+      },
+    ] as never;
+
+    transactionRepo.insertImportWithReceipt.mockResolvedValue(1);
+    await service.importTransactions(1, items, 'import-key-1234');
+    const { payloadHash } = transactionRepo.insertImportWithReceipt.mock
+      .calls[0][0];
+
+    transactionRepo.findImportReceipt.mockResolvedValue({
+      payloadHash,
+      createdCount: 1,
+    });
+    const replay = await service.importTransactions(
+      1,
+      items,
+      'import-key-1234',
+    );
+
+    expect(replay).toEqual({
+      created: 0,
+      createdCount: 1,
+      skippedDuplicates: 0,
+      replayed: true,
+    });
+    expect(transactionRepo.insertImportWithReceipt).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a reused key with a different payload', async () => {
+    transactionRepo.findImportReceipt.mockResolvedValue({
+      payloadHash: 'a'.repeat(64),
+      createdCount: 1,
+    });
+
+    await expect(
+      service.importTransactions(
+        1,
+        [
+          {
+            date: '2026-11-11',
+            description: 'Otra cena',
+            category: 'Restaurantes',
+            amount: -20,
+          },
+        ] as never,
+        'import-key-1234',
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('drops exact duplicate lines within one payload', async () => {
+    const item = {
+      date: '2026-11-10',
+      description: 'Cena',
+      category: 'Restaurantes',
+      amount: -12,
+    };
+
+    const result = await service.importTransactions(1, [
+      item,
+      { ...item },
+    ] as never);
+
+    expect(transactionRepo.createMany).toHaveBeenCalledWith(
+      [expect.objectContaining({ description: 'Cena' })],
+      1,
+    );
+    expect(result).toEqual({
+      created: 1,
+      skippedDuplicates: 1,
+      replayed: false,
+    });
+  });
+
+  it('rejects an invalid idempotency key', async () => {
+    await expect(
+      service.importTransactions(1, [] as never, 'short'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(transactionRepo.createMany).not.toHaveBeenCalled();
   });
 });

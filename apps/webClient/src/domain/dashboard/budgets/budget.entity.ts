@@ -59,6 +59,28 @@ export interface BudgetCategory {
   transactionSpent?: number;
 }
 
+export interface ReconciliationCandidate {
+  id: number;
+  name: string;
+}
+
+/** An unlinked expense that needs a manual budget-category assignment. */
+export interface ReconciliationItem {
+  id: number;
+  date: string;
+  description: string;
+  category: string;
+  amount: number;
+  budgetId: number;
+  budgetName: string;
+  candidates: ReconciliationCandidate[];
+}
+
+export interface ReconciliationQueue {
+  total: number;
+  items: ReconciliationItem[];
+}
+
 export interface Budget {
   id: string | number;
   name: string;

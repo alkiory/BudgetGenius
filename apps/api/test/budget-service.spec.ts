@@ -1,15 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  BUDGET_WINDOW_OVERLAP,
-  BudgetService,
-} from '@application/dashboard/services/budget.service';
+import { BudgetService } from '@application/dashboard/services/budget.service';
 import { BudgetRepository } from '@adapters/dashboard/persistence/budget.repository';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
-import {
-  ConflictException,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { QueryFailedError } from 'typeorm';
 import { BUDGET_CATEGORY_UNIQUE_CONSTRAINT_NAME } from '@domain/dashboard/budget-category.entity';
@@ -141,7 +134,6 @@ describe('BudgetService', () => {
           provide: BudgetRepository,
           useValue: {
             countByUser: jest.fn(),
-            findOverlapping: jest.fn(),
             createBudget: jest.fn(),
             createBudgetCategory: jest.fn(),
             findByUser: jest.fn(),
@@ -154,6 +146,9 @@ describe('BudgetService', () => {
             updateBudgetCategory: jest.fn(),
             deleteBudgetCategory: jest.fn(),
             deleteBudget: jest.fn(),
+            linkUnlinkedTransactionsToCategory: jest.fn(),
+            findReconciliationRows: jest.fn(),
+            setTransactionBudgetCategory: jest.fn(),
           },
         },
         {
@@ -178,8 +173,6 @@ describe('BudgetService', () => {
     userRepo = module.get(UserRepositoryImpl);
     logger = module.get(LoggingService);
 
-    // D2.1: no overlapping budget unless a test says otherwise.
-    repo.findOverlapping.mockResolvedValue(null);
   });
 
   describe('createBudget', () => {
@@ -417,7 +410,6 @@ describe('BudgetService', () => {
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
 
-      expect(repo.findOverlapping).not.toHaveBeenCalled();
       expect(repo.updateBudget).not.toHaveBeenCalled();
     });
 
@@ -949,14 +941,14 @@ describe('BudgetService', () => {
     });
   });
 
-  describe('budget window overlap (D2.1)', () => {
-    const overlappingBudget = () => buildBudget({ id: 2, name: 'Existing' });
-
-    it('rejects creating a budget whose dates overlap an existing one', async () => {
+  describe('overlapping spending budgets (D2.2)', () => {
+    it('creates a spending budget that overlaps another one', async () => {
+      // D2.2 freezes attribution in transactions, so overlapping spending
+      // budgets no longer double-count and must not be rejected.
       userRepo.findById.mockResolvedValue({ ...mockUser, budgets: [] });
-      repo.findOverlapping.mockResolvedValue(overlappingBudget());
+      repo.createBudget.mockResolvedValue(buildBudget());
 
-      const dto = {
+      await service.createBudget(1, {
         name: 'Overlapping',
         period: 'Monthly',
         startDate: new Date('2026-06-15'),
@@ -965,99 +957,13 @@ describe('BudgetService', () => {
         categories: [],
         createdAt: new Date(),
         updatedAt: new Date(),
-      };
-
-      const err = await service.createBudget(1, dto).catch((e) => e);
-
-      expect(err).toBeInstanceOf(ConflictException);
-      expect((err as Error).message).toBe(BUDGET_WINDOW_OVERLAP);
-      expect(repo.findOverlapping).toHaveBeenCalledWith(
-        1,
-        dto.startDate,
-        dto.endDate,
-        'spending',
-        undefined,
-      );
-      expect(repo.createBudget).not.toHaveBeenCalled();
-    });
-
-    it('allows a savings goal to overlap an existing spending budget', async () => {
-      // Savings goals are manual targets: they never consume transactions,
-      // so an overlap cannot double-count anything. The user's monthly goal
-      // must not be blocked by a long-running spending budget.
-      userRepo.findById.mockResolvedValue({ ...mockUser, budgets: [] });
-      repo.createBudget.mockResolvedValue(buildBudget({ type: 'savings' }));
-
-      const dto = {
-        name: 'Savings goal',
-        period: 'Monthly',
-        type: 'savings' as const,
-        startDate: new Date('2026-06-15'),
-        endDate: new Date('2026-07-15'),
-        totalAllocated: 222,
-        categories: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      await service.createBudget(1, dto);
-
-      expect(repo.findOverlapping).not.toHaveBeenCalled();
-      expect(repo.createBudget).toHaveBeenCalledTimes(1);
-    });
-
-    it('creates the budget when its window is free', async () => {
-      userRepo.findById.mockResolvedValue({ ...mockUser, budgets: [] });
-      repo.createBudget.mockResolvedValue(buildBudget());
-
-      const dto = {
-        name: 'Free window',
-        period: 'Monthly',
-        startDate: new Date('2030-01-01'),
-        endDate: new Date('2030-01-31'),
-        totalAllocated: 100,
-        categories: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      await service.createBudget(1, dto);
-
-      expect(repo.findOverlapping).toHaveBeenCalledTimes(1);
-      expect(repo.createBudget).toHaveBeenCalledTimes(1);
-    });
-
-    it('rejects moving a budget onto an overlapping window', async () => {
-      const existing = buildBudget({ id: 1 });
-      repo.findById.mockResolvedValue(existing);
-      userRepo.findById.mockResolvedValue({
-        ...mockUser,
-        budgets: [existing],
       });
-      repo.findOverlapping.mockResolvedValue(overlappingBudget());
 
-      const startDate = new Date('2026-06-10');
-      const endDate = new Date('2026-06-20');
-
-      const err = await service
-        .updateBudget(1, { id: 1, startDate, endDate })
-        .catch((e) => e);
-
-      expect(err).toBeInstanceOf(ConflictException);
-      expect((err as Error).message).toBe(BUDGET_WINDOW_OVERLAP);
-      // The row being edited is excluded from its own lookup.
-      expect(repo.findOverlapping).toHaveBeenCalledWith(
-        1,
-        startDate,
-        endDate,
-        'spending',
-        1,
-      );
-      expect(repo.updateBudget).not.toHaveBeenCalled();
+      expect(repo.createBudget).toHaveBeenCalledTimes(1);
     });
 
-    it('does not enforce the exclusive window when a savings goal changes dates', async () => {
-      const existing = buildBudget({ id: 1, type: 'savings' });
+    it('moves a spending budget onto another window without blocking the edit', async () => {
+      const existing = buildBudget({ id: 1 });
       repo.findById.mockResolvedValue(existing);
       userRepo.findById.mockResolvedValue({
         ...mockUser,
@@ -1071,126 +977,181 @@ describe('BudgetService', () => {
         endDate: new Date('2026-06-20'),
       });
 
-      expect(repo.findOverlapping).not.toHaveBeenCalled();
       expect(repo.updateBudget).toHaveBeenCalledTimes(1);
     });
 
-    it('validates the window when a savings goal becomes a spending budget', async () => {
-      // The dates did not move, but the same window is now exclusive.
-      const existing = buildBudget({ id: 1, type: 'savings' });
-      repo.findById.mockResolvedValue(existing);
-      userRepo.findById.mockResolvedValue({
-        ...mockUser,
-        budgets: [existing],
+    it('links unlinked expenses matching the old name before renaming a spending category', async () => {
+      const category = buildCategory({ id: 7, name: 'Transportation' });
+      category.budget = buildBudget({ id: 1, type: 'spending' }) as never;
+      repo.getBudgetCategory.mockResolvedValue(category);
+      repo.updateBudgetCategory.mockResolvedValue({
+        ...category,
+        name: 'Transporte',
       });
-      repo.findOverlapping.mockResolvedValue(overlappingBudget());
-      repo.updateBudget.mockResolvedValue(existing);
+      repo.linkUnlinkedTransactionsToCategory.mockResolvedValue(2);
 
-      const err = await service
-        .updateBudget(1, { id: 1, type: 'spending' })
-        .catch((e) => e);
+      await service.updateBudgetCategory(1, {
+        id: 7,
+        name: 'Transporte',
+        allocated: 100,
+        spent: 0,
+      });
 
-      expect(err).toBeInstanceOf(ConflictException);
-      expect(repo.findOverlapping).toHaveBeenCalledWith(
+      expect(repo.linkUnlinkedTransactionsToCategory).toHaveBeenCalledWith(
         1,
-        existing.startDate,
-        existing.endDate,
-        'spending',
         1,
+        'Transportation',
+        7,
       );
-      expect(repo.updateBudget).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('historical reconciliation', () => {
+    const unlinkedRow = {
+      id: 279,
+      date: '2026-10-21',
+      description: 'cumple1',
+      category: 'Gifts',
+      amount: '-43.25',
+      budgetId: 21,
+      budgetName: 'Servicios',
+      categoryId: 49,
+      categoryName: 'Utilities',
+    };
+
+    it('returns one item per unlinked expense with the winning budget candidates', async () => {
+      repo.findReconciliationRows.mockResolvedValue([
+        unlinkedRow,
+        // A row whose text already matches a category is attributed by the
+        // legacy fallback, so it must not ask the user for a decision.
+        {
+          ...unlinkedRow,
+          id: 280,
+          category: 'Utilities',
+        },
+      ]);
+
+      const result = await service.getReconciliation(1);
+
+      expect(result.total).toBe(1);
+      expect(result.items[0]).toEqual({
+        id: 279,
+        date: '2026-10-21',
+        description: 'cumple1',
+        category: 'Gifts',
+        amount: -43.25,
+        budgetId: 21,
+        budgetName: 'Servicios',
+        candidates: [{ id: 49, name: 'Utilities' }],
+      });
     });
 
-    it('keeps a budget editable when the update leaves its dates untouched', async () => {
-      const existing = buildBudget({ id: 1 });
-      repo.findById.mockResolvedValue(existing);
-      userRepo.findById.mockResolvedValue({
-        ...mockUser,
-        budgets: [existing],
-      });
-      repo.updateBudget.mockResolvedValue({ ...existing, name: 'Renamed' });
+    it('assigns an expense to a category of its winning budget', async () => {
+      repo.findReconciliationRows.mockResolvedValue([unlinkedRow]);
+      repo.setTransactionBudgetCategory.mockResolvedValue(true);
 
-      await service.updateBudget(1, { id: 1, name: 'Renamed' });
+      const result = await service.reconcileExpense(1, 279, 49);
 
-      // Pre-existing overlaps (created before D2.1) must not block a
-      // rename or a category edit.
-      expect(repo.findOverlapping).not.toHaveBeenCalled();
-      expect(repo.updateBudget).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not block a full-object update that repeats the stored window', async () => {
-      // The edit form sends the whole budget, dates included. Re-sending the
-      // current dates is not a window change, so a pre-existing overlap must
-      // not turn a rename into a 409.
-      const existing = buildBudget({
-        id: 1,
-        startDate: new Date('2026-06-01'),
-        endDate: new Date('2026-06-30'),
-      });
-      repo.findById.mockResolvedValue(existing);
-      userRepo.findById.mockResolvedValue({
-        ...mockUser,
-        budgets: [existing],
-      });
-      repo.findOverlapping.mockResolvedValue(overlappingBudget());
-      repo.updateBudget.mockResolvedValue({ ...existing, name: 'Renamed' });
-
-      await service.updateBudget(1, {
-        id: 1,
-        name: 'Renamed',
-        startDate: new Date('2026-06-01'),
-        endDate: new Date('2026-06-30'),
-      });
-
-      expect(repo.findOverlapping).not.toHaveBeenCalled();
-      expect(repo.updateBudget).toHaveBeenCalledTimes(1);
-    });
-
-    it('keeps a budget with a pre-existing inverted window editable when dates are untouched', async () => {
-      // Legacy rows could have end < start thanks to the bug this change
-      // fixes; renaming one must not be blocked, and its window stays as-is.
-      const existing = buildBudget({
-        id: 1,
-        startDate: '2026-06-30' as unknown as Date,
-        endDate: '2026-06-01' as unknown as Date,
-      });
-      repo.findById.mockResolvedValue(existing);
-      userRepo.findById.mockResolvedValue({
-        ...mockUser,
-        budgets: [existing],
-      });
-      repo.updateBudget.mockResolvedValue({ ...existing, name: 'Renamed' });
-
-      await service.updateBudget(1, { id: 1, name: 'Renamed' });
-
-      expect(repo.findOverlapping).not.toHaveBeenCalled();
-      expect(repo.updateBudget).toHaveBeenCalledTimes(1);
-    });
-
-    it('resolves the window from the stored dates when only one end is sent', async () => {
-      const existing = buildBudget({
-        id: 1,
-        startDate: new Date('2026-06-01'),
-        endDate: new Date('2026-06-30'),
-      });
-      repo.findById.mockResolvedValue(existing);
-      userRepo.findById.mockResolvedValue({
-        ...mockUser,
-        budgets: [existing],
-      });
-      repo.updateBudget.mockResolvedValue(existing);
-      const newEnd = new Date('2026-07-15');
-
-      await service.updateBudget(1, { id: 1, endDate: newEnd });
-
-      expect(repo.findOverlapping).toHaveBeenCalledWith(
+      expect(repo.setTransactionBudgetCategory).toHaveBeenCalledWith(
         1,
-        existing.startDate,
-        newEnd,
-        'spending',
-        1,
+        279,
+        49,
       );
-      expect(repo.updateBudget).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ id: 279, budgetCategoryId: 49 });
+    });
+
+    it('rejects a category that is not a candidate of that budget', async () => {
+      repo.findReconciliationRows.mockResolvedValue([unlinkedRow]);
+
+      await expect(
+        service.reconcileExpense(1, 279, 999),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repo.setTransactionBudgetCategory).not.toHaveBeenCalled();
+    });
+
+    it('rejects an expense that is no longer unlinked', async () => {
+      repo.findReconciliationRows.mockResolvedValue([]);
+
+      await expect(
+        service.reconcileExpense(1, 279, 49),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(repo.setTransactionBudgetCategory).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Cross-user isolation. The fake repository mirrors the production
+     * WHERE scoping: each user only sees their own pending rows. A regression
+     * that drops `userId` from either call surfaces as a leak here.
+     */
+    describe('cross-user isolation', () => {
+      const userAId = 1;
+      const userBId = 2;
+      const userBRow = {
+        id: 901,
+        date: '2026-11-02',
+        description: 'B expense',
+        category: 'Other',
+        amount: '-12.00',
+        budgetId: 77,
+        budgetName: 'B Budget',
+        categoryId: 88,
+        categoryName: 'B Category',
+      };
+
+      const rowsByUser: Record<number, (typeof unlinkedRow)[]> = {
+        [userAId]: [unlinkedRow],
+        [userBId]: [userBRow],
+      };
+      const scopeRows = (userId: number, transactionId?: number) => {
+        const rows = rowsByUser[userId] ?? [];
+        return transactionId == null
+          ? rows
+          : rows.filter((row) => Number(row.id) === transactionId);
+      };
+
+      beforeEach(() => {
+        repo.findReconciliationRows.mockImplementation(
+          async (userId: number, transactionId?: number) =>
+            scopeRows(userId, transactionId),
+        );
+        repo.setTransactionBudgetCategory.mockResolvedValue(true);
+      });
+
+      it('returns only the requesting user queue', async () => {
+        const asUserA = await service.getReconciliation(userAId);
+        const asUserB = await service.getReconciliation(userBId);
+
+        expect(asUserA.items.map((item) => item.id)).toEqual([279]);
+        expect(asUserB.items.map((item) => item.id)).toEqual([901]);
+        expect(repo.findReconciliationRows).toHaveBeenNthCalledWith(1, userAId);
+        expect(repo.findReconciliationRows).toHaveBeenNthCalledWith(2, userBId);
+      });
+
+      it('does not assign another user expense', async () => {
+        await expect(
+          service.reconcileExpense(userAId, userBRow.id, userBRow.categoryId),
+        ).rejects.toBeInstanceOf(NotFoundException);
+
+        expect(repo.setTransactionBudgetCategory).not.toHaveBeenCalled();
+      });
+
+      it('does not accept a category from another user budget', async () => {
+        await expect(
+          service.reconcileExpense(userAId, unlinkedRow.id, userBRow.categoryId),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        expect(repo.setTransactionBudgetCategory).not.toHaveBeenCalled();
+      });
+
+      it('scopes the successful write to the authenticated user', async () => {
+        await service.reconcileExpense(userAId, unlinkedRow.id, 49);
+
+        expect(repo.setTransactionBudgetCategory).toHaveBeenCalledWith(
+          userAId,
+          unlinkedRow.id,
+          49,
+        );
+      });
     });
   });
 

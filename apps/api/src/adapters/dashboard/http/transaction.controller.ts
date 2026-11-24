@@ -17,6 +17,7 @@ import {
   BadRequestException,
   NotFoundException,
   Query,
+  Headers,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -25,6 +26,7 @@ import {
   ApiParam,
   ApiBody,
   ApiQuery,
+  ApiHeader,
 } from '@nestjs/swagger';
 import { EntityNotFoundExceptionFilter } from './filters/entity-not-found.filter';
 
@@ -126,12 +128,28 @@ export class TransactionController {
   }
 
   @Post('import')
-  @ApiOperation({ summary: 'Import transactions in one request' })
+  @ApiOperation({
+    summary: 'Import transactions in one request',
+    description:
+      'Send an Idempotency-Key (8-128 chars of [A-Za-z0-9_-]) to make retries safe: the same key + payload replays the stored outcome; a reused key with a different payload returns 409.',
+  })
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    description:
+      'Optional idempotency key. Required for replay-safe imports; retries with the same payload are not inserted twice.',
+    required: false,
+  })
   @ApiResponse({ status: 201, description: 'Transactions imported' })
-  async importTransactions(@Body() dto: ImportTransactionsDto, @Req() req) {
+  @ApiResponse({ status: 409, description: 'Idempotency-Key reused with a different payload' })
+  async importTransactions(
+    @Body() dto: ImportTransactionsDto,
+    @Req() req,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
     return this.transactionService.importTransactions(
       req.user.userId,
       dto.transactions,
+      idempotencyKey,
     );
   }
   // #endregion Create Transaction

@@ -31,6 +31,7 @@ import {
   UpdateBudgetDto,
 } from '@application/dashboard/dto/update-budget.dto';
 import { BudgetCategory } from '@domain/dashboard/budget-category.entity';
+import { ReconcileExpenseDto } from '@application/dashboard/dto/reconcile-expense.dto';
 
 @ApiTags('budgets')
 @Controller('budgets')
@@ -56,6 +57,33 @@ export class BudgetController {
     @Query('name') name?: string,
   ) {
     return this.svc.findCategories({ userId: req.user.userId, budgetId, name });
+  }
+
+  @Get('reconciliation')
+  @ApiOperation({
+    summary: 'List unlinked expenses that need manual budget attribution',
+  })
+  @ApiResponse({ status: 200, description: 'Reconciliation queue' })
+  getReconciliation(@Req() req) {
+    return this.svc.getReconciliation(req.user.userId);
+  }
+
+  @Put('reconciliation/:id')
+  @ApiOperation({
+    summary: 'Assign an unlinked expense to a budget category',
+  })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiResponse({ status: 200, description: 'Expense assigned' })
+  reconcileExpense(
+    @Param('id') id: string,
+    @Body() dto: ReconcileExpenseDto,
+    @Req() req,
+  ) {
+    return this.svc.reconcileExpense(
+      req.user.userId,
+      +id,
+      dto.budgetCategoryId,
+    );
   }
 
   @Get(':id')

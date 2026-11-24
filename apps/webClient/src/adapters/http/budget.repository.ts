@@ -52,4 +52,17 @@ export const HttpBudgetRepository: BudgetRepository = {
     const response = await api.delete(`/budgets/category/${categoryId}`);
     return response.data;
   },
+
+  async getReconciliation() {
+    const response = await api.get("/budgets/reconciliation");
+    return response.data;
+  },
+
+  async reconcileExpense(transactionId: number, budgetCategoryId: number) {
+    const response = await api.put(
+      `/budgets/reconciliation/${transactionId}`,
+      { budgetCategoryId },
+    );
+    return response.data;
+  },
 };

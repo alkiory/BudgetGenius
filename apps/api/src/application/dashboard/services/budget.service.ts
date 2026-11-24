@@ -1,10 +1,12 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { BudgetRepository } from '@adapters/dashboard/persistence/budget.repository';
+import {
+  BudgetRepository,
+  ReconciliationRow,
+} from '@adapters/dashboard/persistence/budget.repository';
 import { Budget } from '@domain/dashboard/budget.entity';
 import {
   CreateBudgetCategoryDto,
@@ -26,16 +28,6 @@ import { QueryFailedError } from 'typeorm';
 /** Persisted money is kept at two decimals. */
 const roundMoney = (value: number): number =>
   Number(Number(value).toFixed(2));
-
-/**
- * D2.1: stable, client-mappable message for overlapping budget windows.
- * Transactions are attributed to a spending budget by date window, so two
- * overlapping **spending** budgets would count the same expense twice.
- * Savings goals are manual and exempt. Clients can match this string to
- * show a translated explanation; changing it is a breaking change.
- */
-export const BUDGET_WINDOW_OVERLAP =
-  'Budget dates overlap an existing budget';
 
 /** Case-insensitive category name used to match transactions. */
 const categoryKey = (name: string | undefined): string =>
@@ -73,20 +65,6 @@ export class BudgetService {
     if (calendarDay(dto.endDate) < calendarDay(dto.startDate)) {
       throw new BadRequestException(
         `End date ${calendarDay(dto.endDate)} cannot be less than start date ${calendarDay(dto.startDate)}`,
-      );
-    }
-
-    // D2.1: refuse a window that intersects an existing **spending**
-    // budget. Savings goals are manual targets and never claim
-    // transactions, so they may share a window (with a spending budget or
-    // with another goal) without double counting. The check runs before
-    // anything is written, so a rejected request leaves no budget behind.
-    if (budgetType === 'spending') {
-      await this.assertNoBudgetOverlap(
-        userId,
-        dto.startDate,
-        dto.endDate,
-        budgetType,
       );
     }
 
@@ -259,6 +237,121 @@ export class BudgetService {
     return budget;
   }
 
+  /**
+   * Historical reconciliation screen: unlinked expenses that fall inside a
+   * spending window but whose text category does not match any category of
+   * that budget. The caller assigns each one explicitly; nothing is guessed.
+   */
+  async getReconciliation(userId: number) {
+    // The repository query is scoped by `userId`; a user with no pending
+    // rows simply gets an empty queue, and a deleted-user token gets the
+    // same empty result instead of an extra lookup.
+    const rows = await this.repo.findReconciliationRows(userId);
+    const items = this.buildReconciliationItems(rows);
+    return { total: items.length, items };
+  }
+
+  /**
+   * Freezes one manual reconciliation decision. The chosen category must
+   * belong to the expense's winning budget and its window, otherwise the
+   * caller would be able to create an attribution the system itself would
+   * never infer (and would silently count outside the budget dates).
+   */
+  async reconcileExpense(
+    userId: number,
+    transactionId: number,
+    budgetCategoryId: number,
+  ) {
+    const rows = await this.repo.findReconciliationRows(userId, transactionId);
+    if (rows.length === 0) {
+      throw new NotFoundException(
+        `Unassigned expense ${transactionId} not found`,
+      );
+    }
+    const candidates = rows.filter(
+      (row): row is ReconciliationRow & {
+        categoryId: number | string;
+        categoryName: string;
+      } => row.categoryId != null && row.categoryName != null,
+    );
+    if (
+      !candidates.some(
+        (candidate) =>
+          Number(candidate.categoryId) === Number(budgetCategoryId),
+      )
+    ) {
+      throw new BadRequestException(
+        `Category ${budgetCategoryId} does not belong to the expense budget`,
+      );
+    }
+
+    const updated = await this.repo.setTransactionBudgetCategory(
+      userId,
+      transactionId,
+      budgetCategoryId,
+    );
+    if (!updated) {
+      // The row was linked or deleted between the read and the write.
+      throw new NotFoundException(
+        `Unassigned expense ${transactionId} not found`,
+      );
+    }
+    return { id: transactionId, budgetCategoryId };
+  }
+
+  private buildReconciliationItems(rows: ReconciliationRow[]) {
+    const byTransaction = new Map<
+      number,
+      {
+        id: number;
+        date: string;
+        description: string;
+        category: string;
+        amount: number;
+        budgetId: number;
+        budgetName: string;
+        candidates: Array<{ id: number; name: string }>;
+      }
+    >();
+
+    for (const row of rows) {
+      const id = Number(row.id);
+      let item = byTransaction.get(id);
+      if (!item) {
+        item = {
+          id,
+          date: row.date,
+          description: row.description,
+          category: row.category,
+          amount: roundMoney(Number(row.amount)),
+          budgetId: Number(row.budgetId),
+          budgetName: row.budgetName,
+          candidates: [],
+        };
+        byTransaction.set(id, item);
+      }
+      if (row.categoryId != null && row.categoryName) {
+        item.candidates.push({
+          id: Number(row.categoryId),
+          name: row.categoryName,
+        });
+      }
+    }
+
+    // SQL already orders the queue by date, id and candidate name. The
+    // name-match filter keeps rows that the legacy fallback already
+    // attributes out of the manual queue.
+    return [...byTransaction.values()]
+      .filter((item) => item.candidates.length > 0)
+      .filter(
+        (item) =>
+          !item.candidates.some(
+            (candidate) =>
+              categoryKey(candidate.name) === categoryKey(item.category),
+          ),
+      );
+  }
+
   async findCategories(filters: {
     userId: number;
     budgetId?: number;
@@ -375,12 +468,10 @@ export class BudgetService {
     // omitted, so an `endDate` before the stored `startDate` must fail even
     // when the request never sends `startDate`.
     //
-    // D2.1: only an **actual** change to the window is validated. The edit
-    // form PATCHes the whole budget, dates included, so a presence-based
-    // check would lock every pre-existing overlapping budget (created
-    // before this rule) out of renames and category edits. A stored
-    // invalid window is left untouched for the same reason: an unrelated
-    // edit must not be blocked by data this change did not write.
+    // Only an **actual** change to the window is validated. The edit form
+    // PATCHes the whole budget, dates included, so a presence-based check
+    // would reject an unrelated rename that happens to resend the stored
+    // window.
     const startDate = dto.startDate ?? existing.startDate;
     const endDate = dto.endDate ?? existing.endDate;
     const existingType = existing.type ?? 'spending';
@@ -388,26 +479,10 @@ export class BudgetService {
     const windowChanged =
       calendarDay(startDate) !== calendarDay(existing.startDate) ||
       calendarDay(endDate) !== calendarDay(existing.endDate);
-    const typeChanged = budgetType !== existingType;
 
-    if (windowChanged) {
-      if (calendarDay(endDate) < calendarDay(startDate)) {
-        throw new BadRequestException(
-          `End date ${calendarDay(endDate)} cannot be less than start date ${calendarDay(startDate)}`,
-        );
-      }
-    }
-
-    // D2.1: only spending budgets own an exclusive window. The check also
-    // runs when the type itself changes (savings → spending) because the
-    // same dates can become invalid under the new semantics.
-    if (budgetType === 'spending' && (windowChanged || typeChanged)) {
-      await this.assertNoBudgetOverlap(
-        userId,
-        startDate,
-        endDate,
-        budgetType,
-        dto.id,
+    if (windowChanged && calendarDay(endDate) < calendarDay(startDate)) {
+      throw new BadRequestException(
+        `End date ${calendarDay(endDate)} cannot be less than start date ${calendarDay(startDate)}`,
       );
     }
 
@@ -445,6 +520,23 @@ export class BudgetService {
       throw new NotFoundException(`Category ${dto.id} not found`);
     }
 
+    // D2.2 assisted resolution: before a spending category changes its
+    // name, freeze the attribution of every still-unlinked expense that
+    // matched the OLD name inside the budget window. Without this, those
+    // rows would silently stop counting for the category the moment the
+    // name changes. The FK keeps them attached even after the rename.
+    if (category.budget?.type === 'spending') {
+      const nextName = dto.name?.trim();
+      if (nextName && nextName !== category.name) {
+        await this.categoryRepo.linkUnlinkedTransactionsToCategory(
+          userId,
+          category.budget.id,
+          category.name,
+          category.id,
+        );
+      }
+    }
+
     // `manualSpent` is the authoritative manual baseline going forward.
     // The legacy `spent` field is still accepted (older clients) and is
     // treated as manual input; transaction spending is layered on top by
@@ -470,25 +562,6 @@ export class BudgetService {
     await this.recalculateBudgetTotalSpent(category.budget.id, userId);
 
     return updatedCategory;
-  }
-
-  private async assertNoBudgetOverlap(
-    userId: number,
-    startDate: Date,
-    endDate: Date,
-    type: Budget['type'],
-    excludeBudgetId?: number,
-  ): Promise<void> {
-    const overlapping = await this.repo.findOverlapping(
-      userId,
-      startDate,
-      endDate,
-      type,
-      excludeBudgetId,
-    );
-    if (overlapping) {
-      throw new ConflictException(BUDGET_WINDOW_OVERLAP);
-    }
   }
 
   private async recalculateBudgetTotalSpent(
