@@ -87,11 +87,21 @@ export default function LoginPage() {
   if (loading) {
     return (
       <div className="flex h-full w-full items-center justify-center">
-        <BrandDots
-          size="lg"
-          label={t("common.loading")}
-          className="text-primary"
-        />
+        <Card className="w-full max-w-md">
+          <CardContent
+            role="status"
+            aria-live="polite"
+            className="flex flex-col items-center gap-4 pt-12 pb-12"
+          >
+            <BrandDots
+              size="lg"
+              className="text-teal-600 dark:text-teal-300"
+            />
+            <span className="text-sm text-slate-500 dark:text-slate-400">
+              {t("common.loading")}
+            </span>
+          </CardContent>
+        </Card>
       </div>
     );
   }

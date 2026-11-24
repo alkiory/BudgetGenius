@@ -8,6 +8,7 @@ import { RoutePaths } from "@presentation/utils/routes";
 import { errorToast, successToast } from "@presentation/utils/toast";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router";
 import { GoogleAccountReauthModal } from "./auth/GoogleAccountReauthModal";
@@ -15,6 +16,7 @@ import { BrandDots } from "./loader";
 import { Button } from "./ui/button";
 
 export function SocialLoginButtons() {
+  const { t } = useTranslation();
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
@@ -69,8 +71,12 @@ export function SocialLoginButtons() {
 
   if (loading) {
     return (
-      <div className="flex h-full w-full items-center justify-center">
-        <BrandDots size="lg" className="text-primary" />
+      <div className="flex min-h-10 w-full items-center justify-center py-1.5">
+        <BrandDots
+          size="lg"
+          label={t("common.loading")}
+          className="text-teal-600 dark:text-teal-300"
+        />
       </div>
     );
   }

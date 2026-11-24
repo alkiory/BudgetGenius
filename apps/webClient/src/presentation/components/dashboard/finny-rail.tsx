@@ -207,7 +207,7 @@ export function FinnyRail() {
                   className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-800 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-200"
                 >
                   {mutation.isPending ? (
-                    <BrandDots size="xs" />
+                    <BrandDots size="sm" />
                   ) : (
                     <RefreshCw className="h-3 w-3" />
                   )}
@@ -284,7 +284,7 @@ export function FinnyRail() {
               <div className="mr-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-500 dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-400">
                 <BrandDots
                   size="sm"
-                  className="text-teal-500 dark:text-teal-300"
+                  className="text-teal-600 dark:text-teal-300"
                 />
                 {t("finny.thinking")}
               </div>
@@ -317,8 +317,11 @@ export function FinnyRail() {
           <button
             type="submit"
             disabled={!prompt.trim() || mutation.isPending || isOffline}
+            aria-busy={mutation.isPending}
             aria-label={t("finny.send")}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-teal-400 to-cyan-500 text-slate-950 shadow-[0_0_20px_-6px_rgb(45_212_191_/_0.9)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+            className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-teal-400 to-cyan-500 text-slate-950 shadow-[0_0_20px_-6px_rgb(45_212_191_/_0.9)] transition hover:brightness-110 disabled:cursor-not-allowed ${
+              mutation.isPending ? "" : "disabled:opacity-40"
+            }`}
           >
             {mutation.isPending ? (
               <BrandDots size="sm" />

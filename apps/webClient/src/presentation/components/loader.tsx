@@ -1,8 +1,8 @@
 export type BrandDotsSize = "xs" | "sm" | "md" | "lg";
 
 const DOT_SIZE: Record<BrandDotsSize, number> = {
-  xs: 3,
-  sm: 4,
+  xs: 4,
+  sm: 5,
   md: 6,
   lg: 9,
 };
