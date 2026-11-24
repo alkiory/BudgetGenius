@@ -244,6 +244,7 @@
         "budgetHealthy": "You're within budget. Keep it up!",
         "createError": "Failed to create budget",
         "updateError": "Failed to update budget",
+        "windowOverlap": "These dates overlap an existing budget. Pick a period that doesn't share a day with another budget.",
         "budgetName": "Budget Name",
         "budgetPeriod": "Budget Period",
         "budgetCategories": "Budget Categories",

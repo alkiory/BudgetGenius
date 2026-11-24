@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -26,9 +27,29 @@ import { QueryFailedError } from 'typeorm';
 const roundMoney = (value: number): number =>
   Number(Number(value).toFixed(2));
 
+/**
+ * D2.1: stable, client-mappable message for overlapping budget windows.
+ * Transactions are attributed to a budget by date window, so two
+ * overlapping budgets would count the same expense twice. Clients can
+ * match this string to show a translated explanation; changing it is a
+ * breaking change.
+ */
+export const BUDGET_WINDOW_OVERLAP =
+  'Budget dates overlap an existing budget';
+
 /** Case-insensitive category name used to match transactions. */
 const categoryKey = (name: string | undefined): string =>
   (name ?? '').trim().toLowerCase();
+
+/**
+ * Calendar day (`YYYY-MM-DD`) of either a DTO date or a Postgres `date`
+ * value. TypeORM hydrates `date` columns as strings while the DTOs carry
+ * `Date` instances, and comparing those two directly (`Date < string`)
+ * is always false — which silently disabled the window validation on
+ * partial updates.
+ */
+const calendarDay = (value: Date | string): string =>
+  (value instanceof Date ? value.toISOString() : String(value)).slice(0, 10);
 
 @Injectable()
 export class BudgetService {
@@ -49,11 +70,16 @@ export class BudgetService {
       throw new BadRequestException(`Budget ${dto.name} already exists`);
     }
 
-    if (dto.endDate < dto.startDate) {
+    if (calendarDay(dto.endDate) < calendarDay(dto.startDate)) {
       throw new BadRequestException(
-        `End date ${dto.endDate} cannot be less than start date ${dto.startDate}`,
+        `End date ${calendarDay(dto.endDate)} cannot be less than start date ${calendarDay(dto.startDate)}`,
       );
     }
+
+    // D2.1: refuse a window that intersects an existing budget. The check
+    // runs before anything is written, so a rejected request leaves no
+    // budget behind.
+    await this.assertNoBudgetOverlap(userId, dto.startDate, dto.endDate);
 
     const categories = dto.categories?.map((category) => {
       // A brand-new category starts from its manual baseline (normally 0);
@@ -336,10 +362,30 @@ export class BudgetService {
       throw new NotFoundException(`Budget ${dto.id} not found`);
     }
 
-    if (dto.endDate < dto.startDate) {
-      throw new BadRequestException(
-        `End date ${dto.endDate} cannot be less than start date ${dto.startDate}`,
-      );
+    // Resolve the window once: a partial PATCH inherits whichever end it
+    // omitted, so an `endDate` before the stored `startDate` must fail even
+    // when the request never sends `startDate`.
+    //
+    // D2.1: only an **actual** change to the window is validated. The edit
+    // form PATCHes the whole budget, dates included, so a presence-based
+    // check would lock every pre-existing overlapping budget (created
+    // before this rule) out of renames and category edits. A stored
+    // invalid window is left untouched for the same reason: an unrelated
+    // edit must not be blocked by data this change did not write.
+    const startDate = dto.startDate ?? existing.startDate;
+    const endDate = dto.endDate ?? existing.endDate;
+    const windowChanged =
+      calendarDay(startDate) !== calendarDay(existing.startDate) ||
+      calendarDay(endDate) !== calendarDay(existing.endDate);
+
+    if (windowChanged) {
+      if (calendarDay(endDate) < calendarDay(startDate)) {
+        throw new BadRequestException(
+          `End date ${calendarDay(endDate)} cannot be less than start date ${calendarDay(startDate)}`,
+        );
+      }
+
+      await this.assertNoBudgetOverlap(userId, startDate, endDate, dto.id);
     }
 
     const updatedCategories = dto.categories?.map((category) => {
@@ -401,6 +447,23 @@ export class BudgetService {
     await this.recalculateBudgetTotalSpent(category.budget.id, userId);
 
     return updatedCategory;
+  }
+
+  private async assertNoBudgetOverlap(
+    userId: number,
+    startDate: Date,
+    endDate: Date,
+    excludeBudgetId?: number,
+  ): Promise<void> {
+    const overlapping = await this.repo.findOverlapping(
+      userId,
+      startDate,
+      endDate,
+      excludeBudgetId,
+    );
+    if (overlapping) {
+      throw new ConflictException(BUDGET_WINDOW_OVERLAP);
+    }
   }
 
   private async recalculateBudgetTotalSpent(

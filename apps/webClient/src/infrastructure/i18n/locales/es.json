@@ -235,6 +235,7 @@
     "budgetHealthy": "Estás dentro del presupuesto. ¡Sigue así!",
     "createError": "Error al crear el presupuesto",
     "updateError": "Error al actualizar el presupuesto",
+    "windowOverlap": "Estas fechas se solapan con un presupuesto existente. Elige un período que no comparta ningún día con otro presupuesto.",
     "budgetName": "Nombre del Presupuesto",
     "budgetPeriod": "Período del Presupuesto",
     "budgetCategories": "Categorías del Presupuesto",

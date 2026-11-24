@@ -1,8 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BudgetService } from '@application/dashboard/services/budget.service';
+import {
+  BUDGET_WINDOW_OVERLAP,
+  BudgetService,
+} from '@application/dashboard/services/budget.service';
 import { BudgetRepository } from '@adapters/dashboard/persistence/budget.repository';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import {
+  ConflictException,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
@@ -137,6 +141,7 @@ describe('BudgetService', () => {
           provide: BudgetRepository,
           useValue: {
             countByUser: jest.fn(),
+            findOverlapping: jest.fn(),
             createBudget: jest.fn(),
             createBudgetCategory: jest.fn(),
             findByUser: jest.fn(),
@@ -172,6 +177,9 @@ describe('BudgetService', () => {
     repo = module.get(BudgetRepository);
     userRepo = module.get(UserRepositoryImpl);
     logger = module.get(LoggingService);
+
+    // D2.1: no overlapping budget unless a test says otherwise.
+    repo.findOverlapping.mockResolvedValue(null);
   });
 
   describe('createBudget', () => {
@@ -387,6 +395,54 @@ describe('BudgetService', () => {
       await expect(service.updateBudget(1, dto)).rejects.toThrow(
         BadRequestException,
       );
+    });
+
+    it('should reject an endDate earlier than the stored startDate on a partial update', async () => {
+      const existing = buildBudget({
+        id: 1,
+        startDate: new Date('2026-06-15'),
+        endDate: new Date('2026-06-30'),
+      });
+      repo.findById.mockResolvedValue(existing);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [existing],
+      });
+
+      // No `startDate` in the payload: the comparison must use the stored one.
+      await expect(
+        service.updateBudget(1, {
+          id: 1,
+          endDate: new Date('2026-06-10'),
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(repo.findOverlapping).not.toHaveBeenCalled();
+      expect(repo.updateBudget).not.toHaveBeenCalled();
+    });
+
+    it('should compare a stored date string with a DTO Date on a partial update', async () => {
+      // Postgres `date` columns hydrate as `YYYY-MM-DD` strings even though
+      // the entity type says Date; `Date < string` is always false.
+      const existing = buildBudget({
+        id: 1,
+        startDate: '2026-06-15' as unknown as Date,
+        endDate: '2026-06-30' as unknown as Date,
+      });
+      repo.findById.mockResolvedValue(existing);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [existing],
+      });
+
+      await expect(
+        service.updateBudget(1, {
+          id: 1,
+          endDate: new Date('2026-06-10'),
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(repo.updateBudget).not.toHaveBeenCalled();
     });
   });
 
@@ -890,6 +946,178 @@ describe('BudgetService', () => {
           } as any,
         }),
       ).rejects.toThrow('connection reset');
+    });
+  });
+
+  describe('budget window overlap (D2.1)', () => {
+    const overlappingBudget = () => buildBudget({ id: 2, name: 'Existing' });
+
+    it('rejects creating a budget whose dates overlap an existing one', async () => {
+      userRepo.findById.mockResolvedValue({ ...mockUser, budgets: [] });
+      repo.findOverlapping.mockResolvedValue(overlappingBudget());
+
+      const dto = {
+        name: 'Overlapping',
+        period: 'Monthly',
+        startDate: new Date('2026-06-15'),
+        endDate: new Date('2026-07-15'),
+        totalAllocated: 100,
+        categories: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const err = await service.createBudget(1, dto).catch((e) => e);
+
+      expect(err).toBeInstanceOf(ConflictException);
+      expect((err as Error).message).toBe(BUDGET_WINDOW_OVERLAP);
+      expect(repo.findOverlapping).toHaveBeenCalledWith(
+        1,
+        dto.startDate,
+        dto.endDate,
+        undefined,
+      );
+      expect(repo.createBudget).not.toHaveBeenCalled();
+    });
+
+    it('creates the budget when its window is free', async () => {
+      userRepo.findById.mockResolvedValue({ ...mockUser, budgets: [] });
+      repo.createBudget.mockResolvedValue(buildBudget());
+
+      const dto = {
+        name: 'Free window',
+        period: 'Monthly',
+        startDate: new Date('2030-01-01'),
+        endDate: new Date('2030-01-31'),
+        totalAllocated: 100,
+        categories: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await service.createBudget(1, dto);
+
+      expect(repo.findOverlapping).toHaveBeenCalledTimes(1);
+      expect(repo.createBudget).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects moving a budget onto an overlapping window', async () => {
+      const existing = buildBudget({ id: 1 });
+      repo.findById.mockResolvedValue(existing);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [existing],
+      });
+      repo.findOverlapping.mockResolvedValue(overlappingBudget());
+
+      const startDate = new Date('2026-06-10');
+      const endDate = new Date('2026-06-20');
+
+      const err = await service
+        .updateBudget(1, { id: 1, startDate, endDate })
+        .catch((e) => e);
+
+      expect(err).toBeInstanceOf(ConflictException);
+      expect((err as Error).message).toBe(BUDGET_WINDOW_OVERLAP);
+      // The row being edited is excluded from its own lookup.
+      expect(repo.findOverlapping).toHaveBeenCalledWith(
+        1,
+        startDate,
+        endDate,
+        1,
+      );
+      expect(repo.updateBudget).not.toHaveBeenCalled();
+    });
+
+    it('keeps a budget editable when the update leaves its dates untouched', async () => {
+      const existing = buildBudget({ id: 1 });
+      repo.findById.mockResolvedValue(existing);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [existing],
+      });
+      repo.updateBudget.mockResolvedValue({ ...existing, name: 'Renamed' });
+
+      await service.updateBudget(1, { id: 1, name: 'Renamed' });
+
+      // Pre-existing overlaps (created before D2.1) must not block a
+      // rename or a category edit.
+      expect(repo.findOverlapping).not.toHaveBeenCalled();
+      expect(repo.updateBudget).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not block a full-object update that repeats the stored window', async () => {
+      // The edit form sends the whole budget, dates included. Re-sending the
+      // current dates is not a window change, so a pre-existing overlap must
+      // not turn a rename into a 409.
+      const existing = buildBudget({
+        id: 1,
+        startDate: new Date('2026-06-01'),
+        endDate: new Date('2026-06-30'),
+      });
+      repo.findById.mockResolvedValue(existing);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [existing],
+      });
+      repo.findOverlapping.mockResolvedValue(overlappingBudget());
+      repo.updateBudget.mockResolvedValue({ ...existing, name: 'Renamed' });
+
+      await service.updateBudget(1, {
+        id: 1,
+        name: 'Renamed',
+        startDate: new Date('2026-06-01'),
+        endDate: new Date('2026-06-30'),
+      });
+
+      expect(repo.findOverlapping).not.toHaveBeenCalled();
+      expect(repo.updateBudget).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps a budget with a pre-existing inverted window editable when dates are untouched', async () => {
+      // Legacy rows could have end < start thanks to the bug this change
+      // fixes; renaming one must not be blocked, and its window stays as-is.
+      const existing = buildBudget({
+        id: 1,
+        startDate: '2026-06-30' as unknown as Date,
+        endDate: '2026-06-01' as unknown as Date,
+      });
+      repo.findById.mockResolvedValue(existing);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [existing],
+      });
+      repo.updateBudget.mockResolvedValue({ ...existing, name: 'Renamed' });
+
+      await service.updateBudget(1, { id: 1, name: 'Renamed' });
+
+      expect(repo.findOverlapping).not.toHaveBeenCalled();
+      expect(repo.updateBudget).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves the window from the stored dates when only one end is sent', async () => {
+      const existing = buildBudget({
+        id: 1,
+        startDate: new Date('2026-06-01'),
+        endDate: new Date('2026-06-30'),
+      });
+      repo.findById.mockResolvedValue(existing);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [existing],
+      });
+      repo.updateBudget.mockResolvedValue(existing);
+      const newEnd = new Date('2026-07-15');
+
+      await service.updateBudget(1, { id: 1, endDate: newEnd });
+
+      expect(repo.findOverlapping).toHaveBeenCalledWith(
+        1,
+        existing.startDate,
+        newEnd,
+        1,
+      );
+      expect(repo.updateBudget).toHaveBeenCalledTimes(1);
     });
   });
 

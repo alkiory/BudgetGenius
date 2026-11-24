@@ -435,6 +435,33 @@ echo $DB_HOST $DB_USER $DB_PASSWORD $REDIS_HOST
 
 ---
 
+### ⚠️ Common Pitfall: Root-Owned Build Artifacts (`EACCES` on `dist` / `.vite`)
+
+Containers run as **root** by default. When a one-off container or a Compose service builds or starts the app over the bind-mounted checkout, it leaves files owned by `root` in your working tree. Your host user cannot replace or unlink them, and the next local run fails with:
+
+```text
+Error: EACCES: permission denied, unlink '.../apps/api/dist/jest.config.d.ts'
+Error: EACCES: permission denied, unlink '.../apps/webClient/node_modules/.vite/deps/<hash>.js'
+```
+
+The usual offenders are `apps/api/dist` (written by `nest build` / `nest start`) and `apps/webClient/node_modules/.vite` (Vite's dependency cache).
+
+**Fix (no sudo needed)** — remove or re-own the artifacts from a container:
+
+```bash
+# Delete the regenerable artifacts; the next build/dev run recreates them
+docker run --rm -v "$PWD:/app" -w /app node:20-alpine \
+  rm -rf apps/api/dist apps/webClient/node_modules/.vite
+
+# ...or keep them and give them back to your host user
+docker run --rm -v "$PWD:/app" -w /app node:20-alpine \
+  chown -R "$(id -u):$(id -g)" apps/api/dist apps/webClient/node_modules/.vite
+```
+
+**Prevention:** avoid alternating root containers and host-side `pnpm dev` over the same working tree. If you need both, run the helper container as your user (`--user "$(id -u):$(id -g)"`), or clean the artifacts *before* switching back to the host. `dist` and `.vite` are build outputs, never source, so deleting them is always safe.
+
+---
+
 ### Common Commands Reference
 
 | Command | Description |

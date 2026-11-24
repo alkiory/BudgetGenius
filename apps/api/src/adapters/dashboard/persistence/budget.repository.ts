@@ -1,6 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import {
+  LessThanOrEqual,
+  MoreThanOrEqual,
+  Not,
+  Repository,
+} from 'typeorm';
 import { Budget } from '@domain/dashboard/budget.entity';
 import { BudgetCategory } from '@domain/dashboard/budget-category.entity';
 import { Transaction } from '@domain/dashboard/transaction.entity';
@@ -18,6 +23,37 @@ export class BudgetRepository {
 
   async countByUser(userId: number): Promise<number> {
     return this.repo.count({ where: { user: { id: userId } } });
+  }
+
+  /**
+   * D2.1: first budget of the user whose date window intersects
+   * `[startDate, endDate]`, or `null`. Both ends are inclusive, matching
+   * the `BETWEEN` used to attribute transactions — two budgets that share
+   * a single day would count the same expense twice.
+   *
+   * `excludeBudgetId` lets an update ignore the row being edited, so a
+   * budget never conflicts with itself. No relations are loaded: the
+   * caller only needs to know whether a conflict exists.
+   */
+  async findOverlapping(
+    userId: number,
+    startDate: Date,
+    endDate: Date,
+    excludeBudgetId?: number,
+  ): Promise<Budget | null> {
+    const [overlapping] = await this.repo.find({
+      where: {
+        user: { id: userId },
+        startDate: LessThanOrEqual(endDate),
+        endDate: MoreThanOrEqual(startDate),
+        ...(excludeBudgetId !== undefined
+          ? { id: Not(excludeBudgetId) }
+          : {}),
+      },
+      order: { startDate: 'ASC' },
+      take: 1,
+    });
+    return overlapping ?? null;
   }
 
   async createBudget(budget: Omit<Budget, 'id'>): Promise<Budget> {
