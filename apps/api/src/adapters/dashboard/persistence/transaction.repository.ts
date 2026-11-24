@@ -323,6 +323,8 @@ export class TransactionRepository {
       take: limit,
       order: {
         date: 'DESC',
+        createdAt: 'DESC',
+        id: 'DESC',
       },
     });
     return {

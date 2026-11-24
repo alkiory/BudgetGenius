@@ -585,7 +585,10 @@
     "subtitle": "Tu asistente financiero con IA",
     "open": "Abrir Finny",
     "close": "Cerrar Finny",
+    "collapse": "Encoger Finny",
+    "expand": "Expandir Finny",
     "online": "En línea",
+    "offline": "No disponible",
     "setup": {
       "badge": "Falta configurar",
       "missing": {

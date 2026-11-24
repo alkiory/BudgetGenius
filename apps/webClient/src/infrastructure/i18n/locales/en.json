@@ -585,7 +585,10 @@
         "subtitle": "Your AI financial sidekick",
         "open": "Open Finny",
         "close": "Close Finny",
+        "collapse": "Collapse Finny",
+        "expand": "Expand Finny",
         "online": "Online",
+        "offline": "Unavailable",
         "setup": {
             "badge": "Setup needed",
             "missing": {

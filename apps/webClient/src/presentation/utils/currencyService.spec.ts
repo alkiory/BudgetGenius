@@ -36,9 +36,10 @@ describe("amount input formatting", () => {
   it.each([
     { raw: 62.787499999999994, expected: "62.79" },
     { raw: 1260.2818351105634, expected: "1260.28" },
-    { raw: 100, expected: "100" },
-    { raw: 0, expected: "0" },
-    { raw: 10.5, expected: "10.5" },
+    { raw: 1500.2, expected: "1500.20" },
+    { raw: 100, expected: "100.00" },
+    { raw: 0, expected: "0.00" },
+    { raw: 10.5, expected: "10.50" },
   ])("seeds the editor with $raw as $expected", ({ raw, expected }) => {
     expect(currencyService.formatAmountInput(raw, "EUR")).toBe(expected);
   });
