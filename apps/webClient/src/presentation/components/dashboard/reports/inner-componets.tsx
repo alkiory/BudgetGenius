@@ -5,8 +5,10 @@ const ChartContainer = ({
   title: string;
   children: React.ReactNode;
 }) => (
-  <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
-    <h3 className="mb-4 text-lg font-medium">{title}</h3>
+  <div className="glass-panel hover-glow rounded-xl p-6">
+    <h3 className="mb-4 text-sm font-semibold tracking-tight text-slate-900 dark:text-white">
+      {title}
+    </h3>
     <div className="h-80">{children}</div>
   </div>
 );
@@ -20,7 +22,7 @@ const InsightBox = ({
   value: React.ReactNode;
   description: string;
 }) => (
-  <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+  <div className="rounded-xl border border-slate-200/70 bg-white/40 p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
     <h4 className="font-medium">{title}</h4>
     <div className="mt-1 text-2xl font-bold">{value}</div>
     <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -39,7 +41,7 @@ const ProgressBar = ({ value, color }: { value: number; color: string }) => {
   // the tab's breakdown list.
   const safeWidth = Math.max(0, Math.min(value, 100));
   return (
-    <div className="mt-1 h-2 w-full rounded-full bg-slate-100 dark:bg-slate-700">
+    <div className="mt-1 h-2 w-full rounded-full bg-slate-200/70 dark:bg-white/[0.07]">
       <div
         className="h-2 rounded-full"
         style={{ width: `${safeWidth}%`, backgroundColor: color }}

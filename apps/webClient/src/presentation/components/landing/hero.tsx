@@ -31,24 +31,24 @@ export function Hero() {
     : t("landing.getStarted");
 
   return (
-    <section className="relative isolate overflow-x-clip bg-gradient-to-br from-purple-50 via-white to-fuchsia-50 py-16 dark:from-purple-950 dark:via-slate-900 dark:to-slate-900 sm:py-20 lg:py-24">
+    <section className="relative isolate overflow-x-clip bg-gradient-to-br from-teal-50 via-white to-cyan-50 py-16 dark:from-slate-950 dark:via-slate-950 dark:to-teal-950/40 sm:py-20 lg:py-24">
       {/* Radial glow blobs behind the phone */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-32 -top-32 -z-10 h-[480px] w-[480px] rounded-full bg-[radial-gradient(circle,_var(--tw-gradient-stops))] from-fuchsia-400/40 via-purple-400/15 to-transparent blur-3xl"
+        className="pointer-events-none absolute -right-32 -top-32 -z-10 h-[480px] w-[480px] rounded-full bg-[radial-gradient(circle,_var(--tw-gradient-stops))] from-teal-400/40 via-cyan-400/15 to-transparent blur-3xl"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 -bottom-40 -z-10 h-[300px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-300/30 via-transparent to-transparent blur-2xl"
+        className="pointer-events-none absolute inset-x-0 -bottom-40 -z-10 h-[300px] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-teal-300/30 via-transparent to-transparent blur-2xl"
       />
 
       <div className="container mx-auto grid max-w-7xl gap-12 px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-center lg:gap-16">
         {/* LEFT — text column */}
         <div>
           {/* Social proof pill */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-purple-200/60 bg-white/70 px-3 py-1.5 text-xs font-medium shadow-sm backdrop-blur-sm dark:border-purple-700/40 dark:bg-slate-900/70">
+          <div className="inline-flex items-center gap-2 rounded-full border border-teal-400/30 bg-white/70 px-3 py-1.5 text-xs font-medium shadow-sm backdrop-blur-sm dark:border-teal-400/20 dark:bg-slate-900/70">
             <Sparkles
-              className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400"
+              className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400"
               aria-hidden="true"
             />
             <span className="text-slate-700 dark:text-slate-300">
@@ -59,11 +59,11 @@ export function Hero() {
           {/* Headline with serif-italic accents */}
           <h1 className="mt-6 text-5xl font-extrabold leading-[1.05] tracking-tight text-slate-900 dark:text-white sm:text-6xl lg:text-7xl">
             {t("landing.heroTitleLead")}{" "}
-            <span className="font-serif italic text-purple-700 dark:text-purple-300">
+            <span className="font-serif italic text-teal-700 dark:text-teal-300">
               {t("landing.heroTitleAccent1")}
             </span>
             {t("landing.heroTitleBody")}{" "}
-            <span className="font-serif italic text-purple-700 dark:text-purple-300">
+            <span className="font-serif italic text-teal-700 dark:text-teal-300">
               {t("landing.heroTitleAccent2")}
             </span>
           </h1>
@@ -75,7 +75,7 @@ export function Hero() {
           <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
             <Button
               size="lg"
-              className="bg-gradient-to-r from-purple-600 to-violet-500 text-white shadow-lg shadow-purple-500/30 transition-transform hover:scale-105 hover:from-purple-700 hover:to-violet-600"
+              className="bg-gradient-to-r from-teal-400 to-cyan-500 text-slate-950 shadow-lg shadow-teal-500/25 transition-transform hover:scale-105 hover:from-teal-300 hover:to-cyan-400"
             >
               <Link to={primaryHref} className="flex items-center">
                 {primaryLabel}
@@ -94,7 +94,7 @@ export function Hero() {
           {/* Download App CTA — scrolls to #download section */}
           <a
             href="#download"
-            className="mt-5 group inline-flex items-center gap-2.5 rounded-xl border border-purple-200/60 bg-white/60 px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm backdrop-blur-sm transition-all hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700 hover:shadow-md dark:border-purple-700/40 dark:bg-slate-900/50 dark:text-slate-300 dark:hover:border-purple-600 dark:hover:bg-purple-900/30 dark:hover:text-purple-300"
+            className="mt-5 group inline-flex items-center gap-2.5 rounded-xl border border-teal-400/30 bg-white/60 px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm backdrop-blur-sm transition-all hover:border-teal-400/50 hover:bg-teal-500/10 hover:text-teal-700 hover:shadow-md dark:border-teal-400/20 dark:bg-slate-900/50 dark:text-slate-300 dark:hover:border-teal-400/40 dark:hover:bg-teal-400/10 dark:hover:text-teal-300"
           >
             <AndroidIcon className="h-5 w-5" />
             <span>{t("landing.sectionDownloadApp.buttonLabel")}</span>

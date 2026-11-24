@@ -14,7 +14,7 @@ export default function FooterComponent() {
           {t("common.needHelp")}{" "}
           <Link
             to="#"
-            className="text-purple-600 hover:underline dark:text-purple-400"
+            className="text-teal-600 hover:underline dark:text-teal-400"
           >
             {t("contact.support")}
           </Link>

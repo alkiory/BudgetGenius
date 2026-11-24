@@ -12,6 +12,8 @@ import {
   Legend,
   PieChart,
 } from "recharts";
+import { COLORS } from "@presentation/utils/color";
+import { chartTooltipProps } from "@presentation/utils/chart-theme";
 import { ChartContainer, ProgressBar, InsightBox } from "./inner-componets";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -26,20 +28,7 @@ const LABEL_ELBOW = 18;
 // data is still available in the legend and the breakdown panel.
 const MIN_LABEL_PERCENT = 0.03;
 
-const CATEGORY_PALETTE = [
-  "#8b5cf6",
-  "#10b981",
-  "#f59e0b",
-  "#3b82f6",
-  "#ef4444",
-  "#06b6d4",
-  "#ec4899",
-  "#84cc16",
-  "#f97316",
-  "#6366f1",
-  "#14b8a6",
-  "#d946ef",
-];
+
 interface TrendsTabProps {
   isLoadingInsights: boolean;
   weeklyTrend: any[];
@@ -152,14 +141,13 @@ export default function CategoryTab({
                     {categories?.map((entry: any, index: number) => (
                       <Cell
                         key={`cell-${index}`}
-                        fill={
-                          entry.color ||
-                          CATEGORY_PALETTE[index % CATEGORY_PALETTE.length]
-                        }
+                        fill={entry.color || COLORS[index % COLORS.length]}
                       />
                     ))}
                   </Pie>
                   <Tooltip
+                    {...chartTooltipProps}
+                    cursor={false}
                     formatter={(value) => formatCurrency(Number(value))}
                   />
                   <Legend
@@ -171,7 +159,7 @@ export default function CategoryTab({
             </div>
           </ChartContainer>
 
-          <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
+          <div className="glass-panel hover-glow rounded-xl p-6">
             <h3 className="mb-4 text-lg font-medium">
               {t("reports.categoryBreakdown")}
             </h3>
@@ -189,8 +177,7 @@ export default function CategoryTab({
                 const isOver = percentUsed > 100;
                 const overBy = Math.max(0, percentUsed - 100);
                 const categoryColor =
-                  category.color ||
-                  CATEGORY_PALETTE[index % CATEGORY_PALETTE.length];
+                  category.color || COLORS[index % COLORS.length];
                 return (
                   <div key={category.category}>
                     <div className="flex items-center justify-between">
@@ -207,7 +194,7 @@ export default function CategoryTab({
                     </div>
                     <ProgressBar value={percentUsed} color={categoryColor} />
                     {isOver && (
-                      <p className="mt-1 text-xs font-medium text-red-500 dark:text-red-400">
+                      <p className="mt-1 text-xs font-medium text-rose-500 dark:text-rose-400">
                         {t("reports.overByPercent", {
                           percent: overBy.toFixed(1),
                         })}
@@ -225,7 +212,7 @@ export default function CategoryTab({
         (insights.recommendations?.length > 0 ||
           insights.topCategory !== undefined) && (
           <div className="space-y-6">
-            <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
+            <div className="glass-panel hover-glow rounded-xl p-6">
               <h3 className="mb-4 text-lg font-medium">
                 {t("reports.categoryInsights")}
               </h3>
@@ -261,7 +248,7 @@ export default function CategoryTab({
             </div>
 
             {insights.recommendations?.length > 0 && (
-              <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
+              <div className="glass-panel hover-glow rounded-xl p-6">
                 <h3 className="mb-4 text-lg font-medium">
                   {t("reports.recommendations")}
                 </h3>
@@ -271,10 +258,10 @@ export default function CategoryTab({
                       key={rec.category}
                       className={`rounded-lg border p-4 ${
                         rec.priority === "high"
-                          ? "border-red-200 bg-red-50 dark:border-red-900/30 dark:bg-red-900/10"
+                          ? "border-rose-200 bg-rose-50 dark:border-rose-900/30 dark:bg-rose-900/10"
                           : rec.priority === "medium"
                           ? "border-amber-200 bg-amber-50 dark:border-amber-900/30 dark:bg-amber-900/10"
-                          : "border-green-200 bg-green-50 dark:border-green-900/30 dark:bg-green-900/10"
+                          : "border-emerald-200 bg-emerald-50 dark:border-emerald-900/30 dark:bg-emerald-900/10"
                       }`}
                     >
                       <h4 className="font-medium">{rec.category}</h4>

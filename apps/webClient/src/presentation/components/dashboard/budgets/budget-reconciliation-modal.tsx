@@ -3,6 +3,7 @@ import { useFetchReconciliation } from "@adapters/query/dashboard";
 import { useUserSettings } from "@adapters/hooks/useUserSettings";
 import { Modal } from "@presentation/components/modal/modal";
 import { Button } from "@presentation/components/ui/button";
+import { Select } from "@presentation/components/ui/select";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { errorToast, successToast } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -124,26 +125,28 @@ export function BudgetReconciliationModal({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <select
+                      <Select
                         aria-label={t("budgets.reconcileChooseCategory")}
+                        className="min-w-0 flex-1"
                         value={selected[item.id] ?? ""}
-                        onChange={(event) =>
+                        placeholder={t("budgets.reconcileChooseCategory")}
+                        onChange={(value) =>
                           setSelected((previous) => ({
                             ...previous,
-                            [item.id]: event.target.value,
+                            [item.id]: value,
                           }))
                         }
-                        className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                      >
-                        <option value="">
-                          {t("budgets.reconcileChooseCategory")}
-                        </option>
-                        {item.candidates.map((candidate) => (
-                          <option key={candidate.id} value={candidate.id}>
-                            {candidate.name}
-                          </option>
-                        ))}
-                      </select>
+                        options={[
+                          {
+                            value: "",
+                            label: t("budgets.reconcileChooseCategory"),
+                          },
+                          ...item.candidates.map((candidate) => ({
+                            value: String(candidate.id),
+                            label: candidate.name,
+                          })),
+                        ]}
+                      />
                       <Button
                         type="button"
                         size="sm"

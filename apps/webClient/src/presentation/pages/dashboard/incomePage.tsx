@@ -153,10 +153,10 @@ export default function IncomePage() {
       {/* Cards */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 md:gap-4">
         {/* Total Income Card */}
-        <div className="w-full rounded-lg bg-white p-4 shadow-sm dark:bg-slate-800 sm:p-6">
+        <div className="glass-panel hover-glow w-full rounded-xl p-5 sm:p-6">
           <div className="flex items-center gap-2">
-            <div className="rounded-full bg-green-100 p-2 dark:bg-green-900">
-              <DollarSign className="h-4 w-4 text-green-600 dark:text-green-400 sm:h-5 sm:w-5" />
+            <div className="grid h-9 w-9 place-items-center rounded-lg border border-emerald-500/25 bg-emerald-500/10">
+              <DollarSign className="h-4 w-4 text-emerald-600 dark:text-emerald-300 sm:h-5 sm:w-5" />
             </div>
             <span className="text-xs font-medium sm:text-sm">
               {t("transactions.heading.totalIncome")}
@@ -173,10 +173,10 @@ export default function IncomePage() {
         </div>
 
         {/* Primary Income Card (Top Category) */}
-        <div className="w-full rounded-lg bg-white p-4 shadow-sm dark:bg-slate-800 sm:p-6">
+        <div className="glass-panel hover-glow w-full rounded-xl p-5 sm:p-6">
           <div className="flex items-center gap-2">
-            <div className="rounded-full bg-blue-100 p-2 dark:bg-blue-900">
-              <Wallet className="h-4 w-4 text-blue-600 dark:text-blue-400 sm:h-5 sm:w-5" />
+            <div className="grid h-9 w-9 place-items-center rounded-lg border border-cyan-500/25 bg-cyan-500/10">
+              <Wallet className="h-4 w-4 text-cyan-600 dark:text-cyan-300 sm:h-5 sm:w-5" />
             </div>
             <span className="text-xs font-medium sm:text-sm">
               {t("transactions.heading.primaryCategory")}
@@ -206,10 +206,10 @@ export default function IncomePage() {
         </div>
 
         {/* Average Income Card — NaN-safe (Phase 3 T3.7) */}
-        <div className="w-full rounded-lg bg-white p-4 shadow-sm dark:bg-slate-800 sm:p-6">
+        <div className="glass-panel hover-glow w-full rounded-xl p-5 sm:p-6">
           <div className="flex items-center gap-2">
-            <div className="rounded-full bg-purple-100 p-2 dark:bg-purple-900">
-              <ArrowUpRight className="h-4 w-4 text-purple-600 dark:text-purple-400 sm:h-5 sm:w-5" />
+            <div className="grid h-9 w-9 place-items-center rounded-lg border border-teal-500/25 bg-teal-500/10">
+              <ArrowUpRight className="h-4 w-4 text-teal-600 dark:text-teal-300 sm:h-5 sm:w-5" />
             </div>
             <span className="text-xs font-medium sm:text-sm">
               {t("transactions.heading.averageIncome")}
@@ -236,7 +236,7 @@ export default function IncomePage() {
               <Filter className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>{t("common.filter")}</span>
               {activeFiltersCount > 0 && (
-                <span className="ml-1 rounded-full bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-200 sm:px-2">
+                <span className="ml-1 rounded-full bg-teal-500/10 px-1.5 py-0.5 text-xs font-medium text-teal-800 dark:bg-teal-400/15 dark:text-teal-200 sm:px-2">
                   {activeFiltersCount}
                 </span>
               )}

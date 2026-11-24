@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Menu,
 } from "lucide-react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useLocation, useNavigate } from "react-router";
@@ -75,6 +76,32 @@ export function DashboardSidebar() {
 
   const pathname = useLocation().pathname;
 
+  const navItemRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
+  const [activeIndicator, setActiveIndicator] = useState({
+    top: 0,
+    height: 0,
+    ready: false,
+  });
+
+  const activeNavKey = navigation.find((item) => pathname === item.href)?.key;
+
+  // One shared pill slides between nav items instead of the highlight
+  // snapping from link to link, so selecting a page reads as motion.
+  useLayoutEffect(() => {
+    const activeItem = activeNavKey ? navItemRefs.current[activeNavKey] : null;
+    if (!activeItem) {
+      setActiveIndicator((previous) =>
+        previous.ready ? { ...previous, ready: false } : previous,
+      );
+      return;
+    }
+    setActiveIndicator({
+      top: activeItem.offsetTop,
+      height: activeItem.offsetHeight,
+      ready: true,
+    });
+  }, [activeNavKey, isCollapsed]);
+
   // v1.7.2 — `clearAuthAndStateForLogout` is the canonical state-reset
   // helper. The previous implementation dispatched `logoutAction` only;
   // that left the React Query cache (especially `useGetSettings`'s
@@ -105,14 +132,13 @@ export function DashboardSidebar() {
 
   const getLinkClasses = (_item: any, isActive: boolean) => {
     return `
-    group flex items-center rounded-md px-2 text-sm font-medium transition-colors duration-200
+    group relative z-10 flex items-center rounded-md px-2 text-sm font-medium transition-colors duration-200
       ${isCollapsed ? "justify-center py-3" : "py-2"}
       gap-2
-      ${isActive &&
-      "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-      }
-      ${!isActive &&
-      "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+      ${isActive ? "text-teal-700 dark:text-teal-300" : ""}
+      ${
+        !isActive &&
+        "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/[0.045] dark:hover:text-slate-100"
       }
       ${isCollapsed && "animate-shake"}
     `;
@@ -122,9 +148,10 @@ export function DashboardSidebar() {
     return `
     ${isCollapsed ? "h-6 w-6" : "h-5 w-5 flex-shrink-0 mr-3"}
       transition-colors duration-200
-      ${isActive && "text-slate-600 dark:text-slate-300"}
-      ${!isActive &&
-      "text-slate-400 group-hover:text-slate-500 dark:text-slate-500 dark:group-hover:text-slate-300"
+      ${isActive && "text-teal-600 dark:text-teal-300"}
+      ${
+        !isActive &&
+        "text-slate-400 group-hover:text-teal-600 dark:text-slate-500 dark:group-hover:text-teal-300"
       }
     `;
   };
@@ -136,7 +163,7 @@ export function DashboardSidebar() {
         <div className="fixed bottom-[calc(max(env(safe-area-inset-bottom),1rem)+4.5rem)] right-4 z-40 md:hidden">
           <AddTransactionModal
             trigger={
-              <button className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-purple-600 to-fuchsia-600 text-white shadow-xl transition-all duration-200 hover:shadow-2xl hover:scale-105 active:scale-95">
+              <button className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 text-slate-950 shadow-[0_12px_40px_-10px_rgb(45_212_191_/_0.8)] transition-all duration-200 hover:scale-105 hover:brightness-110 active:scale-95">
                 <Plus className="h-7 w-7" strokeWidth={2.5} />
               </button>
             }
@@ -146,8 +173,9 @@ export function DashboardSidebar() {
 
       {/* Botón de toggle para móvil */}
       <button
-        onClick={toggleSidebar} className={`
-          fixed bottom-[max(env(safe-area-inset-bottom),1rem)] right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-purple-600 text-white shadow-lg transition-all duration-300 md:hidden
+        onClick={toggleSidebar}
+        className={`
+          fixed bottom-[max(env(safe-area-inset-bottom),1rem)] right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-teal-500 text-slate-950 shadow-[0_10px_35px_-8px_rgb(45_212_191_/_0.8)] transition-all duration-300 md:hidden
           ${isOpen ? "rotate-90" : "rotate-0"}
           `}
       >
@@ -157,7 +185,7 @@ export function DashboardSidebar() {
       {/* Sidebar */}
       <div
         className={`
-          fixed inset-y-0 left-0 z-30 flex flex-col border-r border-slate-200 bg-white transition-all duration-300 ease-in-out dark:border-slate-800 dark:bg-slate-950
+          fixed inset-y-0 left-0 z-30 flex flex-col border-r border-slate-200/80 bg-white/85 backdrop-blur-2xl transition-all duration-300 ease-in-out dark:border-white/[0.07] dark:bg-[#060b14]/85
           ${isOpen ? "translate-x-0" : "-translate-x-full"}
           ${isCollapsed ? "md:w-20" : "md:w-64"}
           md:translate-x-0
@@ -165,14 +193,15 @@ export function DashboardSidebar() {
       >
         <div
           className={`
-            flex items-center border-b border-slate-200 px-4 pb-5 pt-[max(env(safe-area-inset-top),1.25rem)] dark:border-slate-800
+            flex items-center border-b border-slate-200/80 px-4 pb-5 pt-[max(env(safe-area-inset-top),1.25rem)] dark:border-white/[0.07]
             ${isCollapsed ? "justify-center" : "justify-between"}
             `}
         >
           <Link
             to={RoutePaths.App + "/" + RoutePaths.Dashboard}
-            className={`flex items-center gap-2 ${isCollapsed ? "justify-center" : ""
-              }`}
+            className={`flex items-center gap-2 ${
+              isCollapsed ? "justify-center" : ""
+            }`}
           >
             <Logo size="sm" variant={isCollapsed ? "minimal" : "default"} />
           </Link>
@@ -181,9 +210,10 @@ export function DashboardSidebar() {
           <button
             onClick={toggleSidebar}
             className={`
-              hidden rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 md:block
-              ${isCollapsed &&
-              "absolute right-0 top-5 -mr-3 bg-white dark:bg-slate-950"
+              hidden rounded-full p-1 text-slate-400 hover:bg-teal-500/10 hover:text-teal-600 dark:text-slate-400 dark:hover:bg-white/[0.06] dark:hover:text-teal-300 md:block
+              ${
+                isCollapsed &&
+                "absolute right-0 top-5 -mr-3 bg-white dark:bg-[#060b14]"
               }
               `}
           >
@@ -196,37 +226,50 @@ export function DashboardSidebar() {
         </div>
 
         <div className="flex flex-1 flex-col overflow-y-auto pt-5 pb-4">
-          <nav
-            className={`mt-2 flex-1 space-y-1 ${isCollapsed ? "px-1" : "px-2"}`}
-          >
-            {navigation.map((item) => {
-              const isActive = pathname === item.href;
-              const label = t(item.i18nKey ?? "sidebar." + item.key);
-              return (
-                <Link
-                  key={item.key}
-                  to={item.href}
-                  className={getLinkClasses(item, isActive)}
-                  title={isCollapsed ? label : ""}
-                  onClick={closeSidebar}
-                >
-                  <item.icon
-                    className={getIconClasses(item, isActive)}
-                    aria-hidden="true"
-                  />
-                  {!isCollapsed && (
-                    <span className="flex-1 transition-opacity duration-200">
-                      {label}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+          <nav className={`mt-2 flex-1 ${isCollapsed ? "px-1" : "px-2"}`}>
+            <div className="relative space-y-1">
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none absolute inset-x-0 rounded-md bg-teal-500/10 shadow-[0_0_26px_-12px_rgb(45_212_191_/_0.75)] ring-1 ring-inset ring-teal-500/25 transition-[transform,height,opacity] duration-300 ease-out ${
+                  activeIndicator.ready ? "opacity-100" : "opacity-0"
+                }`}
+                style={{
+                  height: activeIndicator.height,
+                  transform: `translateY(${activeIndicator.top}px)`,
+                }}
+              />
+              {navigation.map((item) => {
+                const isActive = pathname === item.href;
+                const label = t(item.i18nKey ?? "sidebar." + item.key);
+                return (
+                  <Link
+                    key={item.key}
+                    ref={(element) => {
+                      navItemRefs.current[item.key] = element;
+                    }}
+                    to={item.href}
+                    className={getLinkClasses(item, isActive)}
+                    title={isCollapsed ? label : ""}
+                    onClick={closeSidebar}
+                  >
+                    <item.icon
+                      className={getIconClasses(item, isActive)}
+                      aria-hidden="true"
+                    />
+                    {!isCollapsed && (
+                      <span className="flex-1 transition-opacity duration-200">
+                        {label}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
           </nav>
         </div>
         <div
           className={`
-            flex flex-shrink-0 border-t border-slate-200 p-4 dark:border-slate-800
+            flex flex-shrink-0 border-t border-slate-200/80 p-4 dark:border-white/[0.07]
             ${isCollapsed ? "justify-center" : ""}
             `}
         >
@@ -236,7 +279,7 @@ export function DashboardSidebar() {
             onClick={handleLogout}
           >
             <div className="flex items-center">
-              <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 dark:bg-purple-900 dark:text-purple-400 font-medium">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-500/15 font-medium text-teal-700 ring-1 ring-inset ring-teal-500/25 dark:bg-teal-400/10 dark:text-teal-300">
                 {(user?.name?.charAt(0).toUpperCase() ?? "") +
                   (user?.surname?.charAt(0).toUpperCase() ?? "")}
               </div>
@@ -259,8 +302,9 @@ export function DashboardSidebar() {
 
         {/* Version badge — always visible at the bottom of the sidebar */}
         <div
-          className={`flex flex-shrink-0 border-t border-slate-200 px-4 py-2 dark:border-slate-800 ${isCollapsed ? "justify-center" : "justify-center"
-            }`}
+          className={`flex flex-shrink-0 border-t border-slate-200/80 px-4 py-2 dark:border-white/[0.07] ${
+            isCollapsed ? "justify-center" : "justify-center"
+          }`}
         >
           <VersionBadge />
         </div>

@@ -67,7 +67,7 @@ export const TabsList = React.forwardRef<HTMLDivElement, TabsListProps>(
     <div
       ref={ref}
       role="tablist"
-      className={`inline-flex h-10 gap-2 items-center justify-center rounded-md p-1 bg-primary-foreground dark:bg-primary-foreground ${className}`}
+      className={`flex w-full flex-wrap items-center justify-start gap-1 rounded-xl border border-slate-200/80 bg-white/60 p-1 shadow-sm backdrop-blur dark:border-white/[0.08] dark:bg-white/[0.04] md:w-auto md:flex-nowrap ${className}`}
     >
       {children}
     </div>
@@ -90,15 +90,11 @@ export const TabsTrigger = React.forwardRef<
       role="tab"
       id={`tab-${value}`}
       aria-selected={isActive}
-      className={`inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium transition-all
-          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
-          disabled:pointer-events-none disabled:opacity-50 bg-foreground/10 text-slate-900 dark:text-slate-100
-          ${
-            activeTab === value
-              ? "dark:bg-secondary-foreground text-muted-foreground shadow-md"
-              : "hover:text-gray-700 dark:hover:text-slate-50"
-          }
-          ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50 disabled:pointer-events-none disabled:opacity-50 ${
+        isActive
+          ? "bg-teal-500/15 text-teal-700 shadow-[0_0_22px_-10px_rgb(45_212_191_/_0.9)] ring-1 ring-inset ring-teal-400/30 dark:bg-teal-400/15 dark:text-teal-300"
+          : "text-slate-500 hover:bg-slate-100/70 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/[0.05] dark:hover:text-slate-100"
+      } ${className}`}
     >
       {children}
     </button>
@@ -116,7 +112,7 @@ export const TabsContent = React.forwardRef<HTMLDivElement, TabsContentProps>(
         ref={ref}
         role="tabpanel"
         aria-labelledby={`tab-${value}`}
-        className={`mt-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${className}`}
+        className={`mt-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40 ${className}`}
       >
         {children}
       </div>

@@ -11,7 +11,7 @@ export function DashboardHeader() {
   const user = useSelector((state: RootState) => state.auth.user);
 
   return (
-    <header className="sticky top-0 z-10 flex min-h-16 pt-[max(env(safe-area-inset-top),0.5rem)] md:pt-0 flex-shrink-0 border-b bg-white dark:bg-slate-950 dark:border-slate-800">
+    <header className="sticky top-0 z-20 flex min-h-16 flex-shrink-0 border-b border-slate-200/70 bg-white/65 pt-[max(env(safe-area-inset-top),0.5rem)] backdrop-blur-2xl dark:border-white/[0.06] dark:bg-[#050a12]/65 md:pt-0">
       <div className="flex flex-1 justify-end px-4">
         <div className="flex items-center gap-3">
           <div className="hidden md:block">
@@ -24,13 +24,13 @@ export function DashboardHeader() {
             <div>
               <button
                 type="button"
-                className="flex max-w-xs items-center rounded-full bg-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:bg-slate-950"
+                className="flex max-w-xs items-center rounded-full bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/70 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-[#050a12]"
                 id="user-menu-button"
               >
                 <span className="sr-only">{t("dashboard.openUserMenu")}</span>
                 <Link
                   to={RoutePaths.App + "/" + RoutePaths.Profile}
-                  className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 dark:bg-purple-900 dark:text-purple-400 font-medium"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-500/15 font-medium text-teal-700 ring-1 ring-inset ring-teal-500/25 transition hover:bg-teal-500/25 dark:bg-teal-400/10 dark:text-teal-300"
                 >
                   {(user?.name?.charAt(0)?.toUpperCase() || "") +
                     (user?.surname?.charAt(0)?.toUpperCase() || "")}

@@ -22,7 +22,7 @@ export function HowItWorks() {
     >
       <div className="container mx-auto max-w-7xl px-6">
         <div className="mx-auto mb-12 max-w-2xl text-center">
-          <span className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-purple-700 dark:border-purple-700/40 dark:bg-purple-900/30 dark:text-purple-300">
+          <span className="inline-flex rounded-full border border-teal-400/30 bg-teal-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-teal-700 dark:border-teal-400/20 dark:bg-teal-400/10 dark:text-teal-300">
             {t("landing.sectionHow.badge")}
           </span>
           <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-5xl">
@@ -41,10 +41,10 @@ export function HowItWorks() {
                 idx === 0 ? "md:pl-0" : ""
               } ${idx === STEP_IDS.length - 1 ? "md:pr-0" : ""}`}
             >
-              <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-white text-purple-700 shadow-sm ring-1 ring-purple-100 dark:bg-slate-900 dark:text-purple-300 dark:ring-purple-900/40">
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-white text-teal-700 shadow-sm ring-1 ring-teal-500/15 dark:bg-slate-900 dark:text-teal-300 dark:ring-teal-400/20">
                 {STEP_ICONS[idx]}
               </div>
-              <span className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+              <span className="text-xs font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
                 {t(`landing.sectionHow.steps.${id}.label`)}
               </span>
               <h3 className="text-2xl font-bold text-slate-900 dark:text-white">

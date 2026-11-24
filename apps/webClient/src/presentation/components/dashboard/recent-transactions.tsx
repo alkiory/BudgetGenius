@@ -45,10 +45,10 @@ const CATEGORY_ICONS: Record<string, React.FC<{ className?: string }>> = {
 
 // Colores y fondos para los iconos
 const CATEGORY_STYLES: Record<string, { color: string; bg: string }> = {
-  Income: { color: "text-green-500", bg: "bg-green-100 dark:bg-green-900" },
+  Income: { color: "text-emerald-500", bg: "bg-emerald-100 dark:bg-emerald-900" },
   Shopping: { color: "text-blue-500", bg: "bg-blue-100 dark:bg-blue-900" },
   Food: { color: "text-amber-500", bg: "bg-amber-100 dark:bg-amber-900" },
-  Housing: { color: "text-purple-500", bg: "bg-purple-100 dark:bg-purple-900" },
+  Housing: { color: "text-teal-400", bg: "bg-teal-500/10 dark:bg-teal-400/15" },
   default: { color: "text-slate-500", bg: "bg-slate-100 dark:bg-slate-700" },
   Transportation: {
     color: "text-cyan-500",
@@ -89,14 +89,14 @@ export function RecentTransactions() {
     currencyService.formatCurrency(raw, targetCurrency);
 
   return (
-    <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
+    <div className="glass-panel hover-glow rounded-xl p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">
           {t("dashboard.recentTransactions")}
         </h2>
         <Link
           to={`${RoutePaths.App}/${RoutePaths.Transactions}`}
-          className="text-sm text-purple-600 hover:underline dark:text-purple-400"
+          className="text-xs font-medium text-teal-600 transition hover:text-teal-500 hover:underline dark:text-teal-300"
         >
           {t("common.viewAll")}
         </Link>
@@ -114,7 +114,7 @@ export function RecentTransactions() {
               return (
                 <div
                   key={transaction.id}
-                  className="flex items-center justify-between rounded-lg border border-slate-100 p-3 dark:border-slate-700"
+                  className="glow-row group flex items-center justify-between rounded-xl border border-slate-200/60 bg-white/40 p-3 dark:border-white/[0.06] dark:bg-white/[0.02]"
                 >
                   <div className="flex items-center gap-3">
                     <div className={`rounded-full p-2 ${bg}`}>
@@ -135,8 +135,8 @@ export function RecentTransactions() {
                   <span
                     className={`font-medium ${
                       transaction.amount >= 0
-                        ? "text-green-600 dark:text-green-400"
-                        : "text-red-600 dark:text-red-400"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-rose-600 dark:text-rose-400"
                     }`}
                   >
                     {formatted.formatted}
@@ -146,7 +146,7 @@ export function RecentTransactions() {
             })}
           </>
         ) : (
-          <div className="flex items-center justify-between rounded-lg border border-slate-100 p-3 dark:border-slate-700">
+          <div className="glow-row flex items-center justify-between rounded-xl border border-slate-200/60 bg-white/40 p-3 dark:border-white/[0.06] dark:bg-white/[0.02]">
             <div className="flex items-center gap-3">
               <div className={`rounded-full p-2 ${CATEGORY_STYLES.default.bg}`}>
                 <Plus className={`h-5 w-5 ${CATEGORY_STYLES.default.color}`} />

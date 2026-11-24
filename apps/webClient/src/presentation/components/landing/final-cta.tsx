@@ -11,7 +11,7 @@ import { MockupFrame } from "./mockup-frame";
 
 /**
  * Final-CTA banner section.
- * Wide purple-gradient rounded card: headline + dual CTAs on the left,
+ * Wide deep-teal gradient card: headline + dual CTAs on the left,
  * two phones tilted and clipped to spill off the right edge — Vaulta-style
  * "phones sticking out of a banner" composition.
  */
@@ -32,7 +32,7 @@ export function FinalCta() {
   return (
     <section className="overflow-x-clip bg-background py-12 lg:py-20">
       <div className="container mx-auto max-w-7xl px-6">
-        <div className="relative isolate overflow-hidden rounded-3xl bg-gradient-to-br from-purple-700 via-violet-600 to-fuchsia-600 px-8 py-14 shadow-2xl shadow-purple-500/30 sm:px-12 lg:py-16">
+        <div className="relative isolate overflow-hidden rounded-3xl bg-gradient-to-br from-teal-800 via-teal-700 to-cyan-700 px-8 py-14 shadow-2xl shadow-teal-950/40 sm:px-12 lg:py-16">
           {/* Decorative blur layers */}
           <div
             aria-hidden="true"
@@ -40,7 +40,7 @@ export function FinalCta() {
           />
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute -bottom-40 -left-32 h-80 w-80 rounded-full bg-fuchsia-400/40 blur-3xl"
+            className="pointer-events-none absolute -bottom-40 -left-32 h-80 w-80 rounded-full bg-cyan-400/30 blur-3xl"
           />
 
           <div className="relative grid items-center gap-10 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:gap-12">
@@ -58,7 +58,7 @@ export function FinalCta() {
               <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
                 <Button
                   size="lg"
-                  className="bg-stale-300 text-purple-700 shadow-lg hover:scale-105 hover:bg-purple-50"
+                  className="bg-white text-teal-800 shadow-lg hover:scale-105 hover:bg-teal-50"
                 >
                   <Link to={primaryHref} className="flex items-center">
                     {primaryLabel}

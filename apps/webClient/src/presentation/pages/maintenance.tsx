@@ -7,12 +7,12 @@ export default function MaintenancePage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 pt-[max(env(safe-area-inset-top),3rem)] pb-[max(env(safe-area-inset-bottom),3rem)]">
       <div className="max-w-md text-center">
         <div className="mb-6 flex justify-center">
-          <div className="rounded-full bg-purple-100 p-6">
-            <Wrench className="h-12 w-12 text-purple-600" />
+          <div className="rounded-full bg-teal-500/10 p-6">
+            <Wrench className="h-12 w-12 text-teal-600" />
           </div>
         </div>
         <div className="mb-4 flex items-center justify-center gap-2">
-          <Wallet className="h-6 w-6 text-purple-600" />
+          <Wallet className="h-6 w-6 text-teal-600" />
           <span className="text-2xl font-bold">{t("app.name")}</span>
         </div>
         <h1 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">

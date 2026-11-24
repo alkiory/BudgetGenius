@@ -37,31 +37,15 @@ export default function Profile() {
         onValueChange={setActiveTab}
         className="space-y-4"
       >
-        <TabsList className="grid w-full grid-cols-4 lg:w-auto bg-accent/35 dark:bg-accent/30">
-          <TabsTrigger
-            className="text-primary dark:text-neutral"
-            value="personal-info"
-          >
+        <TabsList className="w-full lg:w-auto">
+          <TabsTrigger value="personal-info">
             {t("profile.personalInfo")}
           </TabsTrigger>
-          <TabsTrigger
-            className="text-primary dark:text-neutral"
-            value="security"
-          >
-            {t("profile.security")}
-          </TabsTrigger>
-          <TabsTrigger
-            className="text-primary dark:text-neutral"
-            value="notifications"
-          >
+          <TabsTrigger value="security">{t("profile.security")}</TabsTrigger>
+          <TabsTrigger value="notifications">
             {t("profile.notifications")}
           </TabsTrigger>
-          <TabsTrigger
-            className="text-primary dark:text-neutral"
-            value="account"
-          >
-            {t("profile.account")}
-          </TabsTrigger>
+          <TabsTrigger value="account">{t("profile.account")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="personal-info" className="space-y-4">

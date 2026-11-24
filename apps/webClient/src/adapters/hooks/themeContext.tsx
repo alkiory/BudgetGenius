@@ -8,7 +8,9 @@ const ThemeContext = createContext<
 
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   const storedTheme = localStorage.getItem("theme") as Theme | null;
-  const [theme, setTheme] = useState<Theme>(storedTheme || "light");
+  // The rebranding is dark-first (deep navy + teal). Light mode is still
+  // one click away in the header and is remembered once chosen.
+  const [theme, setTheme] = useState<Theme>(storedTheme || "dark");
 
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";

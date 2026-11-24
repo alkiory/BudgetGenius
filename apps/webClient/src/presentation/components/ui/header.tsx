@@ -180,7 +180,7 @@ export default function HeaderComponent() {
                 <div>
                   <button
                     type="button"
-                    className="flex max-w-xs items-center rounded-full bg-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:bg-slate-950"
+                    className="flex max-w-xs items-center rounded-full bg-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 dark:bg-slate-950"
                     id="user-menu-button"
                   >
                     <span className="sr-only">
@@ -188,7 +188,7 @@ export default function HeaderComponent() {
                     </span>
                     <Link
                       to={RoutePaths.App + "/" + RoutePaths.Profile}
-                      className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 dark:bg-purple-900 dark:text-purple-400 font-medium"
+                      className="h-8 w-8 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-600 dark:bg-teal-400/15 dark:text-teal-400 font-medium"
                     >
                       {(user?.name?.charAt(0)?.toUpperCase() || "") +
                         (user?.surname?.charAt(0)?.toUpperCase() || "")}
@@ -250,7 +250,7 @@ export default function HeaderComponent() {
                 <Link
                   to="/auth/signup"
                   onClick={closeMenu}
-                  className="rounded-md px-3 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-50 dark:text-purple-300 dark:hover:bg-purple-900/30"
+                  className="rounded-md px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-500/10 dark:text-teal-300 dark:hover:bg-teal-400/10"
                 >
                   {t("auth.signUp")}
                 </Link>

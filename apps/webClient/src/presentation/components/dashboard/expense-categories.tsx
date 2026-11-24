@@ -1,4 +1,5 @@
 import { ExpenseBreakdown } from "@domain/dashboard/dashboard.entity";
+import { chartTooltipProps } from "@presentation/utils/chart-theme";
 import { COLORS } from "@presentation/utils/color";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { useTranslation } from "react-i18next";
@@ -111,17 +112,17 @@ export function ExpenseCategories({
   };
 
   return (
-    <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
+    <div className="glass-panel hover-glow rounded-xl p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">
           {t("dashboard.expenseBreakdown")}
         </h2>
-        <span className="text-sm text-slate-500 dark:text-slate-400">
+        <span className="text-xs text-slate-400 dark:text-slate-500">
           {period}
         </span>
       </div>
       {byCategory.length > 0 ? (
-        <div className="h-64 text-slate-700 dark:text-slate-200">
+        <div className="h-64 text-slate-500 dark:text-slate-400">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -132,6 +133,7 @@ export function ExpenseCategories({
                 outerRadius={64}
                 paddingAngle={2}
                 dataKey="value"
+                stroke="none"
                 label={renderOutsideLabel}
                 labelLine={renderLabelLine}
               >
@@ -144,13 +146,15 @@ export function ExpenseCategories({
                 ))}
               </Pie>
               <Tooltip
+                {...chartTooltipProps}
+                cursor={false}
                 formatter={(v) => [
                   currencyService.formatCurrency(Number(v), currency, false)
                     .formatted,
                   t("transactions.amount"),
                 ]}
               />
-              <Legend />
+              <Legend wrapperStyle={{ fontSize: 11, color: "#94a3b8" }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -162,17 +166,21 @@ export function ExpenseCategories({
         </div>
       )}
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <div className="rounded-md bg-slate-50 p-3 dark:bg-slate-700">
-          <p className="text-sm text-slate-500">
+        <div className="rounded-xl border border-slate-200/60 bg-white/40 p-3 dark:border-white/[0.06] dark:bg-white/[0.02]">
+          <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
             {t("dashboard.totalExpenses")}
           </p>
-          <p className="text-xl font-bold">{total}</p>
+          <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-white">
+            {total}
+          </p>
         </div>
-        <div className="rounded-md bg-slate-50 p-3 dark:bg-slate-700">
-          <p className="text-sm text-slate-500">
+        <div className="rounded-xl border border-slate-200/60 bg-white/40 p-3 dark:border-white/[0.06] dark:bg-white/[0.02]">
+          <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
             {t("dashboard.largestCategory")}
           </p>
-          <p className="text-xl font-bold">{largest.name}</p>
+          <p className="mt-1 text-lg font-semibold text-slate-900 dark:text-white">
+            {largest.name}
+          </p>
         </div>
       </div>
     </div>

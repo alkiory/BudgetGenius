@@ -191,7 +191,7 @@ export default function SplashPage() {
       role="status"
       aria-live="polite"
       aria-label={t("splash.loading")}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-purple-700 via-purple-800 to-fuchsia-900 text-white"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-slate-950 via-teal-950 to-cyan-950 text-white"
       style={{
         paddingTop: "env(safe-area-inset-top)",
         paddingBottom: "env(safe-area-inset-bottom)",
@@ -200,11 +200,11 @@ export default function SplashPage() {
       {/* Soft animated blobs behind the logo to mimic a gradient sweep. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -left-24 -top-32 h-72 w-72 rounded-full bg-purple-400/30 blur-3xl animate-pulse"
+        className="pointer-events-none absolute -left-24 -top-32 h-72 w-72 rounded-full bg-teal-400/25 blur-3xl animate-pulse"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-fuchsia-400/30 blur-3xl animate-pulse"
+        className="pointer-events-none absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-cyan-400/25 blur-3xl animate-pulse"
         style={{ animationDelay: "0.7s" }}
       />
 
@@ -228,18 +228,18 @@ export default function SplashPage() {
           }`}
       >
         <div className="relative">
-          <div className="rounded-full bg-gradient-to-br from-purple-300 to-fuchsia-400 p-3 shadow-2xl shadow-purple-900/40">
+          <div className="rounded-full bg-gradient-to-br from-teal-300 to-cyan-400 p-3 shadow-2xl shadow-teal-950/40">
             <Wallet className="h-12 w-12 text-white" strokeWidth={2.2} />
           </div>
           <Sparkles
-            className="absolute -right-2 -top-2 h-6 w-6 text-purple-200 animate-pulse"
+            className="absolute -right-2 -top-2 h-6 w-6 text-teal-200 animate-pulse"
             strokeWidth={2.2}
           />
         </div>
 
         <div className="flex flex-col items-center">
           <span className="text-3xl font-bold tracking-tight">
-            Budget<span className="text-fuchsia-300">Genius</span>
+            Budget<span className="text-teal-300">Genius</span>
           </span>
           <span
             className={`mt-1 text-xs uppercase tracking-[0.2em] text-white/70 transition-opacity duration-500 ${stage >= 2 ? "opacity-100" : "opacity-0"
@@ -258,7 +258,7 @@ export default function SplashPage() {
           }`}
       >
         <div
-          className="absolute left-0 top-0 h-full w-1/3 rounded-full bg-fuchsia-300"
+          className="absolute left-0 top-0 h-full w-1/3 rounded-full bg-teal-300"
           style={{ animation: "loading 1.2s ease-in-out infinite" }}
         />
       </div>

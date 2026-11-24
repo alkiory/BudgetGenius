@@ -14,7 +14,7 @@ const FAQ_KEYS = [
 /**
  * FAQ section. Custom React state-based accordion (no Radix / no new
  * dependency) — single-open-at-a-time, plus/minus icons in a circular
- * button to the right, active item gets the purple gradient + white text
+ * button to the right, active item gets the deep-teal gradient + white text
  * treatment so the active row reads as a confident "this answered it".
  */
 export function Faq() {
@@ -28,7 +28,7 @@ export function Faq() {
     >
       <div className="container mx-auto max-w-4xl px-6">
         <div className="mx-auto mb-12 max-w-2xl text-center">
-          <span className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-purple-700 dark:border-purple-700/40 dark:bg-purple-900/30 dark:text-purple-300">
+          <span className="inline-flex rounded-full border border-teal-400/30 bg-teal-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-teal-700 dark:border-teal-400/20 dark:bg-teal-400/10 dark:text-teal-300">
             {t("landing.sectionFaq.badge")}
           </span>
           <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-5xl">
@@ -52,7 +52,7 @@ export function Faq() {
                 key={key}
                 className={`mb-3 overflow-hidden rounded-2xl border transition-all duration-300 ${
                   isOpen
-                    ? "border-transparent bg-gradient-to-br from-purple-700 via-violet-600 to-fuchsia-600 shadow-xl shadow-purple-500/30"
+                    ? "border-transparent bg-gradient-to-br from-teal-800 via-teal-700 to-cyan-700 shadow-xl shadow-teal-950/40"
                     : "border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
                 }`}
               >
@@ -72,7 +72,7 @@ export function Faq() {
                     className={`grid h-9 w-9 flex-none place-items-center rounded-full transition-colors ${
                       isOpen
                         ? "bg-white/20 text-white"
-                        : "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
+                        : "bg-teal-500/10 text-teal-700 dark:bg-teal-400/15 dark:text-teal-300"
                     }`}
                     aria-hidden="true"
                   >

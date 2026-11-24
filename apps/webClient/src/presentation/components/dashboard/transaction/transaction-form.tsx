@@ -10,6 +10,7 @@ import {
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
+import { Select } from "@presentation/components/ui/select";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { errorToast } from "@presentation/utils/toast";
 import { useCallback, useState, useEffect } from "react";
@@ -170,15 +171,15 @@ export function TransactionForm({
       {/* Income / Expense Toggle */}
       <div className="space-y-2">
         <Label>{t("transactions.type")}</Label>
-        <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="flex gap-1 rounded-xl border border-slate-200/80 bg-slate-100/60 p-1 dark:border-white/10 dark:bg-white/[0.04]">
           <button
             type="button"
             data-testid="type-expense"
             onClick={() => setTransactionType("expense")}
-            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
               transactionType === "expense"
-                ? "bg-red-500 text-white"
-                : "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                ? "bg-rose-500/15 text-rose-700 ring-1 ring-inset ring-rose-400/30 dark:bg-rose-400/15 dark:text-rose-300"
+                : "text-slate-500 hover:bg-white/70 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/[0.05] dark:hover:text-slate-100"
             }`}
           >
             {t("transactions.expense")}
@@ -187,10 +188,10 @@ export function TransactionForm({
             type="button"
             data-testid="type-income"
             onClick={() => setTransactionType("income")}
-            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+            className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
               transactionType === "income"
-                ? "bg-green-500 text-white"
-                : "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                ? "bg-emerald-500/15 text-emerald-700 ring-1 ring-inset ring-emerald-400/30 dark:bg-emerald-400/15 dark:text-emerald-300"
+                : "text-slate-500 hover:bg-white/70 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/[0.05] dark:hover:text-slate-100"
             }`}
           >
             {t("transactions.income")}
@@ -200,24 +201,23 @@ export function TransactionForm({
 
       <div className="space-y-2">
         <Label htmlFor="category">{t("transactions.category")}</Label>
-        <select
+        <Select
           id="category"
           name="category"
           value={formData.category}
-          onChange={handleChange}
-          className="block w-full max-w-full box-border rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-          required
-        >
-          {" "}
-          <option value="Other">{t("categories.other")}</option>
-          {TRANSACTION_CATEGORIES.filter(
-            (category) => category !== "All" && category !== "Todos",
-          ).map((category) => (
-            <option key={category} value={category}>
-              {t(`categories.${category.toLowerCase()}`)}
-            </option>
-          ))}
-        </select>
+          onChange={(value) =>
+            setFormData((previous) => ({ ...previous, category: value }))
+          }
+          options={[
+            { value: "Other", label: t("categories.other") },
+            ...TRANSACTION_CATEGORIES.filter(
+              (category) => category !== "All" && category !== "Todos",
+            ).map((category) => ({
+              value: category,
+              label: t(`categories.${category.toLowerCase()}`),
+            })),
+          ]}
+        />
       </div>
 
       <div className="space-y-2">
@@ -280,20 +280,26 @@ export function TransactionForm({
       {transactionType === "income" && (
         <div className="space-y-2">
           <Label htmlFor="recurrence">{t("transactions.recurrence")}</Label>
-          <select
+          <Select
             id="recurrence"
             name="recurrence"
             value={formData.recurrence ?? ONE_TIME_LABEL}
-            onChange={handleChange}
-            className="block w-full max-w-full box-border rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-          >
-            <option value={ONE_TIME_LABEL}>{t("transactions.oneTime")}</option>
-            {INCOME_RECURRENCES.filter((r) => r !== ONE_TIME_LABEL).map((r) => (
-              <option key={r} value={r}>
-                {t(`recurrence.${r}`)}
-              </option>
-            ))}
-          </select>
+            onChange={(value) =>
+              setFormData((previous) => ({
+                ...previous,
+                recurrence: value as IncomeRecurrence,
+              }))
+            }
+            options={[
+              { value: ONE_TIME_LABEL, label: t("transactions.oneTime") },
+              ...INCOME_RECURRENCES.filter(
+                (recurrence) => recurrence !== ONE_TIME_LABEL,
+              ).map((recurrence) => ({
+                value: recurrence,
+                label: t(`recurrence.${recurrence}`),
+              })),
+            ]}
+          />
         </div>
       )}
 

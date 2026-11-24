@@ -551,6 +551,38 @@
         "switchToDark": "Switch to dark mode",
         "switchToLight": "Switch to light mode"
     },
+    "finny": {
+        "title": "Finny",
+        "subtitle": "Your AI financial sidekick",
+        "online": "Online",
+        "setup": {
+            "badge": "Setup needed",
+            "missing": {
+                "title": "Finny needs an API key",
+                "body": "Add AGENT_API_KEY to the API environment and restart it. The key stays on the server."
+            },
+            "invalid": {
+                "title": "Finny's API key was rejected",
+                "body": "Replace AGENT_API_KEY with an active key and restart the API."
+            },
+            "placeholder": "Finny is offline until the key is configured",
+            "retry": "Try again"
+        },
+        "insightsTitle": "Insights",
+        "budgetRisk": "{{count}} budget(s) at risk",
+        "onTrack": "Budgets on track",
+        "onTrackDesc": "No category has exceeded its limit.",
+        "topCategory": "Top spending: {{category}}",
+        "topCategoryDesc": "{{amount}} this period.",
+        "savings": "Savings rate {{rate}}%",
+        "savingsDesc": "Income minus expenses for the current period.",
+        "conversation": "Conversation",
+        "ask": "Ask Finny about your money...",
+        "send": "Send to Finny",
+        "thinking": "Finny is thinking...",
+        "error": "I couldn't connect right now. Try again in a moment.",
+        "disclaimer": "Finny can make mistakes. Check important numbers."
+    },
     "sidebar": {
         "investments": "Investments",
         "savings": "Savings",

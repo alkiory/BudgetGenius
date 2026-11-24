@@ -78,12 +78,12 @@ export default function BudgetSummary({
         <div
           className={`h-2 rounded-full ${
             isSavings
-              ? "bg-green-500"
+              ? "bg-emerald-500"
               : percentSpent > 90
-              ? "bg-red-500"
+              ? "bg-rose-500"
               : percentSpent > 75
               ? "bg-yellow-500"
-              : "bg-green-500"
+              : "bg-emerald-500"
           }`}
           style={{ width: `${Math.min(percentSpent, 100)}%` }}
         ></div>
@@ -92,8 +92,8 @@ export default function BudgetSummary({
         <span
           className={
             remaining >= 0
-              ? "text-green-600 dark:text-green-400"
-              : "text-red-600 dark:text-red-400"
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-rose-600 dark:text-rose-400"
           }
         >
           {remaining >= 0

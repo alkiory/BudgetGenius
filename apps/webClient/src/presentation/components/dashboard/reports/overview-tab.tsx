@@ -19,23 +19,14 @@ import {
   BarChart,
   PieChart,
 } from "recharts";
+import { COLORS } from "@presentation/utils/color";
+import {
+  chartAxisProps,
+  chartGridProps,
+  chartTooltipProps,
+} from "@presentation/utils/chart-theme";
 import { ChartContainer } from "./inner-componets";
 import SummaryCard from "./summary-card";
-
-const CATEGORY_PALETTE = [
-  "#8b5cf6",
-  "#10b981",
-  "#f59e0b",
-  "#3b82f6",
-  "#ef4444",
-  "#06b6d4",
-  "#ec4899",
-  "#84cc16",
-  "#f97316",
-  "#6366f1",
-  "#14b8a6",
-  "#d946ef",
-];
 
 interface OverviewTabProps {
   isLoadingOverview: boolean;
@@ -107,7 +98,7 @@ export default function OverviewTab({
           title={t("reports.topSpending")}
           value={topCategory?.category || t("reports.nA")}
           icon={BarChart3}
-          color="purple"
+          color="teal"
           subtitle={
             topCategory
               ? formatCurrency(topCategory.amount) + " " + t("reports.spent")
@@ -120,10 +111,11 @@ export default function OverviewTab({
         <ChartContainer title={t("reports.incomeExpensesTab")}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={overview?.monthly || []}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
+              <CartesianGrid {...chartGridProps} />
+              <XAxis dataKey="month" {...chartAxisProps} />
+              <YAxis {...chartAxisProps} />
               <Tooltip
+                {...chartTooltipProps}
                 formatter={(value) => [formatCurrency(Number(value)), ""]}
               />
               <Legend />
@@ -135,7 +127,7 @@ export default function OverviewTab({
               <Bar
                 dataKey="expenses"
                 name={t("reports.totalExpenses")}
-                fill="#ef4444"
+                fill="#f43f5e"
               />
             </BarChart>
           </ResponsiveContainer>
@@ -161,15 +153,16 @@ export default function OverviewTab({
                   ) => (
                     <Cell
                       key={`cell-${index}`}
-                      fill={
-                        entry.color ||
-                        CATEGORY_PALETTE[index % CATEGORY_PALETTE.length]
-                      }
+                      fill={entry.color || COLORS[index % COLORS.length]}
                     />
                   ),
                 )}
               </Pie>
-              <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+              <Tooltip
+                {...chartTooltipProps}
+                cursor={false}
+                formatter={(value) => formatCurrency(Number(value))}
+              />
               <Legend
                 formatter={(value) => translateCategory(String(value), t)}
               />
@@ -181,13 +174,13 @@ export default function OverviewTab({
       {/* Insights */}
       {isLoadingInsights && <Loader />}
       {insights && (
-        <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
+        <div className="glass-panel hover-glow rounded-xl p-6">
           <h3 className="mb-4 text-lg font-medium">
             {t("reports.financialInsights")}
           </h3>
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
-              <h4 className="font-medium">
+            <div className="rounded-xl border border-slate-200/70 bg-white/40 p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+              <h4 className="text-xs font-medium text-slate-500 dark:text-slate-400">
                 {t("reports.highestSpendingMonthLabel")}
               </h4>
               <p className="mt-1 text-2xl font-bold">
@@ -199,8 +192,8 @@ export default function OverviewTab({
               </p>
             </div>
 
-            <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
-              <h4 className="font-medium">
+            <div className="rounded-xl border border-slate-200/70 bg-white/40 p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+              <h4 className="text-xs font-medium text-slate-500 dark:text-slate-400">
                 {t("reports.averageMonthlyExpenses")}
               </h4>
               <p className="mt-1 text-2xl font-bold">
@@ -211,8 +204,8 @@ export default function OverviewTab({
               </p>
             </div>
 
-            <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
-              <h4 className="font-medium">
+            <div className="rounded-xl border border-slate-200/70 bg-white/40 p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+              <h4 className="text-xs font-medium text-slate-500 dark:text-slate-400">
                 {t("reports.expenseToIncomeRatio")}
               </h4>
               <p className="mt-1 text-2xl font-bold">

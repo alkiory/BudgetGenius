@@ -551,6 +551,38 @@
     "switchToDark": "Cambiar a modo oscuro",
     "switchToLight": "Cambiar a modo claro"
   },
+  "finny": {
+    "title": "Finny",
+    "subtitle": "Tu asistente financiero con IA",
+    "online": "En línea",
+    "setup": {
+      "badge": "Falta configurar",
+      "missing": {
+        "title": "Finny necesita una clave de API",
+        "body": "Añade AGENT_API_KEY al entorno de la API y reiníciala. La clave se queda en el servidor."
+      },
+      "invalid": {
+        "title": "La clave de API de Finny fue rechazada",
+        "body": "Sustituye AGENT_API_KEY por una clave activa y reinicia la API."
+      },
+      "placeholder": "Finny está desconectado hasta configurar la clave",
+      "retry": "Reintentar"
+    },
+    "insightsTitle": "Insights",
+    "budgetRisk": "{{count}} presupuesto(s) en riesgo",
+    "onTrack": "Presupuestos al día",
+    "onTrackDesc": "Ninguna categoría ha superado su límite.",
+    "topCategory": "Mayor gasto: {{category}}",
+    "topCategoryDesc": "{{amount}} en este periodo.",
+    "savings": "Tasa de ahorro {{rate}}%",
+    "savingsDesc": "Ingresos menos gastos del periodo actual.",
+    "conversation": "Conversación",
+    "ask": "Pregúntale a Finny sobre tu dinero...",
+    "send": "Enviar a Finny",
+    "thinking": "Finny está pensando...",
+    "error": "No pude conectar ahora mismo. Inténtalo de nuevo en un momento.",
+    "disclaimer": "Finny puede cometer errores. Verifica las cifras importantes."
+  },
   "sidebar": {
     "investments": "Inversiones",
     "savings": "Ahorros",

@@ -19,7 +19,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@presentation/components/ui/dropdown-menu";
+import { BrandDots } from "@presentation/components/loader";
 import { PageHeader } from "@presentation/components/ui/page-header";
+import { Select } from "@presentation/components/ui/select";
 import { downloadBlob } from "@infrastructure/downloadService";
 import {
   Calendar,
@@ -27,7 +29,6 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
-  Loader2,
 } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
@@ -198,29 +199,25 @@ export default function ReportsPage() {
       >
         <div className="flex gap-2">
           {/* Selector de timeframe */}
-          <div className="relative">
-            <select
-              className="appearance-none rounded-md border border-slate-200 bg-white pl-3 pr-10 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800"
-              value={timeframe}
-              onChange={(e) => setTimeframe(e.target.value)}
-            >
-              {timeframeText &&
-                Object.keys(timeframeText).map((key) => (
-                  <option key={key} value={key}>
-                    {timeframeText[key]}
-                  </option>
-                ))}
-            </select>
-            <Calendar className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-          </div>
+          <Select
+            value={timeframe}
+            onChange={setTimeframe}
+            aria-label={timeframeText[timeframe]}
+            icon={<Calendar className="h-4 w-4" />}
+            className="w-40"
+            options={Object.entries(timeframeText).map(([value, label]) => ({
+              value,
+              label,
+            }))}
+          />
 
           <DropdownMenu>
             <DropdownMenuTrigger
               disabled={isExporting !== null}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white/70 px-3 py-2 text-sm font-medium text-slate-600 backdrop-blur transition hover:border-teal-400/40 hover:bg-teal-500/10 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-teal-400/10"
             >
               {isExporting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <BrandDots size="sm" />
               ) : (
                 <Download className="h-4 w-4" />
               )}
@@ -236,7 +233,7 @@ export default function ReportsPage() {
                 disabled={isExporting !== null}
                 className="flex items-center gap-2"
               >
-                <FileText className="h-4 w-4 text-red-500" />
+                <FileText className="h-4 w-4 text-rose-500" />
                 <span>{t("reports.exportPdf")}</span>
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -244,7 +241,7 @@ export default function ReportsPage() {
                 disabled={isExporting !== null}
                 className="flex items-center gap-2"
               >
-                <FileSpreadsheet className="h-4 w-4 text-green-600" />
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
                 <span>{t("reports.exportExcel")}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -253,15 +250,15 @@ export default function ReportsPage() {
       </PageHeader>
 
       {/* Tabs */}
-      <div className="border-b border-slate-200 dark:border-slate-700">
-        <nav className="-mb-px flex space-x-6">
+      <div className="border-b border-slate-200/80 dark:border-white/[0.07]">
+        <nav className="no-scrollbar -mb-px flex space-x-6 overflow-x-auto">
           {["overview", "income-expenses", "categories", "trends"].map(
             (tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`py-4 text-sm font-medium border-b-2 capitalize ${activeTab === tab
-                  ? "border-purple-500 text-purple-600 dark:text-purple-400"
+                className={`shrink-0 py-4 text-sm font-medium border-b-2 capitalize ${activeTab === tab
+                  ? "border-teal-400 text-teal-600 dark:text-teal-300"
                   : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-300"
                   }`}
               >

@@ -30,7 +30,7 @@ export default function ErrorPage({
       {isAuthenticated ? <DashboardHeader /> : <HeaderComponent />}
 
       {/* Error Content */}
-      <main className="flex flex-1 flex-col items-center justify-center px-4 text-center bg-gradient-to-b from-purple-500 to-cyan-50 dark:from-purple-900 dark:to-slate-900">
+      <main className="flex flex-1 flex-col items-center justify-center px-4 text-center bg-gradient-to-b from-teal-500/15 to-background dark:from-teal-950/50 dark:to-slate-950">
         <div className="max-w-md my-5">
           <div className="mb-6 flex justify-center">
             <div className="rounded-full bg-amber-100 p-6">
@@ -47,7 +47,7 @@ export default function ErrorPage({
             <Button
               onClick={reset}
               size="lg"
-              className="bg-purple-600 hover:bg-purple-700"
+              className="bg-teal-600 hover:bg-teal-700"
             >
               <RefreshCw className="mr-2 h-4 w-4" />
               {t("common.tryAgain")}
@@ -64,7 +64,7 @@ export default function ErrorPage({
               <h2 className="mb-2 text-sm font-semibold">
                 {t("errors.errorDetails")}
               </h2>
-              <p className="text-xs text-red-600">{error.message}</p>
+              <p className="text-xs text-rose-600">{error.message}</p>
               {error.stack && (
                 <pre className="mt-2 max-h-40 overflow-auto rounded bg-background p-2 text-xs dark:text-neutral">
                   {error.stack}

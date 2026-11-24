@@ -139,7 +139,7 @@ export function DropdownMenuContent({
   return (
     <div
       ref={contentRef}
-      className={`absolute z-50 mt-${sideOffset} min-w-[8rem] overflow-hidden rounded-md border border-slate-200 bg-white p-1 shadow-md animate-in fade-in-80 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 dark:border-slate-800 dark:bg-slate-950 ${alignmentClasses[align]} ${className}`}
+      className={`absolute z-50 mt-${sideOffset} min-w-[8rem] overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 p-1 shadow-[0_24px_60px_-24px_rgb(15_23_42/0.45)] backdrop-blur-xl animate-in fade-in-80 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 dark:border-white/10 dark:bg-[#0b1424]/95 ${alignmentClasses[align]} ${className}`}
       {...props}
     >
       {children}
@@ -161,7 +161,7 @@ export function DropdownMenuItem({
 
   return (
     <button
-      className={`relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-slate-100 focus:bg-slate-100 focus:text-slate-900 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 dark:hover:bg-slate-800 dark:focus:bg-slate-800 dark:focus:text-slate-50 ${
+      className={`relative flex w-full cursor-default select-none items-center rounded-lg px-2.5 py-2 text-sm outline-none transition-colors hover:bg-teal-500/10 focus:bg-teal-500/10 focus:text-teal-700 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 dark:hover:bg-teal-400/10 dark:focus:bg-teal-400/10 dark:focus:text-teal-200 ${
         inset ? "pl-8" : ""
       } ${className}`}
       onClick={() => setOpen(false)}
@@ -200,7 +200,7 @@ export function DropdownMenuSeparator({
 }: DropdownMenuSeparatorProps) {
   return (
     <div
-      className={`-mx-1 my-1 h-px bg-slate-100 dark:bg-slate-800 ${className}`}
+      className={`-mx-1 my-1 h-px bg-slate-200/70 dark:bg-white/[0.07] ${className}`}
       {...props}
     />
   );

@@ -27,7 +27,7 @@ export default function TermsOfServicePage() {
           </p>
         </div>
 
-        <div className="prose gap-5 dark:prose-invert prose-headings:font-semibold prose-headings:tracking-tight prose-lead:text-slate-500 dark:prose-lead:text-slate-400 prose-a:text-purple-600 dark:prose-a:text-purple-400">
+        <div className="prose gap-5 dark:prose-invert prose-headings:font-semibold prose-headings:tracking-tight prose-lead:text-slate-500 dark:prose-lead:text-slate-400 prose-a:text-teal-600 dark:prose-a:text-teal-400">
           <p className="lead">{t("contact.tosLead")}</p>
 
           <h2>{t("contact.tosAcceptance")}</h2>

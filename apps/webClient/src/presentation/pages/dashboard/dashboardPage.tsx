@@ -119,7 +119,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6">
         <ExpenseCategories
           total={formattedBreackdown.total.formatted}
           byCategory={rawBreackdownCategories ?? []}

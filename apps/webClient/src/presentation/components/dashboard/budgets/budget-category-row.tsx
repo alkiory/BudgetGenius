@@ -7,6 +7,7 @@ import {
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
+import { Select } from "@presentation/components/ui/select";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -80,30 +81,32 @@ export function BudgetCategoryRow({
         <Label htmlFor={`category-name-${index}`}>
           {t("budgets.categoryField")}
         </Label>
-        <select
+        <Select
           id={`category-name-${index}`}
           value={category.name}
-          onChange={(e) => onCategoryChange(index, "name", e.target.value)}
-          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-          required
-        >
-          <option value="">{t("transactions.selectCategory")}</option>
-          {/* Keep a legacy category selectable even if it is not in the
-              curated planning list (e.g. an old "Salary" row). */}
-          {category.name &&
-            !BUDGET_CATEGORY_OPTIONS.includes(category.name) && (
-              <option value={category.name}>
-                {t(`categories.${category.name.toLowerCase()}`, {
-                  defaultValue: category.name,
-                })}
-              </option>
-            )}
-          {BUDGET_CATEGORY_OPTIONS.map((cat) => (
-            <option key={cat} value={cat}>
-              {t(`categories.${cat.toLowerCase()}`)}
-            </option>
-          ))}
-        </select>
+          onChange={(value) => onCategoryChange(index, "name", value)}
+          placeholder={t("transactions.selectCategory")}
+          options={[
+            { value: "", label: t("transactions.selectCategory") },
+            // Keep a legacy category selectable even if it is not in the
+            // curated planning list (e.g. an old "Salary" row).
+            ...(category.name &&
+            !BUDGET_CATEGORY_OPTIONS.includes(category.name)
+              ? [
+                  {
+                    value: category.name,
+                    label: t(`categories.${category.name.toLowerCase()}`, {
+                      defaultValue: category.name,
+                    }),
+                  },
+                ]
+              : []),
+            ...BUDGET_CATEGORY_OPTIONS.map((cat) => ({
+              value: cat,
+              label: t(`categories.${cat.toLowerCase()}`),
+            })),
+          ]}
+        />
       </div>
       <div className="min-w-0 space-y-2">
         <Label htmlFor={`category-allocated-${index}`}>{amountLabel}</Label>
@@ -130,7 +133,7 @@ export function BudgetCategoryRow({
         size="icon"
         onClick={() => onRemove(index)}
         aria-label={t("budgets.removeCategory")}
-        className="mb-0.5 justify-self-end text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+        className="mb-0.5 justify-self-end text-rose-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20"
       >
         <Trash2 className="h-4 w-4" />
       </Button>

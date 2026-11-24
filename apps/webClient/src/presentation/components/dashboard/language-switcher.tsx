@@ -68,7 +68,7 @@ export function LanguageSwitcher() {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+        className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
         aria-label="Switch language"
         aria-haspopup="listbox"
         aria-expanded={isOpen}
@@ -96,7 +96,7 @@ export function LanguageSwitcher() {
                   role="option"
                   aria-selected={isSelected}
                   className={`flex w-full items-center px-3 py-2 text-left text-sm transition-colors ${isSelected
-                      ? "bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300"
+                      ? "bg-teal-500/10 text-teal-700 dark:bg-teal-400/10 dark:text-teal-300"
                       : "text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
                     }`}
                 >
@@ -109,7 +109,7 @@ export function LanguageSwitcher() {
                   <span>{lang.label}</span>
                   {isSelected && (
                     <span
-                      className="ml-auto text-purple-600 dark:text-purple-400"
+                      className="ml-auto text-teal-600 dark:text-teal-400"
                       aria-hidden="true"
                     >
                       ✓

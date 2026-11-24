@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 /**
  * Three-card features section.
  * - Track (paper): white card, embedded transaction-list preview.
- * - Finny (highlighted): purple-to-violet gradient, white text, chat preview.
+ * - Finny (highlighted): deep-teal gradient, white text, chat preview.
  * - Goals (paper): white card, goal-progress bars preview.
  */
 export function Features() {
@@ -19,7 +19,7 @@ export function Features() {
     <section className="relative isolate overflow-x-clip bg-background py-20 lg:py-24">
       <div className="container mx-auto max-w-7xl px-6">
         <div className="mx-auto mb-12 max-w-2xl text-center">
-          <span className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-purple-700 dark:border-purple-700/40 dark:bg-purple-900/30 dark:text-purple-300">
+          <span className="inline-flex rounded-full border border-teal-400/30 bg-teal-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-teal-700 dark:border-teal-400/20 dark:bg-teal-400/10 dark:text-teal-300">
             {t("landing.sectionFeatures.badge")}
           </span>
           <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-5xl">
@@ -33,7 +33,7 @@ export function Features() {
         <div className="grid gap-6 md:grid-cols-3">
           {/* ── Track (paper) ── */}
           <article className="group flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-xl dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+            <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-teal-500/10 text-teal-700 dark:bg-teal-400/15 dark:text-teal-300">
               <BarChart3 className="h-6 w-6" aria-hidden="true" />
             </div>
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
@@ -69,7 +69,7 @@ export function Features() {
           </article>
 
           {/* ── Finny (HIGHLIGHTED) ── */}
-          <article className="relative flex flex-col overflow-hidden rounded-2xl bg-gradient-to-br from-purple-700 via-violet-600 to-fuchsia-600 p-6 text-white shadow-xl shadow-purple-500/40">
+          <article className="relative flex flex-col overflow-hidden rounded-2xl bg-gradient-to-br from-teal-800 via-teal-700 to-cyan-700 p-6 text-white shadow-xl shadow-teal-950/40">
             <div
               aria-hidden="true"
               className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-white/15 blur-3xl"
@@ -94,7 +94,7 @@ export function Features() {
                   <span aria-hidden="true"> · </span>
                   {t("landing.sectionFeatures.finnyChat.tap")}
                 </div>
-                <div className="rounded-xl bg-gradient-to-r from-violet-500/70 to-fuchsia-500/70 p-3 text-sm font-medium leading-relaxed">
+                <div className="rounded-xl bg-gradient-to-r from-cyan-300/30 to-teal-200/20 p-3 text-sm font-medium leading-relaxed">
                   {t("landing.sectionFeatures.finnyChat.reply")}
                 </div>
               </div>
@@ -103,7 +103,7 @@ export function Features() {
 
           {/* ── Goals (paper) ── */}
           <article className="group flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-xl dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+            <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-teal-500/10 text-teal-700 dark:bg-teal-400/15 dark:text-teal-300">
               <Target className="h-6 w-6" aria-hidden="true" />
             </div>
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
@@ -117,9 +117,9 @@ export function Features() {
             </p>
             {/* Goal progress bars */}
             <div className="mt-6 space-y-3">
-              <GoalBar label="Emergency Fund" percent={80} tone="violet" />
-              <GoalBar label="Vacation" percent={45} tone="fuchsia" />
-              <GoalBar label="New Laptop" percent={22} tone="purple" />
+              <GoalBar label="Emergency Fund" percent={80} tone="teal" />
+              <GoalBar label="Vacation" percent={45} tone="cyan" />
+              <GoalBar label="New Laptop" percent={22} tone="sky" />
             </div>
           </article>
         </div>
@@ -167,14 +167,14 @@ function GoalBar({
 }: {
   label: string;
   percent: number;
-  tone: "violet" | "fuchsia" | "purple";
+  tone: "teal" | "cyan" | "sky";
 }) {
   const fill =
-    tone === "violet"
-      ? "from-violet-500 to-violet-400"
-      : tone === "fuchsia"
-      ? "from-fuchsia-500 to-fuchsia-400"
-      : "from-purple-500 to-purple-400";
+    tone === "teal"
+      ? "from-teal-500 to-teal-400"
+      : tone === "cyan"
+        ? "from-cyan-500 to-cyan-400"
+        : "from-sky-500 to-sky-400";
   return (
     <div>
       <div className="mb-1 flex items-center justify-between text-xs">

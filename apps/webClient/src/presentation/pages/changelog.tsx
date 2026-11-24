@@ -76,7 +76,7 @@ export default function ChangelogPage() {
     >
       <div className="container mx-auto max-w-3xl px-6">
         <div className="mx-auto mb-14 max-w-2xl text-center">
-          <span className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-purple-700 dark:border-purple-700/40 dark:bg-purple-900/30 dark:text-purple-300">
+          <span className="inline-flex rounded-full border border-teal-400/30 bg-teal-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-teal-700 dark:border-teal-400/20 dark:bg-teal-400/10 dark:text-teal-300">
             {t("landing.changelog.badge")}
           </span>
           <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-5xl">
@@ -116,7 +116,7 @@ export default function ChangelogPage() {
                 {!isLast && (
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute left-3.5 top-3 bottom-0 w-0.5 -translate-x-1/2 bg-purple-200 dark:bg-purple-700/40"
+                    className="pointer-events-none absolute left-3.5 top-3 bottom-0 w-0.5 -translate-x-1/2 bg-teal-500/25 dark:bg-teal-500/40"
                   />
                 )}
                 {/* Neutral timeline dot — small, filled, no number. 10 px
@@ -124,7 +124,7 @@ export default function ChangelogPage() {
                     rather than competing with the version pill below. */}
                 <span
                   aria-hidden="true"
-                  className="absolute left-3.5 top-2 -ml-[5px] h-[10px] w-[10px] rounded-full bg-purple-500 shadow-sm ring-4 ring-white dark:ring-slate-900"
+                  className="absolute left-3.5 top-2 -ml-[5px] h-[10px] w-[10px] rounded-full bg-teal-400 shadow-sm ring-4 ring-white dark:ring-slate-900"
                 />
 
                 <div className="flex flex-wrap items-center gap-3">
@@ -133,7 +133,7 @@ export default function ChangelogPage() {
                       {t("landing.changelog.newBadge")}
                     </span>
                   )}
-                  <span className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-purple-700 dark:border-purple-700/40 dark:bg-purple-900/30 dark:text-purple-300">
+                  <span className="inline-flex rounded-full border border-teal-400/30 bg-teal-500/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-teal-700 dark:border-teal-400/20 dark:bg-teal-400/10 dark:text-teal-300">
                     v{entry.version}
                   </span>
                   <time

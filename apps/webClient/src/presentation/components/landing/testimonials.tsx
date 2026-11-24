@@ -64,12 +64,12 @@ function TestimonialCard({
       aria-label={`${t("landing.sectionTestimonials.regionAria")} card ${
         cardIndex + 1
       }`}
-      className="rounded-2xl border border-dashed border-purple-200 bg-white/70 p-6 shadow-sm backdrop-blur-sm dark:border-purple-700/40 dark:bg-slate-900/60"
+      className="rounded-2xl border border-dashed border-teal-400/30 bg-white/70 p-6 shadow-sm backdrop-blur-sm dark:border-teal-400/20 dark:bg-slate-900/60"
     >
       <div className="flex items-start gap-3">
         <div
           aria-hidden="true"
-          className="grid h-12 w-12 flex-none place-items-center rounded-full bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300"
+          className="grid h-12 w-12 flex-none place-items-center rounded-full bg-teal-500/10 text-teal-600 dark:bg-teal-400/15 dark:text-teal-300"
         >
           <Quote className="h-5 w-5" />
         </div>
@@ -77,7 +77,7 @@ function TestimonialCard({
           <h3 className="text-base font-semibold text-slate-900 dark:text-white">
             {name}
           </h3>
-          <p className="mt-0.5 text-xs uppercase tracking-wider text-purple-600 dark:text-purple-300">
+          <p className="mt-0.5 text-xs uppercase tracking-wider text-teal-600 dark:text-teal-300">
             {testimonial?.rating}
           </p>
           <p className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -157,10 +157,10 @@ export function Testimonials() {
   const { t } = useTranslation();
   const items = readRealTestimonials(t);
   return (
-    <section className="relative isolate overflow-x-clip bg-gradient-to-b from-white via-purple-50/50 to-white py-20 dark:from-slate-900 dark:via-purple-950/40 dark:to-slate-900 lg:py-24">
+    <section className="relative isolate overflow-x-clip bg-gradient-to-b from-white via-teal-50/50 to-white py-20 dark:from-slate-950 dark:via-teal-950/30 dark:to-slate-950 lg:py-24">
       <div className="container mx-auto max-w-7xl px-6">
         <div className="mx-auto mb-12 max-w-2xl text-center">
-          <span className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-purple-700 dark:border-purple-700/40 dark:bg-purple-900/30 dark:text-purple-300">
+          <span className="inline-flex rounded-full border border-teal-400/30 bg-teal-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-teal-700 dark:border-teal-400/20 dark:bg-teal-400/10 dark:text-teal-300">
             {t("landing.sectionTestimonials.badge")}
           </span>
           <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-5xl">
@@ -171,7 +171,7 @@ export function Testimonials() {
           </p>
           <a
             href={t("landing.sectionTestimonials.ctaHref")}
-            className="mt-6 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-purple-600 to-violet-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-500/30 transition-transform hover:scale-[1.02] hover:from-purple-700 hover:to-violet-600"
+            className="mt-6 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-teal-400 to-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-950 shadow-lg shadow-teal-500/25 transition-transform hover:scale-[1.02] hover:from-teal-300 hover:to-cyan-400"
           >
             {t("landing.sectionTestimonials.cta")}
           </a>

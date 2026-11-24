@@ -32,6 +32,7 @@ import { RootState } from "@adapters/store/rootStore";
 import { updateUserSettings } from "@application/user/user.service";
 import { Button } from "@presentation/components/ui/button";
 import { PageHeader } from "@presentation/components/ui/page-header";
+import { Select } from "@presentation/components/ui/select";
 import { APP_CURRENCY, toCurrency } from "@presentation/utils/currencyService";
 import {
   COMMON_TIMEZONES,
@@ -223,7 +224,7 @@ export default function OnboardingPage() {
           aria-labelledby="onb-timezone"
         >
           <div className="flex items-center gap-3">
-            <span className="rounded-md bg-purple-50 p-2 text-purple-600 dark:bg-slate-800 dark:text-purple-300">
+            <span className="rounded-md bg-teal-500/10 p-2 text-teal-600 dark:bg-slate-800 dark:text-teal-300">
               <Clock className="h-4 w-4" aria-hidden="true" />
             </span>
             <h2
@@ -236,18 +237,17 @@ export default function OnboardingPage() {
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
             {t("onboarding.timezoneHelp")}
           </p>
-          <select
-            value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
-            required
-            className="mt-3 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-          >
-            {COMMON_TIMEZONES.map((tz) => (
-              <option key={tz} value={tz}>
-                {tz}
-              </option>
-            ))}
-          </select>
+          <div className="mt-3">
+            <Select
+              value={timezone}
+              onChange={setTimezone}
+              aria-label={t("onboarding.timezone")}
+              options={COMMON_TIMEZONES.map((tz) => ({
+                value: tz,
+                label: tz,
+              }))}
+            />
+          </div>
         </section>
 
         {/* Language card */}
@@ -256,7 +256,7 @@ export default function OnboardingPage() {
           aria-labelledby="onb-language"
         >
           <div className="flex items-center gap-3">
-            <span className="rounded-md bg-purple-50 p-2 text-purple-600 dark:bg-slate-800 dark:text-purple-300">
+            <span className="rounded-md bg-teal-500/10 p-2 text-teal-600 dark:bg-slate-800 dark:text-teal-300">
               <Globe className="h-4 w-4" aria-hidden="true" />
             </span>
             <h2
@@ -280,7 +280,7 @@ export default function OnboardingPage() {
                   aria-pressed={active}
                   className={`flex items-center justify-between rounded-md border px-4 py-3 text-left transition-colors ${
                     active
-                      ? "border-purple-500 bg-purple-50 text-purple-700 dark:border-purple-400 dark:bg-purple-900/30 dark:text-purple-200"
+                      ? "border-teal-400 bg-teal-500/10 text-teal-700 dark:border-teal-400 dark:bg-teal-400/10 dark:text-teal-200"
                       : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                   }`}
                 >
@@ -289,7 +289,7 @@ export default function OnboardingPage() {
                   </span>
                   {active && (
                     <Check
-                      className="h-4 w-4 text-purple-600 dark:text-purple-300"
+                      className="h-4 w-4 text-teal-600 dark:text-teal-300"
                       aria-hidden="true"
                     />
                   )}
@@ -305,7 +305,7 @@ export default function OnboardingPage() {
           aria-labelledby="onb-currency"
         >
           <div className="flex items-center gap-3">
-            <span className="rounded-md bg-purple-50 p-2 text-purple-600 dark:bg-slate-800 dark:text-purple-300">
+            <span className="rounded-md bg-teal-500/10 p-2 text-teal-600 dark:bg-slate-800 dark:text-teal-300">
               <Coins className="h-4 w-4" aria-hidden="true" />
             </span>
             <h2
@@ -318,19 +318,17 @@ export default function OnboardingPage() {
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
             {t("onboarding.currencyHelp")}
           </p>
-          <select
-            value={currency}
-            onChange={(e) => setCurrency(toCurrency(e.target.value))}
-            required
-            aria-label={t("onboarding.currency")}
-            className="mt-3 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-          >
-            {SUPPORTED_CURRENCIES.map((code) => (
-              <option key={code} value={code}>
-                {t(`onboarding.currencyOptions.${code}`)}
-              </option>
-            ))}
-          </select>
+          <div className="mt-3">
+            <Select
+              value={currency}
+              onChange={(value) => setCurrency(toCurrency(value))}
+              aria-label={t("onboarding.currency")}
+              options={SUPPORTED_CURRENCIES.map((code) => ({
+                value: code,
+                label: t(`onboarding.currencyOptions.${code}`),
+              }))}
+            />
+          </div>
         </section>
 
         <div className="flex justify-end pt-2">

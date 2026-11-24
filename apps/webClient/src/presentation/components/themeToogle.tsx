@@ -13,11 +13,11 @@ export function ThemeToggle() {
   const { t } = useTranslation();
 
   return (
-    <div className="relative text-primary dark:text-neutral">
+    <div className="relative text-slate-600 dark:text-slate-300">
       <Button
         variant="ghost"
         onClick={toggleTheme}
-        className="h-9 w-9 cursor-pointer rounded-md p-0 inline-flex items-center justify-center text-sm font-medium transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:focus-visible:ring-slate-400"
+        className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg p-0 text-sm font-medium transition-colors hover:bg-teal-500/10 hover:text-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 dark:hover:bg-white/[0.06] dark:hover:text-teal-300"
         aria-label={
           theme === "light" ? t("theme.switchToDark") : t("theme.switchToLight")
         }

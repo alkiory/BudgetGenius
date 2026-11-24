@@ -26,12 +26,12 @@ export default function BudgetHeader({
   // Spanish-UI dashboard.
   const locale = useLocale();
   return (
-    <div className="flex items-center justify-between">
-      <div>
-        <h2 className="text-xl font-semibold">{name}</h2>
-        <div className="mt-1 flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
-          <CalendarIcon className="h-4 w-4" />
-          <span>
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h2 className="break-words text-xl font-semibold">{name}</h2>
+        <div className="mt-1 flex flex-wrap items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
+          <CalendarIcon className="h-4 w-4 shrink-0" />
+          <span className="min-w-0">
             {new Date(startDate).toLocaleDateString(locale)} -{" "}
             {new Date(endDate).toLocaleDateString(locale)}
           </span>
@@ -43,7 +43,7 @@ export default function BudgetHeader({
       <Button
         variant="outline"
         size="sm"
-        className="gap-1"
+        className="shrink-0 gap-1"
         onClick={handleEditBudgetClick}
       >
         <Edit2 className="h-4 w-4" />

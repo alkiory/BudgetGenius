@@ -18,8 +18,8 @@ export default function ForgotPasswordConfirmationPage() {
     <Card className="w-full max-w-md">
       <CardHeader className="space-y-1 text-center">
         <div className="flex justify-center">
-          <div className="rounded-full bg-green-100 p-2">
-            <CheckCircle className="h-6 w-6 text-green-600" />
+          <div className="rounded-full bg-emerald-100 p-2">
+            <CheckCircle className="h-6 w-6 text-emerald-600" />
           </div>
         </div>
         <CardTitle className="text-2xl font-bold">

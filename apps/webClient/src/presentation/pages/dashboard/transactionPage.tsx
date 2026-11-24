@@ -12,11 +12,12 @@ import {
   FilterCriteria,
   FilterModal,
 } from "@presentation/components/dashboard/transaction/filter-transaction-modal";
+import { BrandDots } from "@presentation/components/loader";
 import TransactionsLoading from "@presentation/components/dashboard/transactions/transactions-loading";
 import { Button } from "@presentation/components/ui/button";
 import { PageHeader } from "@presentation/components/ui/page-header";
 import { warningToast } from "@presentation/utils/toast";
-import { FileUp, Filter, Loader2 } from "lucide-react";
+import { FileUp, Filter } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
@@ -221,7 +222,7 @@ export default function TransactionsPage() {
             className="w-full sm:w-auto"
           >
             {isImporting ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <BrandDots size="sm" className="mr-2" />
             ) : (
               <FileUp className="mr-2 h-4 w-4" />
             )}
@@ -253,7 +254,7 @@ export default function TransactionsPage() {
             <Filter className="h-4 w-4" />
             {t("common.filter")}
             {activeFiltersCount > 0 && (
-              <span className="ml-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+              <span className="ml-1 rounded-full bg-teal-500/10 px-2 py-0.5 text-xs font-medium text-teal-800 dark:bg-teal-400/15 dark:text-teal-200">
                 {activeFiltersCount}
               </span>
             )}
@@ -306,13 +307,13 @@ export default function TransactionsPage() {
       {/* This is the pagination that will be implemented in the future */}
       {/* <div>
         <Button
-          className="text-sm text-purple-600 hover:underline dark:text-purple-400"
+          className="text-sm text-teal-600 hover:underline dark:text-teal-400"
           onClick={handlePreviousPage}
         >
           Previous
         </Button>
         <Button
-          className="text-sm text-purple-600 hover:underline dark:text-purple-400"
+          className="text-sm text-teal-600 hover:underline dark:text-teal-400"
           onClick={handleNextPage}
         >
           Next

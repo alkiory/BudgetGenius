@@ -31,10 +31,12 @@ export function OverviewCard({
   const locale = useLocale();
 
   return (
-    <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">{t("dashboard.overview")}</h2>
-        <span className="text-sm text-slate-500 dark:text-slate-400">
+    <section>
+      <div className="mb-3 flex items-center justify-between px-1">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+          {t("dashboard.overview")}
+        </h2>
+        <span className="text-xs text-slate-400 dark:text-slate-500">
           {periodDate.toLocaleDateString(locale, {
             year: "numeric",
             month: "long",
@@ -42,43 +44,86 @@ export function OverviewCard({
           })}
         </span>
       </div>
+
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-lg bg-purple-50 p-4 dark:border dark:border-purple-800/60 dark:bg-purple-950/40">
-          <div className="flex items-center gap-2">
-            <div className="rounded-full bg-purple-100 p-2 dark:bg-purple-900">
-              <DollarSign className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-            </div>
-            <span className="text-sm font-medium">{t("common.balance")}</span>
-          </div>
-          <p className="mt-2 text-2xl font-bold">{balance}</p>
-        </div>
-        <div className="rounded-lg bg-green-50 p-4 dark:border dark:border-green-800/60 dark:bg-green-950/40">
-          <div className="flex items-center gap-2">
-            <div className="rounded-full bg-green-100 p-2 dark:bg-green-900">
-              <ArrowUpRight className="h-5 w-5 text-green-600 dark:text-green-400" />
-            </div>
-            <span className="text-sm font-medium">
-              {t("dashboard.summaryIncome")}
-            </span>
-          </div>
-          <p className="mt-2 text-2xl font-bold text-green-600 dark:text-green-300">
-            {income}
-          </p>
-        </div>
-        <div className="rounded-lg bg-red-50 p-4 dark:border dark:border-red-800/60 dark:bg-red-950/40">
-          <div className="flex items-center gap-2">
-            <div className="rounded-full bg-red-100 p-2 dark:bg-red-900">
-              <ArrowDownRight className="h-5 w-5 text-red-600 dark:text-red-400" />
-            </div>
-            <span className="text-sm font-medium">
-              {t("dashboard.totalExpenses")}
-            </span>
-          </div>
-          <p className="mt-2 text-2xl font-bold text-red-600 dark:text-red-300">
-            {expenses}
-          </p>
-        </div>
+        <StatCard
+          label={t("common.balance")}
+          value={balance}
+          icon={DollarSign}
+          tone="teal"
+        />
+        <StatCard
+          label={t("dashboard.summaryIncome")}
+          value={income}
+          icon={ArrowUpRight}
+          tone="emerald"
+        />
+        <StatCard
+          label={t("dashboard.totalExpenses")}
+          value={expenses}
+          icon={ArrowDownRight}
+          tone="rose"
+        />
       </div>
+    </section>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: string;
+  icon: React.ElementType;
+  tone: "teal" | "emerald" | "rose";
+}) {
+  const tones = {
+    teal: {
+      tile: "border-teal-500/30 bg-teal-500/10 text-teal-600 dark:text-teal-300",
+      value: "text-slate-900 dark:text-white",
+      bar: "from-transparent via-teal-400/80 to-transparent",
+      glow: "group-hover:shadow-[0_0_45px_-18px_rgb(45_212_191_/_0.75)]",
+    },
+    emerald: {
+      tile: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
+      value: "text-emerald-600 dark:text-emerald-300",
+      bar: "from-transparent via-emerald-400/80 to-transparent",
+      glow: "group-hover:shadow-[0_0_45px_-18px_rgb(52_211_153_/_0.65)]",
+    },
+    rose: {
+      tile: "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-300",
+      value: "text-rose-600 dark:text-rose-300",
+      bar: "from-transparent via-rose-400/80 to-transparent",
+      glow: "group-hover:shadow-[0_0_45px_-18px_rgb(251_113_133_/_0.55)]",
+    },
+  }[tone];
+
+  return (
+    <div
+      className={`group glass-panel hover-glow relative overflow-hidden rounded-xl p-5 ${tones.glow}`}
+    >
+      <span
+        aria-hidden="true"
+        className={`absolute inset-x-6 top-0 h-px bg-gradient-to-r opacity-0 transition-opacity duration-300 group-hover:opacity-100 ${tones.bar}`}
+      />
+      <div className="flex items-start justify-between">
+        <span
+          className={`grid h-10 w-10 place-items-center rounded-lg border ${tones.tile}`}
+        >
+          <Icon className="h-[1.1rem] w-[1.1rem]" />
+        </span>
+        <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+          {label}
+        </span>
+      </div>
+      <p
+        className={`mt-5 text-2xl font-semibold tracking-tight ${tones.value}`}
+      >
+        {value}
+      </p>
     </div>
   );
 }

@@ -20,12 +20,12 @@ export default function NotFoundPage() {
       {user ? <DashboardHeader /> : <HeaderComponent />}
 
       {/* Error Content */}
-      <main className="flex flex-1 flex-col items-center justify-center px-4 text-center bg-gradient-to-b from-purple-500 to-cyan-50 dark:from-purple-900 dark:to-slate-900">
+      <main className="flex flex-1 flex-col items-center justify-center px-4 text-center bg-gradient-to-b from-teal-500/15 to-background dark:from-teal-950/50 dark:to-slate-950">
         <div className="max-w-md">
           <div className="mb-6 flex justify-center">
-            <div className="absolute -inset-0.5 rounded-full bg-purple-600/20 blur-xl dark:bg-red-200/50"></div>
-            <div className="relative rounded-full bg-purple-100 p-6 dark:bg-purple-900">
-              <span className="text-7xl font-bold text-purple-600 dark:text-purple-400">
+            <div className="absolute -inset-0.5 rounded-full bg-teal-500/20 blur-xl dark:bg-teal-400/20"></div>
+            <div className="relative rounded-full bg-teal-500/10 p-6 dark:bg-teal-400/15">
+              <span className="text-7xl font-bold text-teal-600 dark:text-teal-400">
                 404
               </span>
             </div>
@@ -40,7 +40,7 @@ export default function NotFoundPage() {
             <Button
               onClick={() => window.history.back()}
               size="lg"
-              className="bg-purple-600 hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-600"
+              className="bg-teal-600 hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               {t("common.goBack")}

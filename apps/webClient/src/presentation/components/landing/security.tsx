@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 
 function CardIcon({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+    <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-teal-500/10 text-teal-700 dark:bg-teal-400/15 dark:text-teal-300">
       {children}
     </div>
   );
@@ -80,7 +80,7 @@ function SectionHeader() {
   const { t } = useTranslation();
   return (
     <div className="mx-auto mb-12 max-w-2xl text-center">
-      <span className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-purple-700 dark:border-purple-700/40 dark:bg-purple-900/30 dark:text-purple-300">
+      <span className="inline-flex rounded-full border border-teal-400/30 bg-teal-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-teal-700 dark:border-teal-400/20 dark:bg-teal-400/10 dark:text-teal-300">
         {t("landing.sectionSecurity.badge")}
       </span>
       <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-5xl">

@@ -2,11 +2,11 @@ import { AnimatedBackground } from "@presentation/components/animated-background
 import { RoutePaths } from "@presentation/utils/routes";
 import { Outlet, useLocation } from "react-router";
 
-// Each auth flow keeps the same blue/purple family so the pages feel
-// related, but registration leans deeper into indigo/violet so the two
-// forms are visually distinguishable at a glance.
-const LOGIN_GRADIENT = ["from-blue-500", "via-indigo-500", "to-purple-500"];
-const SIGNUP_GRADIENT = ["from-indigo-600", "via-violet-700", "to-purple-900"];
+// Auth uses the same deep-navy/teal family as the app shell. Signup
+// leans one step further into cyan so the two flows stay visually
+// distinguishable without leaving the rebranded palette.
+const LOGIN_GRADIENT = ["from-slate-950", "via-teal-950", "to-cyan-900"];
+const SIGNUP_GRADIENT = ["from-slate-950", "via-cyan-950", "to-teal-900"];
 
 export default function AuthLayout() {
   const { pathname } = useLocation();

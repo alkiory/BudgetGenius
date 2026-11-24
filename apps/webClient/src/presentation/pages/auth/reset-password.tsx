@@ -119,7 +119,7 @@ export default function ResetPasswordPage() {
               required
             />
           </div>
-          {error && <p className="text-red-500">{error}</p>}{" "}
+          {error && <p className="text-rose-500">{error}</p>}{" "}
           <Button type="submit" className="w-full">
             {t("auth.resetPassword")}
           </Button>

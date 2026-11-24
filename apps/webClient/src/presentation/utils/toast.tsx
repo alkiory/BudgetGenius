@@ -42,17 +42,17 @@ const customToast = ({
       icon: <Info className="h-5 w-5 text-blue-500 dark:text-blue-400" />,
     },
     error: {
-      bg: "bg-red-50 dark:bg-red-900/30",
-      border: "border-red-200 dark:border-red-800",
-      text: "text-red-800 dark:text-red-200",
-      icon: <XCircle className="h-5 w-5 text-red-500 dark:text-red-400" />,
+      bg: "bg-rose-50 dark:bg-rose-900/30",
+      border: "border-rose-200 dark:border-rose-800",
+      text: "text-rose-800 dark:text-rose-200",
+      icon: <XCircle className="h-5 w-5 text-rose-500 dark:text-rose-400" />,
     },
     success: {
-      bg: "bg-green-50 dark:bg-green-900/30",
-      border: "border-green-200 dark:border-green-800",
-      text: "text-green-800 dark:text-green-200",
+      bg: "bg-emerald-50 dark:bg-emerald-900/30",
+      border: "border-emerald-200 dark:border-emerald-800",
+      text: "text-emerald-800 dark:text-emerald-200",
       icon: (
-        <CheckCircle2 className="h-5 w-5 text-green-500 dark:text-green-400" />
+        <CheckCircle2 className="h-5 w-5 text-emerald-500 dark:text-emerald-400" />
       ),
     },
   };
@@ -136,7 +136,7 @@ export const confirmToast = (
               options.onConfirm();
               toast.dismiss(t.id);
             }}
-            className="flex gap-4 rounded-md px-3 py-2 text-sm font-medium text-red-500 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-red-500 dark:text-red-400 dark:hover:text-red-300 dark:focus-visible:ring-red-400"
+            className="flex gap-4 rounded-md px-3 py-2 text-sm font-medium text-rose-500 hover:text-rose-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-rose-500 dark:text-rose-400 dark:hover:text-rose-300 dark:focus-visible:ring-rose-400"
             aria-label={options.labelConfirm || "Accept"}
           >
             {options.labelConfirm || "Accept"}

@@ -144,7 +144,7 @@ export function DownloadApp() {
     >
       <div className="container mx-auto max-w-3xl px-6 text-center">
         {/* Badge */}
-        <span className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-purple-700 dark:border-purple-700/40 dark:bg-purple-900/30 dark:text-purple-300">
+        <span className="inline-flex rounded-full border border-teal-400/30 bg-teal-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-teal-700 dark:border-teal-400/20 dark:bg-teal-400/10 dark:text-teal-300">
           {t("landing.sectionDownloadApp.badge")}
         </span>
 
@@ -172,7 +172,7 @@ export function DownloadApp() {
                * platform we ship to (desktop Chrome / Edge / Firefox
                * + Android Chrome WebView). */
               download
-              className="group inline-flex min-h-12 w-full max-w-sm items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-violet-500 px-8 py-4 text-base font-semibold text-white shadow-xl shadow-purple-500/30 transition-transform hover:scale-[1.02] hover:from-purple-700 hover:to-violet-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-purple-400/40 sm:w-auto sm:min-w-[20rem]"
+              className="group inline-flex min-h-12 w-full max-w-sm items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-teal-400 to-cyan-500 px-8 py-4 text-base font-semibold text-slate-950 shadow-xl shadow-teal-500/25 transition-transform hover:scale-[1.02] hover:from-teal-300 hover:to-cyan-400 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-teal-400/40 sm:w-auto sm:min-w-[20rem]"
             >
               <AndroidIcon className="h-7 w-7" />
               <span>{t("landing.sectionDownloadApp.buttonLabel")}</span>

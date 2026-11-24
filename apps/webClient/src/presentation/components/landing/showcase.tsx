@@ -5,7 +5,7 @@ import { MockupFrame } from "./mockup-frame";
 
 /**
  * "Overview" / Showcase section.
- * Two phones staggered diagonally over a soft purple-to-fuchsia radial
+ * Two phones staggered diagonally over a soft teal-to-cyan radial
  * gradient — mirrors Vaulta's "intersecting device" composition without
  * replicating the bank's "card / account" imagery.
  */
@@ -15,7 +15,7 @@ export function Showcase() {
     <section className="relative isolate overflow-x-clip bg-background py-20 lg:py-24">
       <div className="container mx-auto max-w-7xl px-6">
         <div className="mx-auto mb-12 max-w-2xl text-center">
-          <span className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-purple-700 dark:border-purple-700/40 dark:bg-purple-900/30 dark:text-purple-300">
+          <span className="inline-flex rounded-full border border-teal-400/30 bg-teal-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-teal-700 dark:border-teal-400/20 dark:bg-teal-400/10 dark:text-teal-300">
             {t("landing.sectionShowcase.badge")}
           </span>
           <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-5xl">
@@ -30,7 +30,7 @@ export function Showcase() {
           {/* Soft gradient ground (radial) */}
           <div
             aria-hidden="true"
-            className="absolute inset-0 -z-10 rounded-3xl bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-300/40 via-fuchsia-200/20 to-transparent blur-2xl dark:from-purple-700/30 dark:via-fuchsia-700/15"
+            className="absolute inset-0 -z-10 rounded-3xl bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-teal-300/40 via-cyan-200/20 to-transparent blur-2xl dark:from-teal-700/25 dark:via-cyan-700/15"
           />
 
           <div className="grid grid-cols-1 items-center gap-10 px-4 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">

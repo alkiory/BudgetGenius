@@ -390,9 +390,17 @@ api.interceptors.response.use(
 
     // Network error (ERR_NETWORK) OR proxy unavailable (502/503/504 via Vite) —
     // backend is unreachable or user is offline. Queue mutations for retry.
+    // A structured `{ code }` body means the backend answered on purpose
+    // (e.g. Finny's 503 setup state), so it must reach the caller instead of
+    // being mistaken for the dev proxy being down.
     const isNetworkError = !error.response;
+    const isAppError =
+      typeof (error.response?.data as { code?: unknown } | undefined)?.code ===
+      "string";
     const isProxyError =
-      error.response && PROXY_UNAVAILABLE_CODES.includes(error.response.status);
+      !isAppError &&
+      error.response &&
+      PROXY_UNAVAILABLE_CODES.includes(error.response.status);
 
     if (isNetworkError || isProxyError) {
       const method = originalRequest.method?.toUpperCase() || "";

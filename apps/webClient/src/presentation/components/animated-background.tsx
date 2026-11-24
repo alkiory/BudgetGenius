@@ -7,7 +7,7 @@ interface AnimatedBackgroundProps {
 }
 
 export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
-  gradientColors = ["from-purple-200", "via-pink-500", "to-cyan-300"], // Colores por defecto
+  gradientColors = ["from-slate-950", "via-teal-950", "to-cyan-900"], // Colores por defecto
   particleColor = "bg-white", // Color de partículas por defecto
   particleCount = 30, // Número de partículas por defecto
 }) => {

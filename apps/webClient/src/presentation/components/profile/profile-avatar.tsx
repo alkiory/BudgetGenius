@@ -1,4 +1,5 @@
-import { Camera, Loader2 } from "lucide-react";
+import { BrandDots } from "@presentation/components/loader";
+import { Camera } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 
@@ -58,7 +59,7 @@ export function ProfileAvatar({
           className="h-full w-full object-cover"
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center bg-purple-100 text-xl font-medium text-purple-600 dark:bg-purple-900 dark:text-purple-400">
+        <div className="flex h-full w-full items-center justify-center bg-teal-500/10 text-xl font-medium text-teal-600 dark:bg-teal-400/15 dark:text-teal-400">
           {initials}
         </div>
       )}
@@ -70,7 +71,7 @@ export function ProfileAvatar({
             ${isUploading ? "opacity-100" : ""}`}
         >
           {isUploading ? (
-            <Loader2 className="h-6 w-6 animate-spin text-white" />
+            <BrandDots size="md" className="text-white" />
           ) : (
             <Camera className="h-6 w-6 text-white" />
           )}

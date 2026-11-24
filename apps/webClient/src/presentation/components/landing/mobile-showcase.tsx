@@ -135,13 +135,13 @@ export function MobileAppSection() {
   return (
     <section
       ref={sectionRef}
-      className="relative isolate overflow-x-clip bg-gradient-to-b from-background via-purple-50/40 to-background py-20 dark:via-purple-950/20 lg:py-28"
+      className="relative isolate overflow-x-clip bg-gradient-to-b from-background via-teal-50/40 to-background py-20 dark:via-teal-950/20 lg:py-28"
       aria-label={t("landing.sectionMobileApp.regionAria")}
     >
       <div className="container mx-auto grid max-w-7xl items-center gap-12 px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-16">
         {/* LEFT — copy column */}
         <div className="text-center lg:text-left">
-          <span className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-purple-700 dark:border-purple-700/40 dark:bg-purple-900/30 dark:text-purple-300">
+          <span className="inline-flex rounded-full border border-teal-400/30 bg-teal-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-teal-700 dark:border-teal-400/20 dark:bg-teal-400/10 dark:text-teal-300">
             {t("landing.sectionMobileApp.badge")}
           </span>
           <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-5xl">

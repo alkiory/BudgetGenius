@@ -1467,5 +1467,34 @@ The CI workflows (`firebase-hosting-merge.yml`, `build-apk.yml`, `firebase-pull-
 
 ---
 
-*Last updated: 2026-06-25*
+## 17. Frontend design & animation references
+
+Curated references for UI work in `apps/webClient` (loading states, motion and the navy/teal palette):
+
+### 17.1 CSS & animation fundamentals
+
+- **MDN — `transform`**: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/transform
+  Compositor-friendly movement (`translate`, `scale`, `rotate`). Prefer transform/opacity over layout properties for loaders, drifts and hovers.
+- **MDN — CSS reference**: https://developer.mozilla.org/en-US/docs/Web/CSS
+  Canonical syntax for custom properties, `@keyframes`, `@media (prefers-reduced-motion: reduce)` and `color-mix()`.
+- **web.dev — Learn CSS: Animations**: https://web.dev/learn/css/animations
+  Keyframes, timing functions, fill modes, and how to keep UI motion accessible.
+
+### 17.2 Motion inspiration (Codepen)
+
+- **“Funny Candle” — pure CSS character animation**: https://codepen.io/kevin_David_k/pen/eYNeQVY
+  Multi-part keyframe choreography on a single subject; useful for personality-driven loaders.
+- **“Pure CSS cat” — blinking / look-around character**: https://codepen.io/johanmouchet/pen/OXxvqM
+  Small, cheap loops (`blink`, `look-around`) that make a static mark feel alive; pair with `prefers-reduced-motion`.
+
+### 17.3 House rules for BudgetGenius motion
+
+- Every animation must read correctly in both themes: drive colours from the tokens in `src/index.css` (`rgb(var(--primary))`, `rgb(var(--accent))`, `rgb(var(--muted))`), never from fixed hex values.
+- Keep brand loaders transform/opacity-only, and disable them under `prefers-reduced-motion`.
+- Shared loading classes live in `src/index.css` (`brand-loader-*`, `skeleton`); the full-page loader is `presentation/pages/loading.tsx`. Every inline spinner must use `BrandDots` (exported from `presentation/components/loader.tsx`) instead of `animate-spin` / `Loader2`, so all loading states keep the same dot animation and inherit the palette through `currentColor`.
+- Native `<select>` popups are painted by the OS and ignore the theme. Use the portal-based `presentation/components/ui/select.tsx` for any dropdown in the app.
+
+---
+
+*Last updated: 2026-11-24*
 *Maintainers: Alkiory, Sergio Campbell*

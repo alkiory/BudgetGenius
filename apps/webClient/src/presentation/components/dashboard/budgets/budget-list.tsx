@@ -86,9 +86,9 @@ export function BudgetList({
             );
 
             // Savings goals fill up green and are never "over budget".
-            let progressColor = "bg-green-500";
+            let progressColor = "bg-emerald-500";
             if (!isSavings && percentSpent > 90) {
-              progressColor = "bg-red-500";
+              progressColor = "bg-rose-500";
             } else if (!isSavings && percentSpent > 75) {
               progressColor = "bg-yellow-500";
             }
@@ -98,17 +98,17 @@ export function BudgetList({
             const isActiveBudget = activeBudget?.id === budget.id;
 
             let borderClasses =
-              "border-slate-200 bg-white hover:border-purple-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-purple-700";
+              "border-slate-200 bg-white hover:border-teal-400/30 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-teal-400/30";
             if (isActiveBudget) {
               borderClasses =
-                "border-purple-500 bg-purple-50 dark:border-purple-500 dark:bg-purple-900/20";
+                "border-teal-400 bg-teal-500/10 dark:border-teal-400 dark:bg-teal-400/10";
             }
             if (isOverBudget) {
               borderClasses =
-                "border-red-300 bg-red-50/80 dark:border-red-800 dark:bg-red-950/40";
+                "border-rose-300 bg-rose-50/80 dark:border-rose-800 dark:bg-rose-950/40";
               if (isActiveBudget) {
                 borderClasses =
-                  "border-red-400 bg-red-50 dark:border-red-500 dark:bg-red-950/60 ring-1 ring-red-400/50";
+                  "border-rose-400 bg-rose-50 dark:border-rose-500 dark:bg-rose-950/60 ring-1 ring-rose-400/50";
               }
             }
 
@@ -118,12 +118,17 @@ export function BudgetList({
                 className={`rounded-lg border p-4 transition-colors cursor-pointer ${borderClasses}`}
                 onClick={() => handleSelectBudget(budget)}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
                     <OverBudgetIcon isOverBudget={isOverBudget} size="sm" />
-                    <h3 className="font-medium">{budget.name}</h3>
+                    <h3
+                      className="min-w-0 truncate font-medium"
+                      title={budget.name}
+                    >
+                      {budget.name}
+                    </h3>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex shrink-0 items-center gap-1">
                     <Button
                       variant="ghost"
                       size="icon"
@@ -138,7 +143,7 @@ export function BudgetList({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                      className="h-8 w-8 text-rose-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20"
                       onClick={(e) => {
                         e.stopPropagation();
                         onDeleteBudget(budget.id);
@@ -149,21 +154,21 @@ export function BudgetList({
                   </div>
                 </div>
 
-                <div className="mt-2 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-                  <CalendarIcon className="h-3 w-3" />
+                <div className="mt-2 flex flex-wrap items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                  <CalendarIcon className="h-3 w-3 shrink-0" />
                   {/* `locale` is the dashboard-wide BCP-47 tag from
                       `useLocale()`; bare `toLocaleDateString()` here
                       used to fall back to the browser default, which
                       rendered English dates on the Spanish-UI dashboard. */}
-                  <span>
+                  <span className="min-w-0">
                     {new Date(budget.startDate).toLocaleDateString(locale)} -{" "}
                     {new Date(budget.endDate).toLocaleDateString(locale)}
                   </span>
                 </div>
 
                 <div className="mt-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex flex-col gap-0.5">
+                  <div className="flex items-start justify-between gap-3 text-sm">
+                    <div className="flex min-w-0 flex-col gap-0.5">
                       <span>
                         <span className="text-slate-500 dark:text-slate-400">
                           {isSavings
@@ -187,7 +192,7 @@ export function BudgetList({
                         </span>
                       </span>
                     </div>
-                    <span className="font-medium">
+                    <span className="shrink-0 font-medium">
                       {Math.round(percentSpent)}%
                     </span>
                   </div>
@@ -203,8 +208,8 @@ export function BudgetList({
                   <span
                     className={
                       remaining >= 0 || isSavings
-                        ? "text-green-600 dark:text-green-400"
-                        : "text-red-600 dark:text-red-400"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-rose-600 dark:text-rose-400"
                     }
                   >
                     {remaining >= 0
@@ -227,7 +232,7 @@ export function BudgetList({
           })}
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed bg-purple-50 p-6 text-center dark:border-purple-900/30 dark:bg-purple-900/20 md:p-10 md:text-left lg:p-16 xl:p-20 border-slate-200 dark:border-slate-700">
+        <div className="rounded-lg border border-dashed bg-teal-500/10 p-6 text-center dark:border-teal-400/15 dark:bg-teal-400/10 md:p-10 md:text-left lg:p-16 xl:p-20 border-slate-200 dark:border-slate-700">
           <p className="text-slate-500 dark:text-slate-400">
             {t("budgets.noBudgetsFound")}
           </p>
