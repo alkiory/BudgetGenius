@@ -35,7 +35,7 @@ export default function AddBudgetCategory({
   const stepAttr = precision === 0 ? 1 : 1 / 10 ** precision;
 
   return (
-    <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+    <div className="rounded-lg border border-slate-200 p-4 dark:border-white/10">
       <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]">
         <div className="min-w-0 space-y-2">
           <Label htmlFor="new-category-name">

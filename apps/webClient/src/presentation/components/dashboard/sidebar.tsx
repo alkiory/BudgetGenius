@@ -160,7 +160,7 @@ export function DashboardSidebar() {
     <>
       {/* FAB — botón flotante "+" para agregar transacción (solo móvil) */}
       {isMobile && (
-        <div className="fixed bottom-[calc(max(env(safe-area-inset-bottom),1rem)+4.5rem)] right-4 z-40 md:hidden">
+        <div className="finny-sheet-hide fixed bottom-[calc(max(env(safe-area-inset-bottom),1rem)+4.5rem)] right-4 z-40 md:hidden">
           <AddTransactionModal
             trigger={
               <button className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 text-slate-950 shadow-[0_12px_40px_-10px_rgb(45_212_191_/_0.8)] transition-all duration-200 hover:scale-105 hover:brightness-110 active:scale-95">
@@ -175,7 +175,7 @@ export function DashboardSidebar() {
       <button
         onClick={toggleSidebar}
         className={`
-          fixed bottom-[max(env(safe-area-inset-bottom),1rem)] right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-teal-500 text-slate-950 shadow-[0_10px_35px_-8px_rgb(45_212_191_/_0.8)] transition-all duration-300 md:hidden
+          finny-sheet-hide fixed bottom-[max(env(safe-area-inset-bottom),1rem)] right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-teal-500 text-slate-950 shadow-[0_10px_35px_-8px_rgb(45_212_191_/_0.8)] transition-all duration-300 md:hidden
           ${isOpen ? "rotate-90" : "rotate-0"}
           `}
       >

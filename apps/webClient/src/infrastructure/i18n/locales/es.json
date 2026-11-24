@@ -554,6 +554,8 @@
   "finny": {
     "title": "Finny",
     "subtitle": "Tu asistente financiero con IA",
+    "open": "Abrir Finny",
+    "close": "Cerrar Finny",
     "online": "En línea",
     "setup": {
       "badge": "Falta configurar",

@@ -119,7 +119,7 @@ export default function BudgetCategoryList({
               </div>
             </div>
 
-            <div className="mt-1 h-2 w-full rounded-full bg-slate-100 dark:bg-slate-700">
+            <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-white/[0.07]">
               <div
                 className={`h-2 rounded-full ${progressColor}`}
                 style={{ width: `${Math.min(percentUsed, 100)}%` }}

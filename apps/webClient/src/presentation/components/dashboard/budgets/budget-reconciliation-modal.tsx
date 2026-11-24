@@ -80,7 +80,7 @@ export function BudgetReconciliationModal({
             {t("common.loading")}
           </p>
         ) : !data || data.items.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center dark:border-slate-700">
+          <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center dark:border-white/10">
             <Link2 className="mx-auto mb-2 h-5 w-5 text-slate-400" />
             <p className="text-sm text-slate-500 dark:text-slate-400">
               {t("budgets.reconcileEmpty")}
@@ -104,7 +104,7 @@ export function BudgetReconciliationModal({
                 return (
                   <li
                     key={item.id}
-                    className="space-y-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"
+                    className="space-y-3 rounded-lg border border-slate-200/90 bg-white/70 p-3 backdrop-blur dark:border-white/[0.08] dark:bg-white/[0.03]"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">

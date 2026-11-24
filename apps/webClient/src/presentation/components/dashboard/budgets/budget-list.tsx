@@ -98,24 +98,24 @@ export function BudgetList({
             const isActiveBudget = activeBudget?.id === budget.id;
 
             let borderClasses =
-              "border-slate-200 bg-white hover:border-teal-400/30 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-teal-400/30";
+              "border-slate-200/90 bg-white/85 shadow-[0_18px_45px_-30px_rgb(15_23_42_/_0.35)] backdrop-blur hover:border-teal-400/40 dark:border-white/[0.08] dark:bg-white/[0.03] dark:shadow-[0_24px_60px_-32px_rgb(0_0_0_/_0.95)] dark:hover:border-teal-400/30";
             if (isActiveBudget) {
               borderClasses =
-                "border-teal-400 bg-teal-500/10 dark:border-teal-400 dark:bg-teal-400/10";
+                "border-teal-400/60 bg-teal-500/10 shadow-[0_18px_45px_-30px_rgb(15_23_42_/_0.35)] backdrop-blur dark:border-teal-400/50 dark:bg-teal-400/[0.08] dark:shadow-[0_24px_60px_-32px_rgb(0_0_0_/_0.95)]";
             }
             if (isOverBudget) {
               borderClasses =
-                "border-rose-300 bg-rose-50/80 dark:border-rose-800 dark:bg-rose-950/40";
+                "border-rose-300 bg-rose-50/80 shadow-[0_18px_45px_-30px_rgb(15_23_42_/_0.35)] backdrop-blur dark:border-rose-500/40 dark:bg-rose-950/30 dark:shadow-[0_24px_60px_-32px_rgb(0_0_0_/_0.95)]";
               if (isActiveBudget) {
                 borderClasses =
-                  "border-rose-400 bg-rose-50 dark:border-rose-500 dark:bg-rose-950/60 ring-1 ring-rose-400/50";
+                  "border-rose-400 bg-rose-50 ring-1 ring-rose-400/50 dark:border-rose-500/60 dark:bg-rose-950/40";
               }
             }
 
             return (
               <div
                 key={budget.id}
-                className={`rounded-lg border p-4 transition-colors cursor-pointer ${borderClasses}`}
+                className={`cursor-pointer rounded-xl border p-4 transition-colors ${borderClasses}`}
                 onClick={() => handleSelectBudget(budget)}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -196,7 +196,7 @@ export function BudgetList({
                       {Math.round(percentSpent)}%
                     </span>
                   </div>
-                  <div className="mt-1 h-2 w-full rounded-full bg-slate-100 dark:bg-slate-700">
+                  <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-white/[0.07]">
                     <div
                       className={`h-2 rounded-full ${progressColor}`}
                       style={{ width: `${Math.min(percentSpent, 100)}%` }}
@@ -232,7 +232,7 @@ export function BudgetList({
           })}
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed bg-teal-500/10 p-6 text-center dark:border-teal-400/15 dark:bg-teal-400/10 md:p-10 md:text-left lg:p-16 xl:p-20 border-slate-200 dark:border-slate-700">
+        <div className="rounded-xl border border-dashed border-slate-200 bg-teal-500/10 p-6 text-center dark:border-teal-400/15 dark:bg-teal-400/10 md:p-10 md:text-left lg:p-16 xl:p-20">
           <p className="text-slate-500 dark:text-slate-400">
             {t("budgets.noBudgetsFound")}
           </p>

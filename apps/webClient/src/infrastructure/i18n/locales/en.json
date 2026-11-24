@@ -554,6 +554,8 @@
     "finny": {
         "title": "Finny",
         "subtitle": "Your AI financial sidekick",
+        "open": "Open Finny",
+        "close": "Close Finny",
         "online": "Online",
         "setup": {
             "badge": "Setup needed",

@@ -20,8 +20,8 @@ export function OverBudgetContainer({
     <div
       className={`rounded-lg border p-4 transition-colors ${
         isOverBudget
-          ? "border-rose-300 bg-rose-50/60 dark:border-rose-800 dark:bg-rose-950/30"
-          : "border-slate-200 dark:border-slate-700"
+          ? "border-rose-300 bg-rose-50/60 dark:border-rose-500/35 dark:bg-rose-950/30"
+          : "border-slate-200 dark:border-white/10"
       } ${className}`}
     >
       {children}

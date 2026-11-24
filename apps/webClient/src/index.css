@@ -255,6 +255,12 @@ body {
   border-color: rgb(148 163 184 / 0.11);
 }
 
+/* The Finny mobile sheet is inside the content stacking context, while the
+   sidebar FABs sit at the root; hide them so they don't float over the chat. */
+body.finny-sheet-open .finny-sheet-hide {
+  display: none;
+}
+
 .text-gradient-teal {
   background: linear-gradient(100deg, #5eead4 0%, #22d3ee 45%, #38bdf8 100%);
   -webkit-background-clip: text;

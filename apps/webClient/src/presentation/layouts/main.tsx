@@ -27,10 +27,10 @@ export default function MainLayout() {
               scroll instead of pushing this `<main>` past the right
               edge of the screen. `flex-1` does NOT set `min-width`;
               it has to be declared explicitly. */}
-            {/* The extra bottom padding clears the two mobile floating
-              buttons (quick-add + menu) so they never sit on top of the
-              last form field on a page. */}
-            <main className="min-w-0 flex-1 px-4 pt-4 pb-[calc(max(env(safe-area-inset-bottom),1rem)_+_6.5rem)] md:p-6">
+            {/* The extra bottom padding clears the floating buttons: the
+              mobile stack (Finny + quick-add + menu) and, from md to xl,
+              the Finny launcher on its own. */}
+            <main className="min-w-0 flex-1 px-4 pt-4 pb-[calc(max(env(safe-area-inset-bottom),1rem)_+_12rem)] md:pb-24 md:pt-6 md:px-6 xl:p-6">
               <Outlet />
             </main>
           </MainContent>

@@ -175,7 +175,7 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
       <div className="space-y-4">
         <div className="space-y-2">
           <Label>{t("budgets.budgetType")}</Label>
-          <div className="grid grid-cols-2 gap-2 rounded-lg border border-slate-200 p-1 dark:border-slate-700">
+          <div className="grid grid-cols-2 gap-2 rounded-lg border border-slate-200 p-1 dark:border-white/10">
             <button
               type="button"
               data-testid="budget-type-spending"
@@ -313,7 +313,7 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
           ))}
         </div>
 
-        <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+        <div className="rounded-lg border border-slate-200 p-4 dark:border-white/10">
           <div className="flex items-center justify-between">
             <span className="font-medium">{totalLabel}</span>
             <span className="text-lg font-bold">{formattedTotal}</span>
