@@ -10,13 +10,19 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * disagree with its owner (dev had 2 such rows) and any future consumer that
  * trusted the column would inherit that lie.
  *
- * `up()` aligns the stale copies first (so a reader between steps sees
- * coherent data), then drops the default and the column. After this,
- * `user_settings.currency` is the single source of truth and `SUM(amount)`
- * is valid for every aggregate because all stored amounts share one unit.
+ * The whole forward migration is one `DROP COLUMN IF EXISTS`:
  *
- * Idempotent by design: the column-existence guard makes a re-run (or a DB
- * where the SQL was applied manually) a no-op instead of a hard failure.
+ * - Postgres drops the column's DEFAULT along with the column, so the
+ *   legacy `'USD'` default needs no separate statement.
+ * - TypeORM runs a migration inside one transaction, so no reader can
+ *   observe a backfilled value before the drop: aligning the copies first
+ *   would write rows nobody is able to read.
+ * - `IF EXISTS` is what makes a re-run (or a DB where the DDL was applied
+ *   manually) a no-op instead of a hard failure.
+ *
+ * `down()` restores the column from `user_settings`, so the revert is
+ * lossless: unlike the lossy rewrite in `1800000000001`, the value is
+ * derivable from the owner's profile.
  */
 export class UnifyBudgetCategoryCurrency1800000000011
   implements MigrationInterface
@@ -24,61 +30,36 @@ export class UnifyBudgetCategoryCurrency1800000000011
   name = 'UnifyBudgetCategoryCurrency1800000000011';
 
   public async up(qr: QueryRunner): Promise<void> {
-    const [{ exists }] = (await qr.query(
-      `SELECT EXISTS (
-         SELECT 1
-           FROM information_schema.columns
-          WHERE table_schema = 'bg_public'
-            AND table_name = 'budget_categories'
-            AND column_name = 'currency'
-       ) AS exists`,
-    )) as Array<{ exists: boolean }>;
-    if (!exists) return;
-
-    // 1. Align every category with the currency of the account that owns it.
-    //    Categories whose owner has no user_settings row are left as-is: the
-    //    column is dropped in step 3, so no value survives to be wrong.
-    await qr.query(`
-      UPDATE "bg_public"."budget_categories" AS bc
-         SET "currency" = us."currency"
-        FROM "bg_public"."budgets" AS b
-        JOIN "bg_public"."user_settings" AS us
-          ON us."userId" = b."userId"
-       WHERE bc."budgetId" = b."id"
-         AND bc."currency" <> us."currency"
-    `);
-
-    // 2. Drop the legacy 'USD' default: there is nothing left to default.
+    // No CASCADE on purpose: if someone attached a view or constraint to the
+    // column out of band, the migration should fail loudly, not delete it.
     await qr.query(
       `ALTER TABLE "bg_public"."budget_categories"
-         ALTER COLUMN "currency" DROP DEFAULT`,
-    );
-
-    // 3. Drop the column itself.
-    await qr.query(
-      `ALTER TABLE "bg_public"."budget_categories" DROP COLUMN "currency"`,
+         DROP COLUMN IF EXISTS "currency"`,
     );
   }
 
   public async down(qr: QueryRunner): Promise<void> {
-    // The value is derivable from the owner's profile, so restoring it is
-    // honest — unlike the lossy data rewrite in 1800000000001.
     await qr.query(
       `ALTER TABLE "bg_public"."budget_categories"
          ADD COLUMN IF NOT EXISTS "currency" "bg_public"."currency_enum"`,
     );
 
+    // A scalar subquery instead of `UPDATE ... FROM budgets ... JOIN
+    // user_settings`: `budgetId` is nullable in the initial schema (it never
+    // received a NOT NULL), so an orphan category would keep NULL and the
+    // `SET NOT NULL` below would abort the revert halfway. COALESCE gives
+    // that edge case the same 'USD' fallback the original column had.
     await qr.query(`
       UPDATE "bg_public"."budget_categories" AS bc
          SET "currency" = COALESCE(
-           us."currency",
+           (SELECT us."currency"
+              FROM "bg_public"."budgets" AS b
+              JOIN "bg_public"."user_settings" AS us
+                ON us."userId" = b."userId"
+             WHERE b."id" = bc."budgetId"),
            'USD'::"bg_public"."currency_enum"
          )
-        FROM "bg_public"."budgets" AS b
-        LEFT JOIN "bg_public"."user_settings" AS us
-          ON us."userId" = b."userId"
-       WHERE bc."budgetId" = b."id"
-         AND bc."currency" IS NULL
+       WHERE bc."currency" IS NULL
     `);
 
     await qr.query(

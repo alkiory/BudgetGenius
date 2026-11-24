@@ -113,8 +113,12 @@ export class UserSettingsService {
     // D1 guard: only an account without money can change its currency.
     // Re-sending the current value stays allowed (onboarding wizards PATCH
     // the whole settings object), so the check compares before counting.
-    const nextCurrency = dto.currency as SupportedCurrency | undefined;
-    if (nextCurrency && nextCurrency !== settings.currency) {
+    //
+    // Check-then-write window: a transaction inserted between the count and
+    // the save still slips through. Closing it would need a lock shared by
+    // every financial write; the exposure is one racing PATCH and the next
+    // write is the only thing affected, so it is documented and accepted.
+    if (dto.currency && dto.currency !== settings.currency) {
       const history = await this.repo.countFinancialHistory(userId);
       if (history > 0) {
         throw new ConflictException(CURRENCY_LOCKED_HAS_HISTORY);

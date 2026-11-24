@@ -141,4 +141,31 @@ describe('UserSettingsService — onboarding currency', () => {
     expect(repo.countFinancialHistory).toHaveBeenCalledWith(1);
     expect(repo.save).toHaveBeenCalledTimes(1);
   });
+
+  it('locks a user with money but no settings row yet (first PATCH cannot pick a unit)', async () => {
+    // Edge case: the guard must compare against the row the service is
+    // about to create (EUR), not skip because `settings` was undefined.
+    const repo = makeRepo(undefined, 1);
+    const service = buildService(repo);
+
+    await expect(
+      service.updateSettings(1, { currency: 'USD' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(repo.countFinancialHistory).toHaveBeenCalledWith(1);
+    expect(repo.save).not.toHaveBeenCalled();
+  });
+
+  it('accepts the seeded EUR default for a legacy user with money and no settings row', async () => {
+    // Same edge case, but the effective currency is already EUR, so the
+    // PATCH confirms the existing unit and must not 409.
+    const repo = makeRepo(undefined, 1);
+    const service = buildService(repo);
+
+    const saved = await service.updateSettings(1, { currency: 'EUR' });
+
+    expect(saved.currency).toBe('EUR');
+    expect(repo.countFinancialHistory).not.toHaveBeenCalled();
+    expect(repo.save).toHaveBeenCalledTimes(1);
+  });
 });
