@@ -27,6 +27,16 @@ export class CreateTransactionDto {
   amount: number;
 
   /**
+   * D2.2: optional explicit attribution to one of the caller's budget
+   * categories. When omitted, the server links the row only if exactly one
+   * spending category matches (date window + case-insensitive name).
+   * Incomes never carry an attribution.
+   */
+  @IsOptional()
+  @IsNumber()
+  budgetCategoryId?: number;
+
+  /**
    * Optional recurrence semantic — persisted when the row represents a
    * recurring income (e.g. "Monthly", "Bi-weekly"). Nullable so legacy
    * expense transactions remain unaffected. Mirrored on the update DTO.

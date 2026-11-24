@@ -15,6 +15,16 @@ import { ImportTransactionItemDto } from '../dto/import-transactions.dto';
 const roundToCents = (value: number): number =>
   Number(Number(value).toFixed(2));
 
+/**
+ * Calendar day (`YYYY-MM-DD`) of a DTO date. Transaction and budget dates are
+ * Postgres `date` columns, so the comparison must not depend on the server
+ * timezone: the ISO day the client sent is the day the user picked.
+ */
+const calendarDay = (value: Date | string): string =>
+  typeof value === 'string'
+    ? value.slice(0, 10)
+    : value.toISOString().slice(0, 10);
+
 @Injectable()
 export class TransactionService {
   constructor(
@@ -29,11 +39,19 @@ export class TransactionService {
     // `findByUser` throws NotFoundException if user doesn't exist, so no need for a null check
     const user = await this.transactionRepo.findByUser(userId);
 
+    const budgetCategoryId = await this.resolveBudgetCategoryId(userId, {
+      date: dto.date,
+      category: dto.category,
+      amount: dto.amount,
+      explicitId: dto.budgetCategoryId,
+    });
+
     // Normalize `recurrence` so the built object fully satisfies the entity's
     // nullable column contract — `Omit<Transaction, 'id'>` requires the field
     // (it can be `null`, but not `undefined`).
     const transaction = {
       ...dto,
+      budgetCategoryId,
       amount: roundToCents(dto.amount),
       recurrence: dto.recurrence ?? null,
       user: { id: user.id } as User,
@@ -54,6 +72,9 @@ export class TransactionService {
       recurrence: item.recurrence ?? null,
     }));
     await this.transactionRepo.createMany(normalized, userId);
+    // D2.2: imports bypass the per-row resolver for speed; one set-based
+    // UPDATE links every inserted row that has exactly one candidate.
+    await this.transactionRepo.linkUnambiguousBudgetCategories(userId);
     return { created: normalized.length };
   }
 
@@ -94,6 +115,16 @@ export class TransactionService {
     // Verify user exists - `findByUser` throws NotFoundException if not
     await this.transactionRepo.findByUser(userId);
 
+    // D2.2: re-resolve the attribution from the values being saved. Editing
+    // an expense into income (or into another category/day) must not keep a
+    // link that no longer describes the row.
+    const budgetCategoryId = await this.resolveBudgetCategoryId(userId, {
+      date: dto.date,
+      category: dto.category,
+      amount: dto.amount,
+      explicitId: dto.budgetCategoryId,
+    });
+
     // `recurrence` is intentionally NOT seeded separately — the repo's
     // destructured-undefined guard preserves the existing value when the
     // dto omits the field (matches the partial-update contract on the
@@ -102,6 +133,7 @@ export class TransactionService {
     // called with a foreign id, the SQL will refuse it.
     const transaction = {
       ...dto,
+      budgetCategoryId,
       ...(typeof dto.amount === 'number'
         ? { amount: roundToCents(dto.amount) }
         : {}),
@@ -110,6 +142,50 @@ export class TransactionService {
     };
     return this.transactionRepo.update(transaction, userId);
   }
+  /**
+   * D2.2: decides the `budgetCategoryId` frozen with the row.
+   *
+   * - incomes (`amount >= 0`) never carry an attribution, even if a client
+   *   sends one — they cannot consume a spending limit;
+   * - an explicit id must belong to the caller (404 otherwise, without
+   *   leaking whether it exists for somebody else);
+   * - otherwise the server links only an unambiguous match (exactly one
+   *   spending category for that day and name). Ambiguous rows stay `NULL`
+   *   and readers keep the legacy window + name fallback.
+   */
+  private async resolveBudgetCategoryId(
+    userId: number,
+    input: {
+      date: Date | string;
+      category: string;
+      amount: number;
+      explicitId?: number;
+    },
+  ): Promise<number | null> {
+    if (input.amount >= 0) {
+      return null;
+    }
+
+    if (input.explicitId !== undefined && input.explicitId !== null) {
+      const owned = await this.transactionRepo.findOwnedBudgetCategoryId(
+        input.explicitId,
+        userId,
+      );
+      if (owned === null) {
+        throw new NotFoundException(
+          `Budget category ${input.explicitId} not found`,
+        );
+      }
+      return owned;
+    }
+
+    return this.transactionRepo.findUniqueBudgetCategoryId({
+      userId,
+      day: calendarDay(input.date),
+      category: input.category,
+    });
+  }
+
   async deleteTransaction(
     transactionId: number,
     userId: number,

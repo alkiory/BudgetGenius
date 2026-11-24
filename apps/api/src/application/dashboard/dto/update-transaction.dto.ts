@@ -26,6 +26,15 @@ export class UpdateTransactionDto {
   amount: number;
 
   /**
+   * Same contract as the create DTO: omitted = the server re-resolves the
+   * attribution from the new date/category/amount; explicit = must belong
+   * to the caller. Incomes always end up unlinked.
+   */
+  @IsOptional()
+  @IsNumber()
+  budgetCategoryId?: number;
+
+  /**
    * Optional recurrence — same semantics as the create DTO. Omitted = no
    * change on update (existing value is preserved); explicit `null` clears
    * it (handled by the repo layer).

@@ -1,4 +1,6 @@
 import { Transaction } from '@domain/dashboard/transaction.entity';
+import { Budget } from '@domain/dashboard/budget.entity';
+import { BudgetCategory } from '@domain/dashboard/budget-category.entity';
 import { User } from '@domain/user/user.entity';
 import {
   Injectable,
@@ -13,6 +15,8 @@ export class TransactionRepository {
   constructor(
     @InjectRepository(Transaction)
     private readonly repo: Repository<Transaction>,
+    @InjectRepository(BudgetCategory)
+    private readonly categoryRepo: Repository<BudgetCategory>,
   ) {}
 
   async create(
@@ -47,6 +51,91 @@ export class TransactionRepository {
     );
   }
 
+  /**
+   * D2.2 — the single **spending** budget category this expense belongs to,
+   * or `null` when there are zero or several candidates.
+   *
+   * Candidates are the caller's spending budgets whose window contains the
+   * transaction day and whose category name matches case-insensitively.
+   * Savings budgets are excluded on purpose: they are manual goals and never
+   * consume transactions. Returning `null` on ambiguity is intentional —
+   * guessing would freeze a wrong attribution that later reads trust.
+   */
+  async findUniqueBudgetCategoryId({
+    userId,
+    day,
+    category,
+  }: {
+    userId: number;
+    day: string;
+    category: string;
+  }): Promise<number | null> {
+    const rows = await this.categoryRepo
+      .createQueryBuilder('bc')
+      .innerJoin(Budget, 'b', 'b.id = bc."budgetId"')
+      .select('bc.id', 'id')
+      .where('b."userId" = :userId', { userId })
+      .andWhere("b.type = 'spending'")
+      .andWhere('CAST(:day AS date) BETWEEN b."startDate" AND b."endDate"', {
+        day,
+      })
+      .andWhere('LOWER(bc.name) = LOWER(:category)', { category })
+      .limit(2)
+      .getRawMany<{ id: number }>();
+    return rows.length === 1 ? Number(rows[0].id) : null;
+  }
+
+  /** Ownership check for an explicitly chosen budget category. */
+  async findOwnedBudgetCategoryId(
+    categoryId: number,
+    userId: number,
+  ): Promise<number | null> {
+    const row = await this.categoryRepo
+      .createQueryBuilder('bc')
+      .innerJoin(Budget, 'b', 'b.id = bc."budgetId"')
+      .select('bc.id', 'id')
+      .where('bc.id = :categoryId', { categoryId })
+      .andWhere('b."userId" = :userId', { userId })
+      .getRawOne<{ id: number }>();
+    return row ? Number(row.id) : null;
+  }
+
+  /**
+   * D2.2 catch-up linker for write paths that insert many rows at once
+   * (imports). Runs one set-based UPDATE and only links rows that are still
+   * `NULL` and have exactly one spending candidate. Returns how many rows
+   * received a link.
+   */
+  async linkUnambiguousBudgetCategories(userId: number): Promise<number> {
+    const rows: Array<{ id: number }> = await this.repo.query(
+      `WITH candidates AS (
+         SELECT t."id" AS "transactionId",
+                COUNT(bc."id") AS "matches",
+                MIN(bc."id") AS "budgetCategoryId"
+           FROM "bg_public"."transactions" AS t
+           JOIN "bg_public"."budgets" AS b
+             ON b."userId" = t."userId"
+            AND b."type" = 'spending'
+            AND t."date" BETWEEN b."startDate" AND b."endDate"
+           JOIN "bg_public"."budget_categories" AS bc
+             ON bc."budgetId" = b."id"
+            AND lower(bc."name") = lower(t."category")
+          WHERE t."userId" = $1
+            AND t."budgetCategoryId" IS NULL
+            AND t."amount" < 0
+          GROUP BY t."id"
+       )
+       UPDATE "bg_public"."transactions" AS t
+          SET "budgetCategoryId" = c."budgetCategoryId"
+         FROM candidates AS c
+        WHERE c."transactionId" = t."id"
+          AND c."matches" = 1
+       RETURNING t."id" AS id`,
+      [userId],
+    );
+    return rows.length;
+  }
+
   async findByUser(userId: number): Promise<User> {
     const userRepo = this.repo.manager.getRepository(User);
     const user = await userRepo.findOne({
@@ -74,7 +163,15 @@ export class TransactionRepository {
     data: Partial<Transaction> & { id: number },
     userId: number,
   ): Promise<Transaction> {
-    const { id, date, description, category, amount, recurrence } = data;
+    const {
+      id,
+      date,
+      description,
+      category,
+      amount,
+      recurrence,
+      budgetCategoryId,
+    } = data;
     // findOneOrFail with the userId where-clause: throws
     // EntityNotFoundError if the row does not belong to the user — the
     // service layer lets this bubble up wrapped as NotFoundException so
@@ -94,6 +191,12 @@ export class TransactionRepository {
     // would coerce it to null and silently wipe an existing recurrence.
     if (recurrence !== undefined) {
       transaction.recurrence = recurrence;
+    }
+    // D2.2: the service always sends the key (number or null), so an update
+    // that turns an expense into income clears a stale attribution instead
+    // of keeping it silently.
+    if (budgetCategoryId !== undefined) {
+      transaction.budgetCategoryId = budgetCategoryId;
     }
     await this.repo.save(transaction);
     return transaction;

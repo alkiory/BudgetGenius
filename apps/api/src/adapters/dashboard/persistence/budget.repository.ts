@@ -76,17 +76,39 @@ export class BudgetRepository {
 
   /**
    * Sum of expense transactions per budget and category, across every
-   * budget owned by the user. Each transaction is matched to a budget by
-   * the budget's date window, and to a category by a case-insensitive
-   * `transactions.category = budget_categories.name` comparison.
+   * budget owned by the user.
    *
-   * Runs as one grouped query instead of per-category round-trips; the
-   * service merges the result with each category's manual baseline.
+   * Two disjoint sources, merged by `(budgetId, category)`:
+   *
+   * 1. **Linked rows** (D2.2, `budgetCategoryId` set): summed through the
+   *    FK, so the attribution is frozen even if the category is renamed or
+   *    the window edited later. Spending budgets only.
+   * 2. **Legacy rows** (`budgetCategoryId IS NULL`): the pre-D2.2 window +
+   *    case-insensitive name match, unchanged, so unlinked history keeps
+   *    reading exactly as before.
+   *
+   * The legacy query excludes linked rows, so a transaction is never counted
+   * twice even when its text still matches another category. The service
+   * merges the result with each category's manual baseline.
    */
   async sumExpenseAmountsByBudget(
     userId: number,
   ): Promise<Array<{ budgetId: number; category: string; total: number }>> {
-    const rows = await this.transactionRepo
+    const linked = await this.transactionRepo
+      .createQueryBuilder('t')
+      .innerJoin(BudgetCategory, 'bc', 'bc.id = t."budgetCategoryId"')
+      .innerJoin(Budget, 'b', 'b.id = bc."budgetId"')
+      .select('b.id', 'budgetId')
+      .addSelect('LOWER(bc.name)', 'category')
+      .addSelect('SUM(ABS(t.amount))', 'total')
+      .where('t."userId" = :userId', { userId })
+      .andWhere('t.amount < 0')
+      .andWhere("b.type = 'spending'")
+      .groupBy('b.id')
+      .addGroupBy('LOWER(bc.name)')
+      .getRawMany<{ budgetId: string; category: string; total: string }>();
+
+    const legacy = await this.transactionRepo
       .createQueryBuilder('t')
       // Quote the camelCase FK/date columns explicitly: QueryBuilder's
       // property replacer does not know `userId` (it is not a mapped
@@ -102,15 +124,33 @@ export class BudgetRepository {
       .addSelect('SUM(ABS(t.amount))', 'total')
       .where('t."userId" = :userId', { userId })
       .andWhere('t.amount < 0')
+      .andWhere('t."budgetCategoryId" IS NULL')
+      .andWhere("b.type = 'spending'")
       .groupBy('b.id')
       .addGroupBy('LOWER(t.category)')
       .getRawMany<{ budgetId: string; category: string; total: string }>();
 
-    return rows.map((row) => ({
-      budgetId: Number(row.budgetId),
-      category: (row.category ?? '').toLowerCase(),
-      total: Number(row.total) || 0,
-    }));
+    const totals = new Map<
+      string,
+      { budgetId: number; category: string; total: number }
+    >();
+    for (const row of [...linked, ...legacy]) {
+      const budgetId = Number(row.budgetId);
+      const category = (row.category ?? '').toLowerCase();
+      const key = `${budgetId}|${category}`;
+      const current = totals.get(key);
+      if (current) {
+        current.total += Number(row.total) || 0;
+      } else {
+        totals.set(key, {
+          budgetId,
+          category,
+          total: Number(row.total) || 0,
+        });
+      }
+    }
+
+    return [...totals.values()];
   }
 
   async findByUser(userId: number): Promise<Budget[]> {
