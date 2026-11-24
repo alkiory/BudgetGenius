@@ -26,10 +26,14 @@ export class BudgetRepository {
   }
 
   /**
-   * D2.1: first budget of the user whose date window intersects
-   * `[startDate, endDate]`, or `null`. Both ends are inclusive, matching
-   * the `BETWEEN` used to attribute transactions — two budgets that share
-   * a single day would count the same expense twice.
+   * D2.1: first budget of the user **of the given type** whose date window
+   * intersects `[startDate, endDate]`, or `null`. Both ends are inclusive,
+   * matching the `BETWEEN` used to attribute transactions — two spending
+   * budgets that share a single day would count the same expense twice.
+   *
+   * The type scope is what keeps savings goals usable: they are manual
+   * targets that never consume transactions, so they may share a window
+   * with a spending budget (or with another goal) without double counting.
    *
    * `excludeBudgetId` lets an update ignore the row being edited, so a
    * budget never conflicts with itself. No relations are loaded: the
@@ -39,11 +43,13 @@ export class BudgetRepository {
     userId: number,
     startDate: Date,
     endDate: Date,
+    type: Budget['type'],
     excludeBudgetId?: number,
   ): Promise<Budget | null> {
     const [overlapping] = await this.repo.find({
       where: {
         user: { id: userId },
+        type,
         startDate: LessThanOrEqual(endDate),
         endDate: MoreThanOrEqual(startDate),
         ...(excludeBudgetId !== undefined

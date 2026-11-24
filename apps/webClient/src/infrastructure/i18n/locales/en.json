@@ -538,7 +538,9 @@
     },
     "theme": {
         "light": "Light",
-        "dark": "Dark"
+        "dark": "Dark",
+        "switchToDark": "Switch to dark mode",
+        "switchToLight": "Switch to light mode"
     },
     "sidebar": {
         "investments": "Investments",

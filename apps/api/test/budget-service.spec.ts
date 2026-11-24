@@ -975,9 +975,35 @@ describe('BudgetService', () => {
         1,
         dto.startDate,
         dto.endDate,
+        'spending',
         undefined,
       );
       expect(repo.createBudget).not.toHaveBeenCalled();
+    });
+
+    it('allows a savings goal to overlap an existing spending budget', async () => {
+      // Savings goals are manual targets: they never consume transactions,
+      // so an overlap cannot double-count anything. The user's monthly goal
+      // must not be blocked by a long-running spending budget.
+      userRepo.findById.mockResolvedValue({ ...mockUser, budgets: [] });
+      repo.createBudget.mockResolvedValue(buildBudget({ type: 'savings' }));
+
+      const dto = {
+        name: 'Savings goal',
+        period: 'Monthly',
+        type: 'savings' as const,
+        startDate: new Date('2026-06-15'),
+        endDate: new Date('2026-07-15'),
+        totalAllocated: 222,
+        categories: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await service.createBudget(1, dto);
+
+      expect(repo.findOverlapping).not.toHaveBeenCalled();
+      expect(repo.createBudget).toHaveBeenCalledTimes(1);
     });
 
     it('creates the budget when its window is free', async () => {
@@ -1024,6 +1050,52 @@ describe('BudgetService', () => {
         1,
         startDate,
         endDate,
+        'spending',
+        1,
+      );
+      expect(repo.updateBudget).not.toHaveBeenCalled();
+    });
+
+    it('does not enforce the exclusive window when a savings goal changes dates', async () => {
+      const existing = buildBudget({ id: 1, type: 'savings' });
+      repo.findById.mockResolvedValue(existing);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [existing],
+      });
+      repo.updateBudget.mockResolvedValue(existing);
+
+      await service.updateBudget(1, {
+        id: 1,
+        startDate: new Date('2026-06-10'),
+        endDate: new Date('2026-06-20'),
+      });
+
+      expect(repo.findOverlapping).not.toHaveBeenCalled();
+      expect(repo.updateBudget).toHaveBeenCalledTimes(1);
+    });
+
+    it('validates the window when a savings goal becomes a spending budget', async () => {
+      // The dates did not move, but the same window is now exclusive.
+      const existing = buildBudget({ id: 1, type: 'savings' });
+      repo.findById.mockResolvedValue(existing);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [existing],
+      });
+      repo.findOverlapping.mockResolvedValue(overlappingBudget());
+      repo.updateBudget.mockResolvedValue(existing);
+
+      const err = await service
+        .updateBudget(1, { id: 1, type: 'spending' })
+        .catch((e) => e);
+
+      expect(err).toBeInstanceOf(ConflictException);
+      expect(repo.findOverlapping).toHaveBeenCalledWith(
+        1,
+        existing.startDate,
+        existing.endDate,
+        'spending',
         1,
       );
       expect(repo.updateBudget).not.toHaveBeenCalled();
@@ -1115,6 +1187,7 @@ describe('BudgetService', () => {
         1,
         existing.startDate,
         newEnd,
+        'spending',
         1,
       );
       expect(repo.updateBudget).toHaveBeenCalledTimes(1);

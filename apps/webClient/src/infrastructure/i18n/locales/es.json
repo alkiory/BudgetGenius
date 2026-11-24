@@ -538,7 +538,9 @@
   },
   "theme": {
     "light": "Claro",
-    "dark": "Oscuro"
+    "dark": "Oscuro",
+    "switchToDark": "Cambiar a modo oscuro",
+    "switchToLight": "Cambiar a modo claro"
   },
   "sidebar": {
     "investments": "Inversiones",

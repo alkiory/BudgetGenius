@@ -29,10 +29,10 @@ const roundMoney = (value: number): number =>
 
 /**
  * D2.1: stable, client-mappable message for overlapping budget windows.
- * Transactions are attributed to a budget by date window, so two
- * overlapping budgets would count the same expense twice. Clients can
- * match this string to show a translated explanation; changing it is a
- * breaking change.
+ * Transactions are attributed to a spending budget by date window, so two
+ * overlapping **spending** budgets would count the same expense twice.
+ * Savings goals are manual and exempt. Clients can match this string to
+ * show a translated explanation; changing it is a breaking change.
  */
 export const BUDGET_WINDOW_OVERLAP =
   'Budget dates overlap an existing budget';
@@ -76,10 +76,19 @@ export class BudgetService {
       );
     }
 
-    // D2.1: refuse a window that intersects an existing budget. The check
-    // runs before anything is written, so a rejected request leaves no
-    // budget behind.
-    await this.assertNoBudgetOverlap(userId, dto.startDate, dto.endDate);
+    // D2.1: refuse a window that intersects an existing **spending**
+    // budget. Savings goals are manual targets and never claim
+    // transactions, so they may share a window (with a spending budget or
+    // with another goal) without double counting. The check runs before
+    // anything is written, so a rejected request leaves no budget behind.
+    if (budgetType === 'spending') {
+      await this.assertNoBudgetOverlap(
+        userId,
+        dto.startDate,
+        dto.endDate,
+        budgetType,
+      );
+    }
 
     const categories = dto.categories?.map((category) => {
       // A brand-new category starts from its manual baseline (normally 0);
@@ -374,9 +383,12 @@ export class BudgetService {
     // edit must not be blocked by data this change did not write.
     const startDate = dto.startDate ?? existing.startDate;
     const endDate = dto.endDate ?? existing.endDate;
+    const existingType = existing.type ?? 'spending';
+    const budgetType = dto.type ?? existingType;
     const windowChanged =
       calendarDay(startDate) !== calendarDay(existing.startDate) ||
       calendarDay(endDate) !== calendarDay(existing.endDate);
+    const typeChanged = budgetType !== existingType;
 
     if (windowChanged) {
       if (calendarDay(endDate) < calendarDay(startDate)) {
@@ -384,8 +396,19 @@ export class BudgetService {
           `End date ${calendarDay(endDate)} cannot be less than start date ${calendarDay(startDate)}`,
         );
       }
+    }
 
-      await this.assertNoBudgetOverlap(userId, startDate, endDate, dto.id);
+    // D2.1: only spending budgets own an exclusive window. The check also
+    // runs when the type itself changes (savings → spending) because the
+    // same dates can become invalid under the new semantics.
+    if (budgetType === 'spending' && (windowChanged || typeChanged)) {
+      await this.assertNoBudgetOverlap(
+        userId,
+        startDate,
+        endDate,
+        budgetType,
+        dto.id,
+      );
     }
 
     const updatedCategories = dto.categories?.map((category) => {
@@ -453,12 +476,14 @@ export class BudgetService {
     userId: number,
     startDate: Date,
     endDate: Date,
+    type: Budget['type'],
     excludeBudgetId?: number,
   ): Promise<void> {
     const overlapping = await this.repo.findOverlapping(
       userId,
       startDate,
       endDate,
+      type,
       excludeBudgetId,
     );
     if (overlapping) {
