@@ -133,7 +133,36 @@
     },
     "dashboard": {
         "title": "Dashboard",
-        "welcomeBack": "Welcome back, {{name}}! Here's an overview of your finances.",
+        "welcomeBack": "Welcome back, <highlight>{{name}}</highlight>! {{greeting}}",
+        "greetings": {
+            "morning": [
+                "It's a great day to review your finances.",
+                "Start your morning with your accounts up to date.",
+                "A quick check now brings peace of mind all day.",
+                "Good morning, let's see how your goals are progressing today.",
+                "New morning, new opportunities to save.",
+                "Begin the day with clarity on your budget.",
+                "Grab a coffee and take a quick look at your numbers."
+            ],
+            "afternoon": [
+                "A coffee for this afternoon or early evening.",
+                "How is your budget looking so far today?",
+                "Great time this afternoon to catch up on your expenses.",
+                "Take a short break and check today's balance.",
+                "Your afternoon summary is ready for you.",
+                "Stay on track with your goals before the day wraps up.",
+                "A quick afternoon review keeps everything under control."
+            ],
+            "night": [
+                "Wrap up the day by checking how your finances moved.",
+                "Good evening, here is the summary of your day.",
+                "Before winding down, take a quick look at your balance.",
+                "A quiet evening moment to plan for tomorrow.",
+                "Everything is ready to close out your numbers for the day.",
+                "Review your latest transactions and rest easy.",
+                "Evening is a great time to fine-tune your savings goals."
+            ]
+        },
         "overview": "Financial Overview",
         "recentTransactions": "Recent Transactions",
         "budgetProgress": "Budget Progress",

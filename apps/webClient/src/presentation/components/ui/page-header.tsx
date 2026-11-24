@@ -3,7 +3,7 @@ import { Skeleton } from "./skeleton";
 
 interface PageHeaderProps {
   title: string;
-  description?: string;
+  description?: ReactNode;
   children?: ReactNode;
 }
 

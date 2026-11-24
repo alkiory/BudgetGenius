@@ -16,8 +16,9 @@ import {
   currencyService,
   toCurrency,
 } from "@presentation/utils/currencyService";
-import { useEffect } from "react";
-import { useTranslation } from "react-i18next";
+import { getTimeOfDay, pickRandomGreeting } from "@presentation/utils/greeting";
+import { useEffect, useMemo } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 
 export default function DashboardPage() {
@@ -91,6 +92,18 @@ export default function DashboardPage() {
     }
   }, [dispatch, user, userSettings]);
 
+  const timeOfDay = useMemo(() => getTimeOfDay(), []);
+  const greetingSeed = useMemo(() => Math.random(), []);
+  const welcomeGreeting = useMemo(() => {
+    const candidates = t(`dashboard.greetings.${timeOfDay}`, {
+      returnObjects: true,
+    });
+    const messages = Array.isArray(candidates)
+      ? candidates.filter((item): item is string => typeof item === "string")
+      : [];
+    return pickRandomGreeting(messages, () => greetingSeed);
+  }, [t, timeOfDay, greetingSeed]);
+
   if (isLoading || isloadingExpenseCat) {
     return <DashboardLoading />;
   }
@@ -99,7 +112,20 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title={t("dashboard.title")}
-        description={t("dashboard.welcomeBack", { name: user?.name })}
+        description={
+          <Trans
+            i18nKey="dashboard.welcomeBack"
+            values={{
+              name: user?.name ?? "",
+              greeting: welcomeGreeting,
+            }}
+            components={{
+              highlight: (
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400" />
+              ),
+            }}
+          />
+        }
       />
 
       <OverviewCard

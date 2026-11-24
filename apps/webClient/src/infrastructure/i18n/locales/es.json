@@ -133,7 +133,36 @@
   },
   "dashboard": {
     "title": "Panel de Control",
-    "welcomeBack": "¡Bienvenido de nuevo, {{name}}! Aquí tienes un resumen de tus finanzas.",
+    "welcomeBack": "¡Bienvenido de nuevo, <highlight>{{name}}</highlight>! {{greeting}}",
+    "greetings": {
+      "morning": [
+        "Es un buen día para revisar tus finanzas.",
+        "Arranca la mañana con tus cuentas al día.",
+        "Un vistazo rápido ahora te da tranquilidad todo el día.",
+        "Buenos días, veamos cómo avanzan tus metas hoy.",
+        "Nueva mañana, nuevas oportunidades para ahorrar.",
+        "Empieza el día con claridad sobre tu presupuesto.",
+        "Un café y un repaso rápido a tus números."
+      ],
+      "afternoon": [
+        "Un café para esta tarde o anochecer.",
+        "¿Cómo va tu presupuesto en lo que va del día?",
+        "Buen momento de la tarde para poner tus gastos al día.",
+        "Haz una pausa breve y revisa tu balance de hoy.",
+        "Tu resumen de la tarde está listo para ti.",
+        "Mantén el rumbo de tus metas antes de que termine el día.",
+        "Un repaso rápido esta tarde mantiene todo bajo control."
+      ],
+      "night": [
+        "Cierra el día revisando cómo se movieron tus finanzas.",
+        "Buenas noches, aquí tienes el resumen de tu jornada.",
+        "Antes de descansar, échale un ojo a tu balance.",
+        "Un momento tranquilo de la noche para planificar mañana.",
+        "Todo listo para cerrar tus cuentas del día.",
+        "Revisa tus últimos movimientos y descansa tranquilo.",
+        "La noche es ideal para ajustar tus metas de ahorro."
+      ]
+    },
     "recentTransactions": "Transacciones Recientes",
     "budgetProgress": "Progreso del Presupuesto",
     "expenseBreakdown": "Desglose de Gastos",
