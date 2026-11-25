@@ -94,11 +94,23 @@ jobs:
             prerelease="true"
           fi
 
+          # Android install metadata from the released version: v1.11.0 ->
+          # 11100, so every release is installable over the previous one.
+          base="${version%%-*}"
+          IFS=. read -r vmajor vminor vpatch <<< "$base"
+          vpatch="${vpatch:-0}"
+          if ! [[ "$vmajor" =~ ^[0-9]+$ && "$vminor" =~ ^[0-9]+$ && "$vpatch" =~ ^[0-9]+$ ]]; then
+            echo "::error::Cannot derive an Android versionCode from '${version}'."
+            exit 1
+          fi
+          version_code=$((10#$vmajor * 10000 + 10#$vminor * 100 + 10#$vpatch))
+
           {
             echo "version=${version}"
             echo "tag=${tag}"
             echo "publish=${publish}"
             echo "prerelease=${prerelease}"
+            echo "version_code=${version_code}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Setup Java 21
@@ -107,6 +119,38 @@ jobs:
         with:
           java-version: "21"
           distribution: "temurin"
+
+      # ── Release signing material ──────────────────────────────────────────
+      # `KEYSTORE_BASE64` is decoded outside the repo (and outside git) into
+      # $RUNNER_TEMP, then validated with keytool so a wrong password / alias
+      # fails here with a clear message instead of deep inside Gradle. The
+      # secrets reach Gradle through env vars set on the build step only.
+      - name: Decode release keystore
+        if: steps.release.outputs.publish == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Repository secret ${name} is not set — the release APK cannot be signed."
+              exit 1
+            fi
+          done
+
+          keystore="${RUNNER_TEMP}/budgetgenius-release.keystore"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+
+          if ! keytool -list -keystore "$keystore" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>&1; then
+            echo "::error::The keystore does not open with KEYSTORE_PASSWORD + KEY_ALIAS. Re-encode the .jks and re-store the secrets."
+            exit 1
+          fi
+
+          echo "::notice::Release keystore decoded and validated for alias ${KEY_ALIAS}."
 
       - name: Setup Android SDK
         if: steps.release.outputs.publish == 'true'
@@ -185,20 +229,70 @@ jobs:
           python3 -c "import json; json.load(open('apps/mobile/android/app/google-services.json'))" \
             || (echo "::error::FIREBASE_SERVICES_BASE64 decoded but is not valid JSON — re-base64 the source file and re-store the secret." && exit 1)
 
-      - name: Build debug APK
+      - name: Build signed release APK
         if: steps.release.outputs.publish == 'true'
         working-directory: apps/mobile/android
-        run: ./gradlew assembleDebug --no-daemon
+        env:
+          BG_KEYSTORE_FILE: ${{ runner.temp }}/budgetgenius-release.keystore
+          BG_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          BG_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          BG_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          BG_VERSION_CODE: ${{ steps.release.outputs.version_code }}
+          BG_VERSION_NAME: ${{ steps.release.outputs.version }}
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Rename APK to canonical release filename
         if: steps.release.outputs.publish == 'true'
         run: |
-          mv apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk \
-             "BudgetGenius-${{ steps.release.outputs.tag }}.apk"
+          set -euo pipefail
+          apk="apps/mobile/android/app/build/outputs/apk/release/app-release.apk"
+          test -f "$apk" || { echo "::error::assembleRelease produced no app-release.apk — check that the signing config was applied."; exit 1; }
+          mv "$apk" "BudgetGenius-${{ steps.release.outputs.tag }}.apk"
           # Stable alias: `releases/latest/download/BudgetGenius.apk` is what the
           # landing download button points at, so it always serves the newest
           # stable build without editing an env var or redeploying the site.
           cp "BudgetGenius-${{ steps.release.outputs.tag }}.apk" BudgetGenius.apk
+
+      # Publishing an unsigned or debug-signed file by accident is worse than
+      # failing the pipeline: verify the artifact really carries the release key.
+      - name: Verify APK signature
+        if: steps.release.outputs.publish == 'true'
+        env:
+          # Optional pin: when the secret is set, an APK signed by any other
+          # keystore is refused. Leave it unset (or empty) to skip the check.
+          EXPECTED_CERT_SHA256: ${{ secrets.RELEASE_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          apk="BudgetGenius-${{ steps.release.outputs.tag }}.apk"
+          sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          apksigner="${sdk}/build-tools/35.0.0/apksigner"
+          test -x "$apksigner" || { echo "::error::apksigner not found under ${sdk}/build-tools/35.0.0."; exit 1; }
+
+          "$apksigner" verify "$apk"
+          certs=$("$apksigner" verify --print-certs "$apk")
+          if grep -q "CN=Android Debug" <<<"$certs"; then
+            echo "::error::The APK is debug-signed — refusing to publish it."
+            exit 1
+          fi
+
+          # `Signer #1 certificate SHA-256 digest: AA:BB:…` -> lowercase hex.
+          actual=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<<"$certs" \
+                     | tr -d ': \r\n' | tr 'A-F' 'a-f')
+          [[ -n "$actual" ]] \
+            || { echo "::error::Could not read the signing certificate SHA-256 from apksigner."; exit 1; }
+
+          expected=$(printf '%s' "${EXPECTED_CERT_SHA256:-}" | tr -d ': \r\n' | tr 'A-F' 'a-f')
+          if [[ -n "$expected" ]]; then
+            if [[ "$actual" != "$expected" ]]; then
+              echo "::error::APK signed with ${actual} but RELEASE_CERT_SHA256 pins ${expected} — wrong keystore, refusing to publish."
+              exit 1
+            fi
+            echo "::notice::Signing certificate matches RELEASE_CERT_SHA256."
+          else
+            echo "::notice::RELEASE_CERT_SHA256 is not set; publishing without the certificate pin (actual ${actual})."
+          fi
+
+          grep -E "certificate DN|certificate SHA-256" <<<"$certs" || true
 
       # ── Compose the release description from the changelog ───────────────
       # `knowledge.md` §16.2 makes one `## [vX.Y.Z]` section per release
@@ -244,10 +338,10 @@ jobs:
             printf '   apps and grant permission to the file manager you used.\n'
             printf '4. Tap Install. BudgetGenius is ready.\n\n'
             printf '## Notes\n\n'
-            printf -- '- This APK is signed with the standard Android debug keystore\n'
-            printf '  (same certificate as every development install). It is fine\n'
-            printf '  for personal use; a properly-signed APK will follow when the\n'
-            printf '  Play Store rollout is ready.\n'
+            printf -- '- This APK is signed with the BudgetGenius release key and\n'
+            printf '  carries the version of this release, so it installs over\n'
+            printf '  earlier releases. Builds signed with the old debug key must\n'
+            printf '  be uninstalled once before installing this one.\n'
             printf -- '- iOS — coming soon.\n'
           } >> "$notes"
 

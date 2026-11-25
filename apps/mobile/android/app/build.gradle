@@ -1,5 +1,22 @@
 apply plugin: 'com.android.application'
 
+// Version defaults for local builds; the release workflow overrides both from
+// the tag being published (v1.11.0 -> versionCode 11100).
+def bgVersionCodeRaw = System.getenv("BG_VERSION_CODE")?.trim()
+def bgVersionCode = (bgVersionCodeRaw?.isInteger() ? bgVersionCodeRaw.toInteger() : 11100)
+def bgVersionName = System.getenv("BG_VERSION_NAME")?.trim() ?: "1.11.0"
+
+// Release signing. The workflow decodes `KEYSTORE_BASE64` into $RUNNER_TEMP and
+// exports these four variables, so the store/key passwords never appear on the
+// Gradle command line (where they would leak into logs and process args).
+// Without them (local builds, PR artifacts) no signing config is registered and
+// `assembleRelease` stays unsigned instead of failing.
+def bgKeystoreFile = System.getenv("BG_KEYSTORE_FILE")
+def bgKeystorePassword = System.getenv("BG_KEYSTORE_PASSWORD")
+def bgKeyAlias = System.getenv("BG_KEY_ALIAS")
+def bgKeyPassword = System.getenv("BG_KEY_PASSWORD")
+def hasReleaseSigning = [bgKeystoreFile, bgKeystorePassword, bgKeyAlias, bgKeyPassword].every { it }
+
 android {
     namespace "com.budgetgenius.mobile"
     compileSdk rootProject.ext.compileSdkVersion
@@ -7,8 +24,8 @@ android {
         applicationId "com.budgetgenius.mobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10
-        versionName "1.10.0"
+        versionCode bgVersionCode
+        versionName bgVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +33,23 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(bgKeystoreFile)
+                storePassword bgKeystorePassword
+                keyAlias bgKeyAlias
+                keyPassword bgKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

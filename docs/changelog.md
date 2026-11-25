@@ -14,6 +14,7 @@
 ### Changed
 
 - **Typography** — Manrope (variable WOFF2 + OFL licence) is self-hosted from `apps/landing/src/assets/fonts` and `apps/webClient/src/assets/fonts`, replacing Google Fonts; the SPA no longer loads Google Fonts at all. Playfair Display styles only the landing hero `h1`, and every other landing section and the whole app render in Manrope, `CardDescription` included.
+- **Release-signed APK** — `.github/workflows/release-android.yml` decodes the `KEYSTORE_BASE64` secret into `$RUNNER_TEMP`, validates it with `keytool`, signs `assembleRelease` through `BG_*` environment variables (never the Gradle command line), checks the artifact with `apksigner`, optionally pins the signing certificate against the `RELEASE_CERT_SHA256` secret and publishes that APK instead of the debug build. `versionCode`/`versionName` are derived from the released tag (`v1.11.0` → `11100`), so each release installs over the previous one. `build-apk.yml` now only produces the debug artifact.
 - **Landing icon binding** — Features, Security, Download, Header and FAQ mark their containers with `data-icon-hover`, and `apps/landing/src/layouts/Base.astro` binds `mouseenter`/`mouseleave`/`focusin`/`focusout` immediately through a `WeakSet`, because waiting only on `customElements.whenDefined` left the listeners unbound on first paint. `prefers-reduced-motion` still disables every hover animation.
 
 ### Fixed
