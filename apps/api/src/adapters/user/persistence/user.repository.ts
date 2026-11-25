@@ -86,6 +86,16 @@ export class UserRepositoryImpl implements UserRepositoryPort {
     await this.repo.update(id, { refreshToken });
   }
 
+  /**
+   * Role-only update. Deliberately uses `repo.update` instead of
+   * `preload` + `save`: the entity's `@BeforeUpdate hashPassword` hook would
+   * re-hash the already-hashed column and lock the account out. No password
+   * is touched here, so skipping the hooks is the correct behaviour.
+   */
+  async setRole(id: number, role: string): Promise<void> {
+    await this.repo.update(id, { role });
+  }
+
   async updateUser(id: number, updateUserDto: Partial<UserDto>): Promise<User> {
     // `repo.preload({ id, ...partial })` reads the row, builds a User
     // entity instance with the partial MERGED on top of the loaded

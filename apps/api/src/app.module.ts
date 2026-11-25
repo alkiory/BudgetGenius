@@ -27,6 +27,7 @@ import { UserSettingsModule } from '@infrastructure/user/user-settings.module';
 import { FirebaseAuthMiddleware } from '@infrastructure/auth/firebase-auth.strategy';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TestController } from '@adapters/app.controller';
+import { SuperAdminModule } from '@infrastructure/superadmin/superadmin.module';
 
 @Module({
   imports: [
@@ -116,6 +117,7 @@ import { TestController } from '@adapters/app.controller';
     AiModule,
     DashboardModule,
     CoreModule,
+    SuperAdminModule,
   ],
   controllers: [AppController, UserController, TestController],
   providers: [

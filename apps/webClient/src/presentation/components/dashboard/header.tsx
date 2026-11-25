@@ -5,6 +5,7 @@ import { useSelector } from "react-redux";
 import { Link } from "react-router";
 import { ThemeToggle } from "../themeToogle";
 import { AddTransactionModal } from "./transaction/add-transaction-modal";
+import { SupportDevButton } from "./support-dev-button";
 
 export function DashboardHeader() {
   const { t } = useTranslation();
@@ -17,6 +18,7 @@ export function DashboardHeader() {
           <div className="hidden md:block" data-tour="quick-add">
             <AddTransactionModal isHeader />
           </div>
+          <SupportDevButton />
           <div className="ml-3">
             <ThemeToggle />
           </div>

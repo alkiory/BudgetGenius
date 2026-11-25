@@ -13,6 +13,10 @@ export class UserSeederService {
   ) {}
 
   async createDefaultUsers(): Promise<void> {
+    // The backoffice needs an operator in every environment, so this runs
+    // before the development-only gate below.
+    await this.ensureSuperAdmin();
+
     // QA-0.1 — the seeded accounts use a fixed, publicly-known password
     // (`#Password123`). `AppService.onModuleInit()` runs this in every
     // environment, so a production boot would silently ensure an admin
@@ -95,5 +99,64 @@ export class UserSeederService {
     } else {
       this.logger.log('🙆‍♂️ Users already exist!');
     }
+  }
+
+  /**
+   * Ensures a super admin exists.
+   *
+   * Credentials come from `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD`. In
+   * development they fall back to `superadmin@admin.com` / `#Password123` so
+   * the backoffice is reachable locally with no extra setup — the same
+   * demo-account convention the other seeded users follow. Production without
+   * both variables is a no-op: no fixed-password operator is ever created by
+   * accident.
+   *
+   * An existing account with that email is promoted in place instead of
+   * duplicated, so an operator can be granted the role after signing up
+   * normally.
+   */
+  private async ensureSuperAdmin(): Promise<void> {
+    const isDev = process.env.NODE_ENV === 'development';
+    const email = (
+      process.env.SUPERADMIN_EMAIL?.trim() ||
+      (isDev ? 'superadmin@admin.com' : '')
+    ).toLowerCase();
+    const password =
+      process.env.SUPERADMIN_PASSWORD || (isDev ? '#Password123' : '');
+
+    if (!email || !password) {
+      this.logger.log(
+        '🛡️ Superadmin seeder skipped — set SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD to enable the backoffice',
+      );
+      return;
+    }
+
+    const existing = await this.userRepository.findByEmail(email);
+    if (existing) {
+      if (existing.role !== 'superadmin') {
+        // `setRole` avoids the entity password hook (see its docblock).
+        await this.userRepository.setRole(existing.id, 'superadmin');
+        this.logger.log(`🛡️ ${email} promoted to superadmin`);
+      }
+      return;
+    }
+
+    const created = await this.userRepository.createUser({
+      name: 'Super',
+      surname: 'Admin',
+      email,
+      password,
+      role: 'superadmin',
+      authProvider: 'email',
+      refreshToken: null,
+    });
+
+    await this.userSettings.updateSettings(created.id, {
+      timezone: 'UTC',
+      currency: 'EUR',
+      locale: 'en-US',
+    });
+
+    this.logger.log(`🛡️ Superadmin account ready (${email})`);
   }
 }

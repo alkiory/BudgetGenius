@@ -1125,6 +1125,95 @@
       "changelogBody": "Cada versión está documentada aquí — ábrelo cuando quieras desde la insignia de versión."
     }
   },
+  "superadmin": {
+    "navLabel": "Backoffice",
+    "title": "Backoffice",
+    "subtitle": "Administra la app: módulos, claves de API, avisos y uso agregado. Sin datos personales.",
+    "error": "No se pudo completar la operación",
+    "tabs": {
+      "overview": "Resumen",
+      "modules": "Módulos",
+      "apiKeys": "API keys",
+      "notifications": "Avisos"
+    },
+    "overview": {
+      "users": "Usuarios",
+      "usersNote": "{{count}} nuevos en 30 días",
+      "transactions": "Transacciones",
+      "transactionsNote": "{{count}} en las últimas 24 h",
+      "modules": "Módulos activos",
+      "modulesNote": "{{count}} desactivados",
+      "apiKeys": "API keys activas",
+      "keysNote": "Solo se guarda el hash",
+      "activity": "Actividad (6 meses)",
+      "activityEmpty": "Todavía no hay transacciones"
+    },
+    "modules": {
+      "add": "Registrar módulo",
+      "name": "Nombre",
+      "namePlaceholder": "Informes mensuales",
+      "key": "Clave",
+      "category": "Categoría",
+      "core": "Core",
+      "toggle": "Activar o desactivar módulo",
+      "created": "Módulo registrado",
+      "empty": "Aún no hay módulos registrados",
+      "status": {
+        "active": "Activo",
+        "beta": "Beta",
+        "disabled": "Desactivado"
+      },
+      "kind": "Tipo",
+      "kinds": {
+        "module": "Módulo",
+        "component": "Componente",
+        "integration": "Integración"
+      }
+    },
+    "apiKeys": {
+      "add": "Emitir API key",
+      "name": "Nombre",
+      "scopes": "Permisos",
+      "scopesHint": "modules:read, usage:read",
+      "create": "Emitir key",
+      "created": "API key emitida",
+      "secretTitle": "Copia esta clave ahora",
+      "secretHint": "No se puede volver a mostrar: el servidor solo guarda su hash.",
+      "copy": "Copiar",
+      "copied": "Clave copiada",
+      "revoke": "Revocar",
+      "revoked": "Revocada",
+      "active": "Activa",
+      "empty": "Aún no hay API keys"
+    },
+    "notifications": {
+      "add": "Crear aviso",
+      "title": "Título",
+      "body": "Mensaje",
+      "level": "Nivel",
+      "audience": "Audiencia",
+      "publish": "Publicar o despublicar",
+      "published": "Publicado",
+      "draft": "Borrador",
+      "created": "Aviso creado",
+      "empty": "Aún no hay avisos",
+      "levels": {
+        "info": "Info",
+        "success": "Éxito",
+        "warning": "Aviso",
+        "critical": "Crítico"
+      },
+      "audiences": {
+        "all": "Todos",
+        "free": "Gratis",
+        "premium": "Premium"
+      }
+    }
+  },
+  "support": {
+    "dev": "Apoyar al dev",
+    "tooltip": "Apoya al desarrollador por PayPal"
+  },
   "maintenance": {
     "title": "Estamos en mantenimiento",
     "description": "Estamos realizando mantenimiento programado para mejorar tu experiencia. Volveremos en breve.",

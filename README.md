@@ -914,6 +914,37 @@ See `.env.example` files in each app directory for the full list of available va
 
 ---
 
+## 🛡️ Superadmin backoffice
+
+The app has an operator surface for running the product itself — not for
+browsing accounts. It is gated by the `superadmin` role (`user` and `admin`
+are both rejected by the API).
+
+**Operator account.** Set `SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD`; on boot
+the seeder creates that account, or promotes an existing one with that email.
+In development a local fallback is used (`superadmin@admin.com` /
+`#Password123`). Nothing is seeded when both variables are empty.
+
+**Schema.** The backoffice tables (`app_modules`, `app_api_keys`,
+`app_notifications`) are created by migration `1800000000015`:
+
+```bash
+pnpm --filter api migration:run
+```
+
+**Routes** (all `GET/POST/PUT/DELETE /api/superadmin/*`, JWT + role guard):
+
+| Route | Purpose |
+|---|---|
+| `/superadmin/overview` | Aggregate usage: users, transactions, data volumes, 6-month activity |
+| `/superadmin/modules` | Product module inventory (status, version, core flag) |
+| `/superadmin/api-keys` | Issue keys (secret shown once, only its SHA-256 hash is stored), revoke, delete |
+| `/superadmin/notifications` | Announcements with level, audience, publish and expiry |
+
+**In the app.** The sidebar shows a *Backoffice* entry for a superadmin at
+`/app/superadmin`; the same role check protects the route client-side, but the
+API is the real boundary.
+
 ## 🌐 Web Surfaces & Password Recovery
 
 Since 1.10 the web deploy is a **single tree with two surfaces**:

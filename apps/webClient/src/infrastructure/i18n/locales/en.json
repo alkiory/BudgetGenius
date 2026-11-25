@@ -1125,6 +1125,95 @@
             "changelogBody": "Every release is documented here — open it any time from the version badge."
         }
     },
+    "superadmin": {
+        "navLabel": "Backoffice",
+        "title": "Backoffice",
+        "subtitle": "Run the product: modules, API keys, announcements and aggregate usage. No personal data.",
+        "error": "The operation could not be completed",
+        "tabs": {
+            "overview": "Overview",
+            "modules": "Modules",
+            "apiKeys": "API keys",
+            "notifications": "Announcements"
+        },
+        "overview": {
+            "users": "Users",
+            "usersNote": "{{count}} new in 30 days",
+            "transactions": "Transactions",
+            "transactionsNote": "{{count}} in the last 24 h",
+            "modules": "Active modules",
+            "modulesNote": "{{count}} disabled",
+            "apiKeys": "Active API keys",
+            "keysNote": "Only the hash is stored",
+            "activity": "Activity (6 months)",
+            "activityEmpty": "No transactions yet"
+        },
+        "modules": {
+            "add": "Register module",
+            "name": "Name",
+            "namePlaceholder": "Monthly reports",
+            "key": "Key",
+            "category": "Category",
+            "core": "Core",
+            "toggle": "Enable or disable module",
+            "created": "Module registered",
+            "empty": "No modules registered yet",
+            "status": {
+                "active": "Active",
+                "beta": "Beta",
+                "disabled": "Disabled"
+            },
+            "kind": "Kind",
+            "kinds": {
+                "module": "Module",
+                "component": "Component",
+                "integration": "Integration"
+            }
+        },
+        "apiKeys": {
+            "add": "Issue API key",
+            "name": "Name",
+            "scopes": "Scopes",
+            "scopesHint": "modules:read, usage:read",
+            "create": "Issue key",
+            "created": "API key issued",
+            "secretTitle": "Copy this key now",
+            "secretHint": "It cannot be shown again: the server only stores its hash.",
+            "copy": "Copy",
+            "copied": "Key copied",
+            "revoke": "Revoke",
+            "revoked": "Revoked",
+            "active": "Active",
+            "empty": "No API keys yet"
+        },
+        "notifications": {
+            "add": "Create announcement",
+            "title": "Title",
+            "body": "Message",
+            "level": "Level",
+            "audience": "Audience",
+            "publish": "Publish or unpublish",
+            "published": "Published",
+            "draft": "Draft",
+            "created": "Announcement created",
+            "empty": "No announcements yet",
+            "levels": {
+                "info": "Info",
+                "success": "Success",
+                "warning": "Warning",
+                "critical": "Critical"
+            },
+            "audiences": {
+                "all": "Everyone",
+                "free": "Free",
+                "premium": "Premium"
+            }
+        }
+    },
+    "support": {
+        "dev": "Support the dev",
+        "tooltip": "Support the developer on PayPal"
+    },
     "maintenance": {
         "title": "We're down for maintenance",
         "description": "We're performing scheduled maintenance to improve your experience. We'll be back online shortly.",

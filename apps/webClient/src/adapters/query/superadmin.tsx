@@ -1,0 +1,162 @@
+import {
+  AppNotificationRow,
+  CreateModulePayload,
+  superAdminRepository,
+} from "@adapters/http/superadmin.repository";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+const KEYS = {
+  overview: ["superadmin", "overview"] as const,
+  modules: ["superadmin", "modules"] as const,
+  apiKeys: ["superadmin", "api-keys"] as const,
+  notifications: ["superadmin", "notifications"] as const,
+};
+
+/** Usage snapshot. Backoffice data changes rarely; a 30 s stale window is plenty. */
+export function useSuperAdminOverview() {
+  return useQuery({
+    queryKey: KEYS.overview,
+    queryFn: superAdminRepository.getOverview,
+    staleTime: 30_000,
+  });
+}
+
+export function useAppModules() {
+  return useQuery({
+    queryKey: KEYS.modules,
+    queryFn: superAdminRepository.listModules,
+  });
+}
+
+export function useCreateAppModule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateModulePayload) =>
+      superAdminRepository.createModule(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.modules });
+      queryClient.invalidateQueries({ queryKey: KEYS.overview });
+    },
+  });
+}
+
+export function useUpdateAppModule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...payload
+    }: Partial<CreateModulePayload> & { id: number }) =>
+      superAdminRepository.updateModule(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.modules });
+      queryClient.invalidateQueries({ queryKey: KEYS.overview });
+    },
+  });
+}
+
+export function useDeleteAppModule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => superAdminRepository.deleteModule(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.modules });
+      queryClient.invalidateQueries({ queryKey: KEYS.overview });
+    },
+  });
+}
+
+export function useApiKeys() {
+  return useQuery({
+    queryKey: KEYS.apiKeys,
+    queryFn: superAdminRepository.listApiKeys,
+  });
+}
+
+export function useCreateApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { name: string; scopes?: string[] }) =>
+      superAdminRepository.createApiKey(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.apiKeys });
+      queryClient.invalidateQueries({ queryKey: KEYS.overview });
+    },
+  });
+}
+
+export function useRevokeApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => superAdminRepository.revokeApiKey(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.apiKeys });
+      queryClient.invalidateQueries({ queryKey: KEYS.overview });
+    },
+  });
+}
+
+export function useDeleteApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => superAdminRepository.deleteApiKey(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.apiKeys });
+      queryClient.invalidateQueries({ queryKey: KEYS.overview });
+    },
+  });
+}
+
+export function useNotifications() {
+  return useQuery({
+    queryKey: KEYS.notifications,
+    queryFn: superAdminRepository.listNotifications,
+  });
+}
+
+export function useCreateNotification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      title: string;
+      body: string;
+      level?: AppNotificationRow["level"];
+      audience?: AppNotificationRow["audience"];
+      published?: boolean;
+    }) => superAdminRepository.createNotification(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.notifications });
+      queryClient.invalidateQueries({ queryKey: KEYS.overview });
+    },
+  });
+}
+
+export function useUpdateNotification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...payload
+    }: { id: number } & Partial<
+      Pick<
+        AppNotificationRow,
+        "title" | "body" | "level" | "audience" | "published"
+      >
+    >) => superAdminRepository.updateNotification(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.notifications });
+      queryClient.invalidateQueries({ queryKey: KEYS.overview });
+    },
+  });
+}
+
+export function useDeleteNotification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => superAdminRepository.deleteNotification(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.notifications });
+      queryClient.invalidateQueries({ queryKey: KEYS.overview });
+    },
+  });
+}

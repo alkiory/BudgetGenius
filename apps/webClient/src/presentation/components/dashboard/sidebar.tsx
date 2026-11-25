@@ -8,6 +8,7 @@ import { RoutePaths } from "@presentation/utils/routes";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
+  Building,
   CreditCard,
   DollarSign,
   Home,
@@ -64,6 +65,18 @@ const navigation = [
   },
 ];
 
+/**
+ * Appended only for the `superadmin` role. The API is the real boundary —
+ * every `/superadmin/*` route checks the role server-side — so hiding the
+ * entry is purely about not offering a page whose requests would 403.
+ */
+const superAdminNavigation = {
+  key: "superadmin",
+  href: RoutePaths.App + "/" + RoutePaths.Superadmin,
+  icon: Building,
+  i18nKey: "superadmin.navLabel",
+};
+
 export function DashboardSidebar() {
   const { t } = useTranslation();
   const dispatch = useDispatch();
@@ -83,7 +96,14 @@ export function DashboardSidebar() {
     ready: false,
   });
 
-  const activeNavKey = navigation.find((item) => pathname === item.href)?.key;
+  const navigationItems =
+    user?.role === "superadmin"
+      ? [...navigation, superAdminNavigation]
+      : navigation;
+
+  const activeNavKey = navigationItems.find(
+    (item) => pathname === item.href,
+  )?.key;
 
   // One shared pill slides between nav items instead of the highlight
   // snapping from link to link, so selecting a page reads as motion.
@@ -241,7 +261,7 @@ export function DashboardSidebar() {
                   transform: `translateY(${activeIndicator.top}px)`,
                 }}
               />
-              {navigation.map((item) => {
+              {navigationItems.map((item) => {
                 const isActive = pathname === item.href;
                 const label = t(item.i18nKey ?? "sidebar." + item.key);
                 return (
