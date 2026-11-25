@@ -1,6 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { useMemo, useState } from "react";
 import { RootState } from "@adapters/store/rootStore";
 import Loader from "@presentation/components/loader";
+import { CategoryViewToggle } from "@presentation/components/ui/category-view-toggle";
+import {
+  CATEGORY_GROUP_LIMIT,
+  summarizeCategories,
+  toCategorySlices,
+} from "@presentation/utils/category-groups";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { translateCategory } from "@presentation/utils/display-translations";
 import { TrendingUp, ArrowDownUp, PieChartIcon, BarChart3 } from "@presentation/components/ui/animated-icons";
@@ -19,7 +26,6 @@ import {
   BarChart,
   PieChart,
 } from "recharts";
-import { COLORS } from "@presentation/utils/color";
 import {
   chartAxisProps,
   chartGridProps,
@@ -65,6 +71,26 @@ export default function OverviewTab({
   const targetCurrency = (settings?.currency || "EUR") as Currency;
   const formatCurrency = (value: number) =>
     currencyService.formatCurrency(value, targetCurrency, false).formatted;
+
+  const [grouped, setGrouped] = useState(true);
+
+  // A long tail of categories turns the donut and its legend into clutter, so
+  // the default view keeps the biggest ones and folds the rest into "others".
+  const slices = useMemo(
+    () =>
+      toCategorySlices(categories ?? [], (entry: any) => ({
+        name: String(entry.name ?? entry.category ?? ""),
+        value: Number(entry.amount) || 0,
+      })),
+    [categories],
+  );
+  const categoryData = useMemo(
+    () =>
+      grouped
+        ? summarizeCategories(slices, CATEGORY_GROUP_LIMIT, t("charts.other"))
+        : slices,
+    [grouped, slices, t],
+  );
 
   return (
     <div className="space-y-6">
@@ -133,11 +159,19 @@ export default function OverviewTab({
           </ResponsiveContainer>
         </ChartContainer>
 
-        <ChartContainer title={t("reports.spendingByCategory")}>
+        <ChartContainer
+          title={t("reports.spendingByCategory")}
+          action={
+            <CategoryViewToggle
+              grouped={grouped}
+              onToggle={() => setGrouped((value) => !value)}
+            />
+          }
+        >
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={categories || []}
+                data={categoryData}
                 dataKey="amount"
                 nameKey="name"
                 cx="50%"
@@ -146,17 +180,9 @@ export default function OverviewTab({
                 label={false}
                 labelLine={false}
               >
-                {categories?.map(
-                  (
-                    entry: { amount: number; category: string; color?: string },
-                    index: number,
-                  ) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={entry.color || COLORS[index % COLORS.length]}
-                    />
-                  ),
-                )}
+                {categoryData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
               </Pie>
               <Tooltip
                 {...chartTooltipProps}

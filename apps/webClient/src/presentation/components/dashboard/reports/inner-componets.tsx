@@ -1,14 +1,20 @@
 const ChartContainer = ({
   title,
+  action,
   children,
 }: {
   title: string;
+  /** Optional control rendered opposite the title (e.g. a view toggle). */
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) => (
   <div className="glass-panel hover-glow rounded-xl p-6">
-    <h3 className="mb-4 text-sm font-semibold tracking-tight text-slate-900 dark:text-white">
-      {title}
-    </h3>
+    <div className="mb-4 flex items-center justify-between gap-2">
+      <h3 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-white">
+        {title}
+      </h3>
+      {action}
+    </div>
     <div className="h-80">{children}</div>
   </div>
 );

@@ -1,7 +1,14 @@
+import { useMemo, useState } from "react";
 import { ExpenseBreakdown } from "@domain/dashboard/dashboard.entity";
+import { CategoryViewToggle } from "@presentation/components/ui/category-view-toggle";
 import { chartTooltipProps } from "@presentation/utils/chart-theme";
-import { COLORS } from "@presentation/utils/color";
+import {
+  CATEGORY_GROUP_LIMIT,
+  summarizeCategories,
+  toCategorySlices,
+} from "@presentation/utils/category-groups";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
+import { translateCategory } from "@presentation/utils/display-translations";
 import { useTranslation } from "react-i18next";
 import {
   PieChart,
@@ -30,6 +37,26 @@ export function ExpenseCategories({
   period,
 }: Props) {
   const { t } = useTranslation();
+  const [grouped, setGrouped] = useState(true);
+
+  // One normalised slice per category (largest first, stable colours). The
+  // grouped view folds everything past the limit into a single slice so a
+  // long tail of categories cannot explode the donut and its labels.
+  const slices = useMemo(
+    () =>
+      toCategorySlices(byCategory, (category) => ({
+        name: category.name,
+        value: category.value,
+      })),
+    [byCategory],
+  );
+  const chartData = useMemo(
+    () =>
+      grouped
+        ? summarizeCategories(slices, CATEGORY_GROUP_LIMIT, t("charts.other"))
+        : slices,
+    [grouped, slices, t],
+  );
 
   // Labels sit well outside the donut and are joined to their slice by
   // an elbow connector line. Tiny slices are skipped so their text can
@@ -74,7 +101,7 @@ export function ExpenseCategories({
     const { side, end } = labelGeometry(props);
     const { percent, name } = props;
     if (!percent || percent < MIN_LABEL_PERCENT) return null;
-    const label = String(name ?? "");
+    const label = translateCategory(String(name ?? ""), t);
     const shortened = label.length > 12 ? `${label.slice(0, 11)}…` : label;
     return (
       <text
@@ -117,16 +144,22 @@ export function ExpenseCategories({
         <h2 className="text-lg font-semibold">
           {t("dashboard.expenseBreakdown")}
         </h2>
-        <span className="text-xs text-slate-400 dark:text-slate-500">
-          {period}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400 dark:text-slate-500">
+            {period}
+          </span>
+          <CategoryViewToggle
+            grouped={grouped}
+            onToggle={() => setGrouped((value) => !value)}
+          />
+        </div>
       </div>
       {byCategory.length > 0 ? (
         <div className="h-64 text-slate-500 dark:text-slate-400">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={byCategory}
+                data={chartData}
                 cx="50%"
                 cy="50%"
                 innerRadius={46}
@@ -137,12 +170,8 @@ export function ExpenseCategories({
                 label={renderOutsideLabel}
                 labelLine={renderLabelLine}
               >
-                {byCategory?.map((entry, i) => (
-                  <Cell
-                    key={i}
-                    fill={COLORS[i % COLORS.length]}
-                    name={entry.name}
-                  />
+                {chartData.map((entry, i) => (
+                  <Cell key={i} fill={entry.color} name={entry.name} />
                 ))}
               </Pie>
               <Tooltip
@@ -154,7 +183,10 @@ export function ExpenseCategories({
                   t("transactions.amount"),
                 ]}
               />
-              <Legend wrapperStyle={{ fontSize: 11, color: "#94a3b8" }} />
+              <Legend
+                wrapperStyle={{ fontSize: 11, color: "#94a3b8" }}
+                formatter={(value) => translateCategory(String(value), t)}
+              />
             </PieChart>
           </ResponsiveContainer>
         </div>

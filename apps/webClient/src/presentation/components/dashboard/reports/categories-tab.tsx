@@ -1,5 +1,12 @@
+import { useMemo, useState } from "react";
 import { RootState } from "@adapters/store/rootStore";
 import Loader from "@presentation/components/loader";
+import { CategoryViewToggle } from "@presentation/components/ui/category-view-toggle";
+import {
+  CATEGORY_GROUP_LIMIT,
+  summarizeCategories,
+  toCategorySlices,
+} from "@presentation/utils/category-groups";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { translateCategory } from "@presentation/utils/display-translations";
 import { useTranslation } from "react-i18next";
@@ -54,6 +61,27 @@ export default function CategoryTab({
   const formatCurrency = (value: number) =>
     currencyService.formatCurrency(value, targetCurrency, false).formatted;
 
+  const [grouped, setGrouped] = useState(true);
+
+  // Default view: biggest categories plus one "others" slice. The full list
+  // stays one click away, and the breakdown panel below keeps every category.
+  const slices = useMemo(
+    () =>
+      toCategorySlices(categories ?? [], (entry: any) => ({
+        name: translateCategory(String(entry.category ?? entry.name ?? ""), t),
+        value: Number(entry.amount) || 0,
+        color: entry.color,
+      })),
+    [categories, t],
+  );
+  const categoryData = useMemo(
+    () =>
+      grouped
+        ? summarizeCategories(slices, CATEGORY_GROUP_LIMIT, t("charts.other"))
+        : slices,
+    [grouped, slices, t],
+  );
+
   const labelGeometry = (props: any) => {
     const { cx, cy, midAngle, outerRadius } = props;
     const side = Math.cos(-midAngle * RADIAN) >= 0 ? 1 : -1;
@@ -74,13 +102,10 @@ export default function CategoryTab({
   };
 
   const renderOutsideLabel = (props: any) => {
-    const { percent, index } = props;
+    const { percent } = props;
     if (!percent || percent < MIN_LABEL_PERCENT) return null;
     const { side, end } = labelGeometry(props);
-    const fullLabel = translateCategory(
-      String(categories?.[index]?.category ?? props.name ?? ""),
-      t,
-    );
+    const fullLabel = String(props.name ?? "");
     const shortened =
       fullLabel.length > 14 ? `${fullLabel.slice(0, 13)}…` : fullLabel;
     const textX = end.x + side * 4;
@@ -124,12 +149,20 @@ export default function CategoryTab({
       {isLoadingInsights && <Loader />}
       {categories && (
         <div className="grid gap-6 md:grid-cols-2">
-          <ChartContainer title={t("reports.spendingByCategory")}>
+          <ChartContainer
+            title={t("reports.spendingByCategory")}
+            action={
+              <CategoryViewToggle
+                grouped={grouped}
+                onToggle={() => setGrouped((value) => !value)}
+              />
+            }
+          >
             <div className="h-full w-full text-slate-700 dark:text-slate-200">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={categories}
+                    data={categoryData}
                     dataKey="amount"
                     nameKey="name"
                     cx="50%"
@@ -138,11 +171,8 @@ export default function CategoryTab({
                     label={renderOutsideLabel}
                     labelLine={renderLabelLine}
                   >
-                    {categories?.map((entry: any, index: number) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={entry.color || COLORS[index % COLORS.length]}
-                      />
+                    {categoryData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip
@@ -152,7 +182,7 @@ export default function CategoryTab({
                   />
                   <Legend
                     verticalAlign="bottom"
-                    formatter={(value) => translateCategory(String(value), t)}
+                    formatter={(value) => String(value)}
                   />
                 </PieChart>
               </ResponsiveContainer>
