@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
+  Sparkles,
 } from "@presentation/components/ui/animated-icons";
 import { useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -57,6 +58,12 @@ const navigation = [
     href: RoutePaths.App + "/" + RoutePaths.Income,
     icon: DollarSign,
     i18nKey: "routes.app.dashboard.income",
+  },
+  {
+    key: "modules",
+    href: RoutePaths.App + "/" + RoutePaths.Modules,
+    icon: Sparkles,
+    i18nKey: "routes.app.dashboard.modules",
   },
   {
     key: "settings",

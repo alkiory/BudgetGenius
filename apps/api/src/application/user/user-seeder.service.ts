@@ -104,16 +104,15 @@ export class UserSeederService {
   /**
    * Ensures a super admin exists.
    *
-   * Credentials come from `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD`. In
-   * development they fall back to `superadmin@admin.com` / `#Password123` so
-   * the backoffice is reachable locally with no extra setup — the same
-   * demo-account convention the other seeded users follow. Production without
-   * both variables is a no-op: no fixed-password operator is ever created by
-   * accident.
+   * `SUPERADMIN_EMAIL` selects the operator. Promotion of an existing account
+   * only needs that variable: the account keeps its own password, so an
+   * operator who already signed up is granted the role without a credential
+   * reset. `SUPERADMIN_PASSWORD` is used only when the email does not exist
+   * yet and a new account has to be created — production without it is a
+   * no-op rather than a fixed-password account.
    *
-   * An existing account with that email is promoted in place instead of
-   * duplicated, so an operator can be granted the role after signing up
-   * normally.
+   * In development the local fallback (`superadmin@admin.com` / `#Password123`)
+   * keeps the backoffice reachable with no extra setup.
    */
   private async ensureSuperAdmin(): Promise<void> {
     const isDev = process.env.NODE_ENV === 'development';
@@ -121,12 +120,10 @@ export class UserSeederService {
       process.env.SUPERADMIN_EMAIL?.trim() ||
       (isDev ? 'superadmin@admin.com' : '')
     ).toLowerCase();
-    const password =
-      process.env.SUPERADMIN_PASSWORD || (isDev ? '#Password123' : '');
 
-    if (!email || !password) {
+    if (!email) {
       this.logger.log(
-        '🛡️ Superadmin seeder skipped — set SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD to enable the backoffice',
+        '🛡️ Superadmin seeder skipped — set SUPERADMIN_EMAIL to enable the backoffice',
       );
       return;
     }
@@ -136,8 +133,19 @@ export class UserSeederService {
       if (existing.role !== 'superadmin') {
         // `setRole` avoids the entity password hook (see its docblock).
         await this.userRepository.setRole(existing.id, 'superadmin');
-        this.logger.log(`🛡️ ${email} promoted to superadmin`);
+        this.logger.log(
+          `🛡️ Existing account id=${existing.id} promoted to superadmin`,
+        );
       }
+      return;
+    }
+
+    const password =
+      process.env.SUPERADMIN_PASSWORD || (isDev ? '#Password123' : '');
+    if (!password) {
+      this.logger.warn(
+        '🛡️ Superadmin email does not match an existing account and SUPERADMIN_PASSWORD is empty — nothing was created',
+      );
       return;
     }
 
@@ -157,6 +165,6 @@ export class UserSeederService {
       locale: 'en-US',
     });
 
-    this.logger.log(`🛡️ Superadmin account ready (${email})`);
+    this.logger.log('🛡️ Superadmin account ready');
   }
 }

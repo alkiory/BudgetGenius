@@ -1,5 +1,7 @@
 import { SidebarProvider } from "@adapters/hooks/sidebarContext";
+import { useCrossDeviceSync } from "@infrastructure/use-cross-device-sync";
 import { AmbientBackground } from "@presentation/components/dashboard/ambient-background";
+import { AnnouncementBanner } from "@presentation/components/dashboard/announcement-banner";
 import { DashboardHeader } from "@presentation/components/dashboard/header";
 import { FinnyRail } from "@presentation/components/dashboard/finny-rail";
 import { MainContent } from "@presentation/components/dashboard/main-content";
@@ -8,6 +10,8 @@ import { AppTour } from "@presentation/components/tour/app-tour";
 import { Outlet } from "react-router";
 
 export default function MainLayout() {
+  useCrossDeviceSync();
+
   return (
     <SidebarProvider>
       <div className="relative flex min-h-screen bg-background text-slate-700 dark:text-slate-200">
@@ -16,6 +20,7 @@ export default function MainLayout() {
         <div className="relative z-10 flex min-w-0 flex-1">
           <MainContent>
             <DashboardHeader />
+            <AnnouncementBanner />
             {/* px-4 pt-4 (instead of p-4) so the safe-area-aware pb-declaration
               is the only one touching padding-bottom at <md. `max(env(...))`
               is used (rather than env(... , 1rem)) because modern browsers

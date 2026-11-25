@@ -44,6 +44,15 @@ export class CreateAppNotificationDto {
   @IsBoolean()
   published?: boolean;
 
+  /**
+   * Optional schedule. When set, the announcement counts as published and
+   * goes live at this timestamp instead of immediately. `expiresAt` retires
+   * it automatically.
+   */
+  @IsOptional()
+  @IsDateString()
+  publishAt?: string;
+
   @IsOptional()
   @IsDateString()
   expiresAt?: string;

@@ -10,7 +10,12 @@ export interface SuperAdminOverview {
     last30d: number;
   };
   data: { budgets: number; categories: number };
-  modules: { total: number; active: number; disabled: number };
+  modules: {
+    total: number;
+    active: number;
+    disabled: number;
+    byKind: { module: number; component: number; integration: number };
+  };
   apiKeys: { total: number; active: number };
   notifications: { total: number; live: number };
   activity: Array<{ month: string; transactions: number; amount: number }>;
@@ -41,6 +46,22 @@ export interface AppApiKeyRow {
   scopes: string[] | null;
   lastUsedAt: string | null;
   revokedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProviderKeyRow {
+  id: number;
+  label: string;
+  provider: string;
+  /** Decrypted value; only the superadmin endpoints return it. */
+  key: string | null;
+  lastFour: string;
+  isActive: boolean;
+  priority: number;
+  lastUsedAt: string | null;
+  lastFailedAt: string | null;
+  lastError: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -113,6 +134,36 @@ export const superAdminRepository = {
     await api.delete(`/superadmin/api-keys/${id}`);
   },
 
+  async listProviderKeys(): Promise<ProviderKeyRow[]> {
+    const { data } = await api.get("/superadmin/provider-keys");
+    return data;
+  },
+  async createProviderKey(payload: {
+    label: string;
+    key: string;
+    priority?: number;
+    provider?: string;
+  }): Promise<ProviderKeyRow> {
+    const { data } = await api.post("/superadmin/provider-keys", payload);
+    return data;
+  },
+  async updateProviderKey(
+    id: number,
+    payload: Partial<{
+      label: string;
+      key: string;
+      priority: number;
+      provider: string;
+      isActive: boolean;
+    }>,
+  ): Promise<ProviderKeyRow> {
+    const { data } = await api.put(`/superadmin/provider-keys/${id}`, payload);
+    return data;
+  },
+  async deleteProviderKey(id: number): Promise<void> {
+    await api.delete(`/superadmin/provider-keys/${id}`);
+  },
+
   async listNotifications(): Promise<AppNotificationRow[]> {
     const { data } = await api.get("/superadmin/notifications");
     return data;
@@ -123,6 +174,10 @@ export const superAdminRepository = {
     level?: AppNotificationRow["level"];
     audience?: AppNotificationRow["audience"];
     published?: boolean;
+    /** ISO timestamp: publish at this moment instead of immediately. */
+    publishAt?: string;
+    /** ISO timestamp: retire the announcement automatically. */
+    expiresAt?: string;
   }): Promise<AppNotificationRow> {
     const { data } = await api.post("/superadmin/notifications", payload);
     return data;
@@ -133,7 +188,7 @@ export const superAdminRepository = {
       Pick<
         AppNotificationRow,
         "title" | "body" | "level" | "audience" | "published"
-      >
+      > & { publishAt?: string; expiresAt?: string }
     >,
   ): Promise<AppNotificationRow> {
     const { data } = await api.put(`/superadmin/notifications/${id}`, payload);

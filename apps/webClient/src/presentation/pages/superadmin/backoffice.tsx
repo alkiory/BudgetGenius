@@ -2,6 +2,7 @@ import {
   AppApiKeyRow,
   AppModuleRow,
   AppNotificationRow,
+  ProviderKeyRow,
 } from "@adapters/http/superadmin.repository";
 import {
   useApiKeys,
@@ -9,20 +10,26 @@ import {
   useCreateApiKey,
   useCreateAppModule,
   useCreateNotification,
+  useCreateProviderKey,
   useDeleteApiKey,
   useDeleteAppModule,
   useDeleteNotification,
+  useDeleteProviderKey,
   useNotifications,
+  useProviderKeys,
   useRevokeApiKey,
   useSuperAdminOverview,
   useUpdateAppModule,
   useUpdateNotification,
+  useUpdateProviderKey,
 } from "@adapters/query/superadmin";
 import Loader from "@presentation/components/loader";
 import { Button } from "@presentation/components/ui/button";
 import {
   BarChart3,
   Building,
+  Eye,
+  EyeOff,
   KeyRound,
   Plus,
   Send,
@@ -115,8 +122,10 @@ function OverviewTab() {
         <StatCard
           label={t("superadmin.overview.modules")}
           value={`${number(data.modules.active)} / ${number(data.modules.total)}`}
-          note={t("superadmin.overview.modulesNote", {
-            count: number(data.modules.disabled),
+          note={t("superadmin.overview.modulesBreakdown", {
+            modules: number(data.modules.byKind.module),
+            components: number(data.modules.byKind.component),
+            integrations: number(data.modules.byKind.integration),
           })}
         />
         <StatCard
@@ -129,9 +138,14 @@ function OverviewTab() {
       <div className={panel}>
         <div className="mb-4 flex items-center gap-2">
           <BarChart3 className="h-4 w-4 text-teal-500 dark:text-teal-300" />
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
-            {t("superadmin.overview.activity")}
-          </h3>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+              {t("superadmin.overview.activity")}
+            </h3>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+              {t("superadmin.overview.activityHint")}
+            </p>
+          </div>
         </div>
         {data.activity.length === 0 ? (
           <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -155,8 +169,11 @@ function OverviewTab() {
                     }}
                   />
                 </span>
-                <span className="w-14 shrink-0 text-right text-slate-500 dark:text-slate-400">
-                  {number(row.transactions)}
+                <span className="w-20 shrink-0 text-right text-slate-500 dark:text-slate-400">
+                  {number(row.transactions)}{" "}
+                  <span className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    {t("superadmin.overview.movements")}
+                  </span>
                 </span>
               </li>
             ))}
@@ -328,6 +345,9 @@ function ModulesTab() {
             />
           </div>
         </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {t("superadmin.modules.kindsHelp")}
+        </p>
         <Button type="submit" disabled={create.isPending}>
           <Plus className="mr-1.5 h-4 w-4" />
           {t("common.create")}
@@ -348,6 +368,211 @@ function ModulesTab() {
         )}
       </div>
     </div>
+  );
+}
+
+function ProviderKeysSection() {
+  const { t } = useTranslation();
+  const { data, isLoading } = useProviderKeys();
+  const create = useCreateProviderKey();
+  const update = useUpdateProviderKey();
+  const remove = useDeleteProviderKey();
+  const onError = useMutationError();
+  const [label, setLabel] = useState("");
+  const [keyValue, setKeyValue] = useState("");
+  const [priority, setPriority] = useState("0");
+  const [revealed, setRevealed] = useState<Record<number, boolean>>({});
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    create.mutate(
+      {
+        label: label.trim(),
+        key: keyValue.trim(),
+        priority: Number(priority) || 0,
+      },
+      {
+        onSuccess: () => {
+          setLabel("");
+          setKeyValue("");
+          setPriority("0");
+          toast.success(t("superadmin.providerKeys.created"));
+        },
+        onError,
+      },
+    );
+  };
+
+  const copy = async (row: ProviderKeyRow) => {
+    if (!row.key) return;
+    try {
+      await navigator.clipboard.writeText(row.key);
+      toast.success(t("superadmin.providerKeys.copied"));
+    } catch {
+      toast.error(t("superadmin.error"));
+    }
+  };
+
+  return (
+    <section className={`${panel} space-y-4`}>
+      <div>
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+          {t("superadmin.providerKeys.title")}
+        </h3>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          {t("superadmin.providerKeys.hint")}
+        </p>
+      </div>
+
+      <form onSubmit={submit} className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1">
+            <Label htmlFor="provider-key-label">
+              {t("superadmin.providerKeys.label")}
+            </Label>
+            <Input
+              id="provider-key-label"
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+              placeholder={t("superadmin.providerKeys.labelPlaceholder")}
+              required
+              maxLength={80}
+            />
+          </div>
+          <div className="space-y-1 lg:col-span-2">
+            <Label htmlFor="provider-key-value">
+              {t("superadmin.providerKeys.key")}
+            </Label>
+            <Input
+              id="provider-key-value"
+              type="password"
+              value={keyValue}
+              onChange={(event) => setKeyValue(event.target.value)}
+              placeholder="sk-..."
+              required
+              autoComplete="off"
+              minLength={8}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="provider-key-priority">
+              {t("superadmin.providerKeys.priority")}
+            </Label>
+            <Input
+              id="provider-key-priority"
+              type="number"
+              min={0}
+              max={999}
+              value={priority}
+              onChange={(event) => setPriority(event.target.value)}
+            />
+          </div>
+        </div>
+        <Button type="submit" disabled={create.isPending}>
+          <Plus className="mr-1.5 h-4 w-4" />
+          {t("superadmin.providerKeys.add")}
+        </Button>
+      </form>
+
+      <div>
+        {isLoading ? (
+          <Loader />
+        ) : !data?.length ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {t("superadmin.providerKeys.empty")}
+          </p>
+        ) : (
+          data.map((row) => (
+            <div
+              key={row.id}
+              className="flex flex-wrap items-start gap-3 border-t border-slate-200/70 py-3 first:border-t-0 dark:border-white/[0.06]"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-slate-900 dark:text-white">
+                    {row.label}
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">
+                    {row.provider}
+                  </span>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                    {t("superadmin.providerKeys.order", {
+                      order: row.priority,
+                    })}
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <code className="max-w-full truncate rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600 dark:bg-white/[0.06] dark:text-slate-300">
+                    {row.key
+                      ? revealed[row.id]
+                        ? row.key
+                        : `${row.provider === "openai" ? "sk-" : ""}••••••••${row.lastFour}`
+                      : t("superadmin.providerKeys.undecryptable")}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setRevealed((previous) => ({
+                        ...previous,
+                        [row.id]: !previous[row.id],
+                      }))
+                    }
+                    className="rounded-md p-1 text-slate-400 transition-colors hover:text-teal-600 dark:hover:text-teal-300"
+                    title={t("superadmin.providerKeys.reveal")}
+                  >
+                    {revealed[row.id] ? (
+                      <EyeOff className="h-3.5 w-3.5" />
+                    ) : (
+                      <Eye className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => copy(row)}
+                    disabled={!row.key}
+                    className="text-[10px] underline-offset-2 hover:underline disabled:opacity-40"
+                  >
+                    {t("superadmin.apiKeys.copy")}
+                  </button>
+                </div>
+                {row.lastError && (
+                  <p className="mt-1 line-clamp-2 text-[10px] text-rose-500 dark:text-rose-400">
+                    {row.lastError}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  {row.isActive
+                    ? t("superadmin.providerKeys.active")
+                    : t("superadmin.providerKeys.inactive")}
+                </span>
+                <Switch
+                  checked={row.isActive}
+                  disabled={update.isPending}
+                  onChange={(checked) =>
+                    update.mutate(
+                      { id: row.id, isActive: checked },
+                      { onError },
+                    )
+                  }
+                  aria-label={t("superadmin.providerKeys.toggle")}
+                />
+                <button
+                  type="button"
+                  onClick={() => remove.mutate(row.id, { onError })}
+                  disabled={remove.isPending}
+                  title={t("common.delete")}
+                  className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-rose-500/10 hover:text-rose-500"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -402,6 +627,7 @@ function ApiKeysTab() {
 
   return (
     <div className="space-y-6">
+      <ProviderKeysSection />
       <form onSubmit={submit} className={`${panel} space-y-3`}>
         <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
           {t("superadmin.apiKeys.add")}
@@ -436,6 +662,9 @@ function ApiKeysTab() {
           <KeyRound className="mr-1.5 h-4 w-4" />
           {t("superadmin.apiKeys.create")}
         </Button>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {t("superadmin.apiKeys.hint")}
+        </p>
       </form>
 
       {secret && (
@@ -525,6 +754,13 @@ function NotificationRowItem({
   const remove = useDeleteNotification();
   const onError = useMutationError();
 
+  const scheduledUntil =
+    notification.published &&
+    notification.publishedAt &&
+    new Date(notification.publishedAt).getTime() > Date.now()
+      ? notification.publishedAt
+      : null;
+
   return (
     <div className="flex flex-wrap items-start gap-3 border-t border-slate-200/70 py-3 first:border-t-0 dark:border-white/[0.06]">
       <div className="min-w-0 flex-1">
@@ -542,10 +778,19 @@ function NotificationRowItem({
         <p className="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
           {notification.body}
         </p>
+        {scheduledUntil && (
+          <p className="mt-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+            {t("superadmin.notifications.scheduledFor", {
+              date: new Date(scheduledUntil).toLocaleString(),
+            })}
+          </p>
+        )}
       </div>
       <div className="flex items-center gap-3">
         <span className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
-          {notification.published
+          {scheduledUntil
+            ? t("superadmin.notifications.scheduled")
+            : notification.published
             ? t("superadmin.notifications.published")
             : t("superadmin.notifications.draft")}
         </span>
@@ -583,7 +828,14 @@ function NotificationsTab() {
     body: string;
     level: AppNotificationRow["level"];
     audience: AppNotificationRow["audience"];
-  }>({ title: "", body: "", level: "info", audience: "all" });
+    publishAt: string;
+  }>({
+    title: "",
+    body: "",
+    level: "info",
+    audience: "all",
+    publishAt: "",
+  });
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -593,11 +845,22 @@ function NotificationsTab() {
         body: form.body.trim(),
         level: form.level,
         audience: form.audience,
-        published: false,
+        // No date = draft. With a date the backend publishes it with that
+        // timestamp and the app shows it as soon as its window opens.
+        published: Boolean(form.publishAt),
+        publishAt: form.publishAt
+          ? new Date(form.publishAt).toISOString()
+          : undefined,
       },
       {
         onSuccess: () => {
-          setForm({ title: "", body: "", level: "info", audience: "all" });
+          setForm({
+            title: "",
+            body: "",
+            level: "info",
+            audience: "all",
+            publishAt: "",
+          });
           toast.success(t("superadmin.notifications.created"));
         },
         onError,
@@ -691,6 +954,22 @@ function NotificationsTab() {
                 </option>
               ))}
             </select>
+          </div>
+          <div className="space-y-1 sm:col-span-2">
+            <Label htmlFor="notification-publish-at">
+              {t("superadmin.notifications.schedule")}
+            </Label>
+            <Input
+              id="notification-publish-at"
+              type="datetime-local"
+              value={form.publishAt}
+              onChange={(event) =>
+                setForm({ ...form, publishAt: event.target.value })
+              }
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {t("superadmin.notifications.scheduleHint")}
+            </p>
           </div>
         </div>
         <Button type="submit" disabled={create.isPending}>

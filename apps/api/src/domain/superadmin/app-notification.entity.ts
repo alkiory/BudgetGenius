@@ -36,10 +36,11 @@ export class AppNotification {
   @Column({ type: 'boolean', default: false })
   published: boolean;
 
-  @Column({ type: 'timestamp', name: 'publishedAt', nullable: true })
+  /** Absolute instant: the query compares it with the database's `now()`. */
+  @Column({ type: 'timestamptz', name: 'publishedAt', nullable: true })
   publishedAt: Date | null;
 
-  @Column({ type: 'timestamp', name: 'expiresAt', nullable: true })
+  @Column({ type: 'timestamptz', name: 'expiresAt', nullable: true })
   expiresAt: Date | null;
 
   @CreateDateColumn({ type: 'timestamp', name: 'createdAt' })

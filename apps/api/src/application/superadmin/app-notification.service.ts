@@ -19,7 +19,11 @@ export class AppNotificationService {
   }
 
   create(dto: CreateAppNotificationDto): Promise<AppNotification> {
-    const published = dto.published ?? false;
+    const publishAt = dto.publishAt ? new Date(dto.publishAt) : null;
+    // A scheduled announcement is already "published": the readers filter by
+    // `publishedAt <= now()`, so it stays invisible until its moment arrives
+    // without needing a scheduler process.
+    const published = dto.published ?? Boolean(publishAt);
     return this.repo.save(
       this.repo.create({
         title: dto.title.trim(),
@@ -27,7 +31,7 @@ export class AppNotificationService {
         level: dto.level ?? 'info',
         audience: dto.audience ?? 'all',
         published,
-        publishedAt: published ? new Date() : null,
+        publishedAt: published ? publishAt ?? new Date() : null,
         expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
       }),
     );
@@ -38,9 +42,21 @@ export class AppNotificationService {
     dto: UpdateAppNotificationDto,
   ): Promise<AppNotification> {
     const notification = await this.findRow(id);
+    // Rescheduling reuses the same window semantics as creation.
+    if (dto.publishAt !== undefined) {
+      notification.published = true;
+      notification.publishedAt = dto.publishAt
+        ? new Date(dto.publishAt)
+        : new Date();
+    }
     // Publishing stamps the date once; unpublishing clears it so a later
-    // republish records the new send time instead of an old one.
-    if (dto.published !== undefined && dto.published !== notification.published) {
+    // republish records the new send time instead of an old one. A
+    // `publishAt` above wins over this branch.
+    if (
+      dto.publishAt === undefined &&
+      dto.published !== undefined &&
+      dto.published !== notification.published
+    ) {
       notification.published = dto.published;
       notification.publishedAt = dto.published ? new Date() : null;
     }

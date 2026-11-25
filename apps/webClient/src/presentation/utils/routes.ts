@@ -40,6 +40,7 @@ export enum RoutePaths {
   Reports = "dashboard/reports",
   Budgets = "dashboard/budgets",
   Income = "dashboard/income",
+  Modules = "modules",
   // Superadmin backoffice (role-gated)
   Superadmin = "superadmin",
   // User section

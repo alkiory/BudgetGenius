@@ -9,6 +9,7 @@ const KEYS = {
   overview: ["superadmin", "overview"] as const,
   modules: ["superadmin", "modules"] as const,
   apiKeys: ["superadmin", "api-keys"] as const,
+  providerKeys: ["superadmin", "provider-keys"] as const,
   notifications: ["superadmin", "notifications"] as const,
 };
 
@@ -107,6 +108,58 @@ export function useDeleteApiKey() {
   });
 }
 
+export function useProviderKeys() {
+  return useQuery({
+    queryKey: KEYS.providerKeys,
+    queryFn: superAdminRepository.listProviderKeys,
+  });
+}
+
+export function useCreateProviderKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      label: string;
+      key: string;
+      priority?: number;
+      provider?: string;
+    }) => superAdminRepository.createProviderKey(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.providerKeys });
+    },
+  });
+}
+
+export function useUpdateProviderKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...payload
+    }: {
+      id: number;
+      label?: string;
+      key?: string;
+      priority?: number;
+      provider?: string;
+      isActive?: boolean;
+    }) => superAdminRepository.updateProviderKey(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.providerKeys });
+    },
+  });
+}
+
+export function useDeleteProviderKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => superAdminRepository.deleteProviderKey(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: KEYS.providerKeys });
+    },
+  });
+}
+
 export function useNotifications() {
   return useQuery({
     queryKey: KEYS.notifications,
@@ -123,6 +176,8 @@ export function useCreateNotification() {
       level?: AppNotificationRow["level"];
       audience?: AppNotificationRow["audience"];
       published?: boolean;
+      publishAt?: string;
+      expiresAt?: string;
     }) => superAdminRepository.createNotification(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: KEYS.notifications });
@@ -141,7 +196,7 @@ export function useUpdateNotification() {
       Pick<
         AppNotificationRow,
         "title" | "body" | "level" | "audience" | "published"
-      >
+      > & { publishAt?: string; expiresAt?: string }
     >) => superAdminRepository.updateNotification(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: KEYS.notifications });

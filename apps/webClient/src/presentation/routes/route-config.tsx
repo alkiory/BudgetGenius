@@ -74,6 +74,9 @@ const TransactionsPage = lazy(
 const IncomePage = lazy(
   () => import("@presentation/pages/dashboard/incomePage"),
 );
+const ModulesPage = lazy(
+  () => import("@presentation/pages/modules/modulesPage"),
+);
 
 // User protected routes
 const ProfilePage = lazy(() => import("@presentation/pages/user/profile"));
@@ -189,6 +192,7 @@ const RouteConfig = () => {
             <Route path={RoutePaths.Income} element={<IncomePage />} />
             <Route path={RoutePaths.Budgets} element={<BudgetsPage />} />
             <Route path={RoutePaths.Reports} element={<ReportsPage />} />
+            <Route path={RoutePaths.Modules} element={<ModulesPage />} />
             {/* superadmin backoffice — role-gated; the API enforces the
                 same role on every /superadmin/* route */}
             <Route element={<SuperAdminGuard />}>

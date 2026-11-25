@@ -462,7 +462,8 @@
         "transactions": "Transacciones",
         "budgets": "Presupuestos",
         "reports": "Informes",
-        "income": "Ingresos"
+        "income": "Ingresos",
+        "modules": "Módulos"
       }
     }
   },
@@ -1141,11 +1142,14 @@
       "usersNote": "{{count}} nuevos en 30 días",
       "transactions": "Transacciones",
       "transactionsNote": "{{count}} en las últimas 24 h",
-      "modules": "Módulos activos",
+      "modules": "Módulos y componentes activos",
       "modulesNote": "{{count}} desactivados",
+      "modulesBreakdown": "{{modules}} módulos · {{components}} componentes · {{integrations}} integraciones",
       "apiKeys": "API keys activas",
       "keysNote": "Solo se guarda el hash",
-      "activity": "Actividad (6 meses)",
+      "activity": "Transacciones por mes",
+      "activityHint": "Movimientos registrados en los últimos 6 meses. Cada barra se compara con el mes de mayor volumen.",
+      "movements": "mov.",
       "activityEmpty": "Todavía no hay transacciones"
     },
     "modules": {
@@ -1168,7 +1172,8 @@
         "module": "Módulo",
         "component": "Componente",
         "integration": "Integración"
-      }
+      },
+      "kindsHelp": "Módulo = una función completa de la app. Componente = una pieza reutilizable dentro de una pantalla. Integración = un servicio externo. Lo activo aparece en la página Módulos de la app; desactivarlo lo oculta."
     },
     "apiKeys": {
       "add": "Emitir API key",
@@ -1184,7 +1189,26 @@
       "revoke": "Revocar",
       "revoked": "Revocada",
       "active": "Activa",
-      "empty": "Aún no hay API keys"
+      "empty": "Aún no hay API keys",
+      "hint": "Claves para clientes máquina (integraciones, CLI). No son la clave de Finny: esas se gestionan arriba. Estas claves no están conectadas a ningún endpoint todavía."
+    },
+    "providerKeys": {
+      "title": "Claves de Finny (proveedor)",
+      "hint": "Se prueban en orden de prioridad. Si una es rechazada o falla, Finny usa la siguiente. Se guardan cifradas y solo este backoffice puede revelarlas.",
+      "label": "Etiqueta",
+      "labelPlaceholder": "OpenAI principal",
+      "key": "Clave del proveedor",
+      "priority": "Prioridad",
+      "add": "Añadir clave",
+      "created": "Clave añadida",
+      "empty": "Aún no hay claves de Finny. Mientras no haya ninguna se usa AGENT_API_KEY del servidor.",
+      "order": "orden {{order}}",
+      "reveal": "Mostrar u ocultar la clave",
+      "copied": "Clave copiada",
+      "active": "Activa",
+      "inactive": "Inactiva",
+      "toggle": "Activar o desactivar clave",
+      "undecryptable": "No se pudo descifrar: vuelve a introducirla"
     },
     "notifications": {
       "add": "Crear aviso",
@@ -1195,6 +1219,10 @@
       "publish": "Publicar o despublicar",
       "published": "Publicado",
       "draft": "Borrador",
+      "scheduled": "Programado",
+      "scheduledFor": "Se publica el {{date}}",
+      "schedule": "Programar publicación (opcional)",
+      "scheduleHint": "Sin fecha queda como borrador. Con fecha, el aviso se publica solo en ese momento.",
       "created": "Aviso creado",
       "empty": "Aún no hay avisos",
       "levels": {
@@ -1208,6 +1236,30 @@
         "free": "Gratis",
         "premium": "Premium"
       }
+    }
+  },
+  "announcements": {
+    "dismiss": "Descartar aviso"
+  },
+  "modules": {
+    "title": "Módulos",
+    "subtitle": "Funciones, componentes e integraciones que el equipo del producto ha activado para tu cuenta.",
+    "empty": "El equipo aún no ha publicado módulos.",
+    "beta": "Beta",
+    "kinds": {
+      "module": "Módulo",
+      "component": "Componente",
+      "integration": "Integración"
+    },
+    "kindsPlural": {
+      "module": "Módulos",
+      "component": "Componentes",
+      "integration": "Integraciones"
+    },
+    "kindsHelp": {
+      "module": "Funciones completas de la app.",
+      "component": "Piezas de interfaz que aparecen dentro de las pantallas.",
+      "integration": "Servicios externos conectados a tu cuenta."
     }
   },
   "support": {

@@ -5,9 +5,11 @@ import { JwtStrategy } from '@infrastructure/config/strategy/jwt.strategy';
 import { RedisService } from '@infrastructure/config/redis.service';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { UserModule } from '@infrastructure/user/user.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AppProviderKey } from '@domain/superadmin/app-provider-key.entity';
 
 @Module({
-  imports: [UserModule],
+  imports: [UserModule, TypeOrmModule.forFeature([AppProviderKey])],
   controllers: [AiController],
   providers: [AiService, JwtStrategy, RedisService, LoggingService],
 })

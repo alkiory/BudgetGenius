@@ -926,7 +926,9 @@ In development a local fallback is used (`superadmin@admin.com` /
 `#Password123`). Nothing is seeded when both variables are empty.
 
 **Schema.** The backoffice tables (`app_modules`, `app_api_keys`,
-`app_notifications`) are created by migration `1800000000015`:
+`app_notifications`) are created by migration `1800000000015`; migration
+`1800000000016` stores the announcement windows as `timestamptz` so
+"publish now" is timezone-safe:
 
 ```bash
 pnpm --filter api migration:run
@@ -939,11 +941,84 @@ pnpm --filter api migration:run
 | `/superadmin/overview` | Aggregate usage: users, transactions, data volumes, 6-month activity |
 | `/superadmin/modules` | Product module inventory (status, version, core flag) |
 | `/superadmin/api-keys` | Issue keys (secret shown once, only its SHA-256 hash is stored), revoke, delete |
+| `/superadmin/provider-keys` | Finny provider keys: create, reveal, reorder, disable, delete; used with failover |
 | `/superadmin/notifications` | Announcements with level, audience, publish and expiry |
 
 **In the app.** The sidebar shows a *Backoffice* entry for a superadmin at
 `/app/superadmin`; the same role check protects the route client-side, but the
 API is the real boundary.
+
+### What each backoffice area actually does
+
+- **Módulos** is the product catalogue. A row is `key` (stable machine id),
+  `name`, `kind` (`module` = whole feature, `component` = reusable UI piece,
+  `integration` = external service), `category`, `status`, `version` and
+  `isCore` (cannot be disabled or deleted). Active and beta rows are served by
+  `GET /api/modules` and shown to every user under **Módulos** in the sidebar;
+  disabling a row removes it from that page on the next sync, and beta entries
+  carry a badge. `isCore` blocks disabling/deleting on the write side.
+- **API keys** issues machine credentials (`bg_live_…`). Only the SHA-256 hash
+  is stored, so the secret is shown once. These are for machine clients, not
+  Finny, and are not validated by any endpoint yet — they are the registry for
+  future machine-to-machine access.
+- **Claves de Finny** (inside the API keys tab) stores the provider
+  credentials the assistant uses. They are sealed with AES-256-GCM at rest and
+  the superadmin can reveal them again. Enabled keys are tried in `priority`
+  order: when one is rejected, rate-limited or unreachable, the API records
+  `lastError` on that row and retries with the next key. That is the
+  contingency chain; the old `AGENT_API_KEY` env var remains as the last
+  fallback until it is moved into the backoffice.
+- **Avisos** publishes announcements to users. Leaving the schedule empty saves
+  a draft; setting a date publishes it with that `publishedAt`, and the app
+  reveals it on the first poll after that moment (no cron). `expiresAt` retires
+  it automatically. Levels are presentational: `info` (neutral), `success`
+  (positive/confirmation), `warning` (attention, app still healthy) and
+  `critical` (something is broken or urgent). Audience filters by plan
+  (`all`, `free`, `premium`).
+
+### Finny's provider key
+
+`FINNY_INVALID_KEY` means every configured credential was rejected by the
+model provider. Keys are managed in **Backoffice → API keys → Claves de
+Finny**, so rotating or adding contingency does not require a server change:
+
+1. Add the new provider key with a label and a priority (lower runs first).
+2. Optionally disable the old one; the next prompt already uses the new list.
+3. The list shows the last provider error per key, which is what `FINNY_INVALID_KEY`
+   was reporting.
+
+The key is stored encrypted with `PROVIDER_KEYS_SECRET` (falling back to
+`JWT_SECRET`). If that secret is rotated, existing rows become undecryptable
+and must be re-entered. Until any backoffice key exists, `AGENT_API_KEY` in the
+API environment is still used as the last candidate.
+
+The dev `AGENT_API_KEY` in `apps/api/.env.development` looks like a free-tier
+gateway key; the OpenAI SDK calls `api.openai.com`, so a non-OpenAI key is
+rejected with the same code. Add a valid OpenAI key in the backoffice instead
+of editing the server.
+
+### Cross-device sync and announcements
+
+- `GET /api/modules` returns the active/beta catalogue (modules, components,
+  integrations) rendered on the app's **Módulos** page.
+- `GET /api/sync/revision` returns a small revision string derived from the
+  user's transactions, budgets, categories, settings, modules and live announcements.
+  The SPA and the APK poll it (15 s, paused in background), and when it changes
+  they invalidate the dashboard/report queries. That is what makes a
+  transaction created on the phone appear on the desktop without a refresh.
+- `GET /api/notifications` returns the live announcements for the signed-in
+  user (audience + publish/expiry window). The app renders the newest one as a
+dismissible banner.
+
+Sessions last **7 days**: the access token, the refresh token and the cookie
+max-age all use `7d`, so returning after more than an hour no longer forces a
+re-login.
+
+The overview's **Transacciones por mes** panel is the global count of ledger
+rows per month for the last six months, scaled against the busiest month; the
+`/superadmin/overview` response also exposes `activity[].amount` (sum of the
+month's amounts) for future reporting. The module card breaks its count down by
+kind instead of counting components as modules.
 
 ## 🌐 Web Surfaces & Password Recovery
 

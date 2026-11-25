@@ -20,7 +20,12 @@ export interface SuperAdminOverview {
     last30d: number;
   };
   data: { budgets: number; categories: number };
-  modules: { total: number; active: number; disabled: number };
+  modules: {
+    total: number;
+    active: number;
+    disabled: number;
+    byKind: { module: number; component: number; integration: number };
+  };
   apiKeys: { total: number; active: number };
   notifications: { total: number; live: number };
   activity: Array<{ month: string; transactions: number; amount: number }>;
@@ -99,7 +104,11 @@ export class SuperAdminOverviewService {
         .getRawMany<{ month: string; transactions: number; amount: number }>(),
     ]);
 
-    const activeModules = modules.filter((m) => m.status !== 'disabled').length;
+    const activeModules = modules.filter((m) => m.status !== 'disabled');
+    const byKind = { module: 0, component: 0, integration: 0 };
+    for (const item of activeModules) {
+      if (item.kind in byKind) byKind[item.kind] += 1;
+    }
 
     return {
       users: { total: usersTotal, last7d: users7d, last30d: users30d },
@@ -112,8 +121,9 @@ export class SuperAdminOverviewService {
       data: { budgets: budgetsTotal, categories: categoriesTotal },
       modules: {
         total: modules.length,
-        active: activeModules,
-        disabled: modules.length - activeModules,
+        active: activeModules.length,
+        disabled: modules.length - activeModules.length,
+        byKind,
       },
       apiKeys: {
         total: apiKeys.length,

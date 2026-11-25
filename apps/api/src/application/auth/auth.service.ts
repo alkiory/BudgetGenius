@@ -155,7 +155,7 @@ export class AuthService {
         email: existingUser.email,
         role: existingUser.role,
       };
-      const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
+      const accessToken = this.jwtService.sign(payload, { expiresIn: '7d' });
       const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
       await this.redisService.set(
         `refreshToken:${existingUser.id}`,
@@ -201,7 +201,7 @@ export class AuthService {
       email: newUser.email,
       role: newUser.role,
     };
-    const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '7d' });
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
     await this.redisService.set(
       `refreshToken:${newUser.id}`,
@@ -296,7 +296,7 @@ export class AuthService {
 
       // 5. Generar tokens (JWT)
       const userData = { id: user.id, email: user.email, role: user.role };
-      const accessToken = this.jwtService.sign(userData, { expiresIn: '1h' });
+      const accessToken = this.jwtService.sign(userData, { expiresIn: '7d' });
       const refreshToken = this.jwtService.sign(userData, { expiresIn: '7d' });
 
       // 6. Guardar en Redis
@@ -329,7 +329,7 @@ export class AuthService {
 
       const userData = { sub: id };
       const newAccessToken = this.jwtService.sign(userData, {
-        expiresIn: '1h',
+        expiresIn: '7d',
       });
 
       return { accessToken: newAccessToken };
@@ -454,7 +454,7 @@ export class AuthService {
       role: userEntity.role,
     };
 
-    const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '7d' });
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
     await this.redisService.set(

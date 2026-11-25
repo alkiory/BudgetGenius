@@ -635,7 +635,7 @@ export class AuthController {
           email: payload['email'],
           role: payload['role'],
         },
-        { expiresIn: '1h' },
+        { expiresIn: '7d' },
       );
 
       this.cookieService.setCookie(res, 'accessToken', newAccessToken);
