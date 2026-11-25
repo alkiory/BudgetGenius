@@ -3,7 +3,7 @@ import { RootState } from "@adapters/store/rootStore";
 import Loader from "@presentation/components/loader";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { translateCategory } from "@presentation/utils/display-translations";
-import { TrendingUp, ArrowDownUp, PieChartIcon, BarChart3 } from "lucide-react";
+import { TrendingUp, ArrowDownUp, PieChartIcon, BarChart3 } from "@presentation/components/ui/animated-icons";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 import {

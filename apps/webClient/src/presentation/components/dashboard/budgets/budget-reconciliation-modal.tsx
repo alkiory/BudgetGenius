@@ -7,7 +7,7 @@ import { Select } from "@presentation/components/ui/select";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { errorToast, successToast } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link2 } from "lucide-react";
+import { Link2 } from "@presentation/components/ui/animated-icons";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 

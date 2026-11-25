@@ -33,12 +33,17 @@ const order = [
             <details
               class="faq-item"
               data-reveal
+              data-icon-hover
               style={`--reveal-delay:${index * 60}ms`}
             >
               <summary>
                 <span>{item.question}</span>
                 <span class="faq-icon" aria-hidden="true">
-                  <animate-icons name="plus" size="16"></animate-icons>
+                  <animate-icons
+                    name="plus"
+                    size="16"
+                    is-animated="false"
+                  ></animate-icons>
                 </span>
               </summary>
               <div class="faq-answer">

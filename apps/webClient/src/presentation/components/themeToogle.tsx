@@ -1,5 +1,5 @@
 import { useTheme } from "@adapters/hooks/themeContext";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "@presentation/components/ui/animated-icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 

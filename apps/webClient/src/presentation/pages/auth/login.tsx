@@ -3,6 +3,7 @@ import { login } from "@application/auth/auth.service";
 import { isNativePlatform } from "@infrastructure/platform";
 import { SocialLoginButtons } from "@presentation/components/social-buttons-login";
 import { BrandDots } from "@presentation/components/loader";
+import { Mail } from "@presentation/components/ui/animated-icons";
 import { Button } from "@presentation/components/ui/button";
 import {
   Card,
@@ -122,21 +123,7 @@ export default function LoginPage() {
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center">
             <div className="rounded-full bg-primary/10 p-2">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6 text-primary"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M18.5 4H5.5C4.12 4 3 5.12 3 6.5v11C3 18.88 4.12 20 5.5 20h13c1.38 0 2.5-1.12 2.5-2.5v-11C21 5.12 19.88 4 18.5 4Z" />
-                <path d="M3 6.5l9 6 9-6" />
-              </svg>
+              <Mail className="h-6 w-6 text-primary" aria-hidden="true" />
             </div>
           </div>
           <CardTitle className="text-2xl font-bold">

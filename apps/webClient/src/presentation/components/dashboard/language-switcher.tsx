@@ -1,7 +1,7 @@
 import { updateSettingsAction } from "@adapters/slices/user-settings/settingsSlice";
 import { RootState } from "@adapters/store/rootStore";
 import { updateUserSettings } from "@application/user/user.service";
-import { Languages } from "lucide-react";
+import { Languages } from "@presentation/components/ui/animated-icons";
 import { useState, useRef, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 

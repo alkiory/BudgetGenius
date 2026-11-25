@@ -7,7 +7,7 @@ import {
 } from "@domain/user/UserPassword";
 import { errorToast, successToast } from "@presentation/utils/toast";
 import { useMutation } from "@tanstack/react-query";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "@presentation/components/ui/animated-icons";
 import type React from "react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";

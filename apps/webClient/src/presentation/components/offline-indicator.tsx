@@ -1,5 +1,5 @@
 import { hasQueuedRequests } from "@infrastructure/offline-queue";
-import { WifiOff, CloudOff } from "lucide-react";
+import { WifiOff, CloudOff } from "@presentation/components/ui/animated-icons";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 

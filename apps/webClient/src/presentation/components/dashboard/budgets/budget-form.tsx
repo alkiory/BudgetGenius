@@ -12,7 +12,7 @@ import { Label } from "@presentation/components/ui/label";
 import { Select } from "@presentation/components/ui/select";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { errorToast } from "@presentation/utils/toast";
-import { PiggyBank, Wallet } from "lucide-react";
+import { PiggyBank, Wallet } from "@presentation/components/ui/animated-icons";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";

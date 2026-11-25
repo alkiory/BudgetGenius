@@ -1,4 +1,4 @@
-import { Wallet, Clock, Wrench } from "lucide-react";
+import { Wallet, Clock, Wrench } from "@presentation/components/ui/animated-icons";
 import { useTranslation } from "react-i18next";
 
 export default function MaintenancePage() {

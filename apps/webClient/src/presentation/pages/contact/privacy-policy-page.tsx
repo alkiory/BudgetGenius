@@ -1,5 +1,5 @@
 import { RoutePaths } from "@presentation/utils/routes";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "@presentation/components/ui/animated-icons";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 

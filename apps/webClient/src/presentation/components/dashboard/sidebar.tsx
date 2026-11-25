@@ -18,7 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
-} from "lucide-react";
+} from "@presentation/components/ui/animated-icons";
 import { useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";

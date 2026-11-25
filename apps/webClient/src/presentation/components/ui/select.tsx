@@ -1,4 +1,4 @@
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "@presentation/components/ui/animated-icons";
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { Label } from "./label";

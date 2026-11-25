@@ -10,8 +10,7 @@ const { lang } = Astro.props;
 const t = getCopy(lang);
 const labels = ui[lang];
 const home = lang === "en" ? "/" : "/es/";
-const changelogHref =
-  lang === "en" ? "/changelog/" : "/es/changelog/";
+const changelogHref = lang === "en" ? "/changelog/" : "/es/changelog/";
 const year = new Date().getFullYear();
 ---
 
@@ -39,8 +38,30 @@ const year = new Date().getFullYear();
     </div>
 
     <div class="footer-bottom">
-      <span>© {year} BudgetGenius. {t.allRightsReserved}</span>
-      <span>{t.developedBy} Alkiory</span>
+      <span>
+        © {year} BudgetGenius. {t.allRightsReserved}
+      </span>
+      <span>
+        {t.developedBy}{" "}
+        <a
+          class="developer-link"
+          href="https://alkiory.web.app"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-icon-hover
+        >
+          <span class="developer-name">Alkiory</span>
+          <span class="developer-coffee-reveal" aria-hidden="true">
+            <animate-icons
+              class="developer-coffee"
+              name="coffee"
+              size="16"
+              is-animated="false"
+              aria-hidden="true"
+            ></animate-icons>
+          </span>
+        </a>
+      </span>
     </div>
   </div>
 </footer>

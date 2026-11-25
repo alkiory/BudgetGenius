@@ -4,7 +4,7 @@ import FooterComponent from "@presentation/components/ui/Footer";
 import { Button } from "@presentation/components/ui/button";
 import HeaderComponent from "@presentation/components/ui/header";
 import { RoutePaths } from "@presentation/utils/routes";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "@presentation/components/ui/animated-icons";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 import { Link } from "react-router";

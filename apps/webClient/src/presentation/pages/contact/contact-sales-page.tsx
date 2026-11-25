@@ -5,7 +5,7 @@ import { Select } from "@presentation/components/ui/select";
 import { Textarea } from "@presentation/components/ui/textarea";
 import { RoutePaths } from "@presentation/utils/routes";
 import { errorToast } from "@presentation/utils/toast";
-import { ArrowLeft, Building, Mail, Phone, User, Check } from "lucide-react";
+import { ArrowLeft, Building, Mail, Phone, User, Check } from "@presentation/components/ui/animated-icons";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";

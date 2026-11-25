@@ -96,7 +96,7 @@ Both apps follow a **Clean Architecture / Hexagonal** pattern with strict layer 
 | State Management | Redux Toolkit + React Query (TanStack) | — |
 | Routing | React Router | 7.3 |
 | Charts | Recharts | 2.x |
-| Icons | Lucide React | — |
+| Icons | AnimateIcons (Lucide) | 0.13 |
 | Testing | Playwright | 1.51 |
 | Auth | Firebase JS SDK | 11.x |
 

@@ -8,7 +8,7 @@ import {
   CardFooter,
 } from "@presentation/components/ui/card";
 import { RoutePaths } from "@presentation/utils/routes";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle } from "@presentation/components/ui/animated-icons";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 

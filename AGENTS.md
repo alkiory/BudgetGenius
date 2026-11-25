@@ -11,5 +11,5 @@
 
 - Read `DESIGN.md` before changing the landing or the public UI.
 - Use the project's design tokens, fonts and component patterns.
-- The landing icons come from `@animateicons/vanilla/lucide`; do not add hand-drawn SVG icon paths.
+- Landing icons come from `@animateicons/vanilla/lucide`; app icons come from `@animateicons/react` through `apps/webClient/src/presentation/components/ui/animated-icons.tsx`. Icons animate on the parent component's hover, not only on the icon's own hover. Do not add hand-drawn SVG icon paths or import `lucide-react`.
 - Impeccable is an assistant-side account skill. Do not install its `.claude`/`.cursor` agents or skills into this repository, and do not commit local agent folders or screenshots.

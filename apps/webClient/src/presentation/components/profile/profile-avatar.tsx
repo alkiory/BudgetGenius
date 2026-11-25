@@ -1,5 +1,5 @@
 import { BrandDots } from "@presentation/components/loader";
-import { Camera } from "lucide-react";
+import { Camera } from "@presentation/components/ui/animated-icons";
 import type React from "react";
 import { useState } from "react";
 

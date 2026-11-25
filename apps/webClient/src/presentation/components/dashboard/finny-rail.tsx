@@ -18,7 +18,7 @@ import {
   Send,
   TrendingUp,
   X,
-} from "lucide-react";
+} from "@presentation/components/ui/animated-icons";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";

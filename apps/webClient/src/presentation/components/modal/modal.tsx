@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { X } from "@presentation/components/ui/animated-icons";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 

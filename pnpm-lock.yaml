@@ -476,6 +476,9 @@ importers:
 
   apps/webClient:
     dependencies:
+      '@animateicons/react':
+        specifier: 0.13.0
+        version: 0.13.0(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       '@capacitor/app':
         specifier: ^7.1.2
         version: 7.1.2(@capacitor/core@7.6.7)
@@ -515,9 +518,6 @@ importers:
       i18next:
         specifier: 26.3.1
         version: 26.3.1(typescript@5.7.3)
-      lucide-react:
-        specifier: 0.483.0
-        version: 0.483.0(react@19.0.0)
       react:
         specifier: 19.0.0
         version: 19.0.0
@@ -633,6 +633,13 @@ packages:
   '@angular-devkit/schematics@16.1.0':
     resolution: {integrity: sha512-LM35PH9DT3eQRSZgrkk2bx1ZQjjVh8BCByTlr37/c+FnF9mNbeBsa1YkxrlsN/CwO+045OwEwRHnkM9Zcx0U/A==}
     engines: {node: ^16.14.0 || >=18.10.0, npm: ^6.11.0 || ^7.5.6 || >=8.0.0, yarn: '>= 1.13.0'}
+
+  '@animateicons/react@0.13.0':
+    resolution: {integrity: sha512-xbSymVZQJqUR1tcRVW4vyEy+USAFMDp0l3uM4nlmEyQazPib7Ay+PFKdBNLeXHXaSUGhKUYJXSvxHYkFki6P2w==}
+    engines: {node: '>=18.17.0'}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
 
   '@animateicons/vanilla@0.2.0':
     resolution: {integrity: sha512-kkiuijLYjj11c80WR+AI7h+Az/o0aYHOseUKZay6eGRMPqOOv38zp0bFfMPnhEBa3fv7yIIWfxc7ot2YzikqDQ==}
@@ -6013,11 +6020,6 @@ packages:
   lru-memoizer@2.3.0:
     resolution: {integrity: sha512-GXn7gyHAMhO13WSKrIiNfztwxodVsP8IoZ3XfrJV4yH2x0/OeTO/FIaAHTY5YekdGgW94njfuKmyyt1E0mR6Ug==}
 
-  lucide-react@0.483.0:
-    resolution: {integrity: sha512-WldsY17Qb/T3VZdMnVQ9C3DDIP7h1ViDTHVdVGnLZcvHNg30zH/MTQ04RTORjexoGmpsXroiQXZ4QyR0kBy0FA==}
-    peerDependencies:
-      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
-
   macos-release@2.5.1:
     resolution: {integrity: sha512-DXqXhEM7gW59OjZO8NIjBCz9AQ1BEMrfiOAl4AYByHCtVHRF4KoGNO8mqQeM8lRCtQe/UnJ4imO/d2HdkKsd+A==}
     engines: {node: '>=6'}
@@ -8390,6 +8392,11 @@ snapshots:
       rxjs: 7.8.1
     transitivePeerDependencies:
       - chokidar
+
+  '@animateicons/react@0.13.0(react-dom@19.0.0(react@19.0.0))(react@19.0.0)':
+    dependencies:
+      react: 19.0.0
+      react-dom: 19.0.0(react@19.0.0)
 
   '@animateicons/vanilla@0.2.0': {}
 
@@ -14485,10 +14492,6 @@ snapshots:
     dependencies:
       lodash.clonedeep: 4.5.0
       lru-cache: 6.0.0
-
-  lucide-react@0.483.0(react@19.0.0):
-    dependencies:
-      react: 19.0.0
 
   macos-release@2.5.1: {}
 

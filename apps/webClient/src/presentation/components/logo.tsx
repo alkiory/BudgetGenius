@@ -1,4 +1,4 @@
-import { DollarSign, Sparkles } from "lucide-react";
+import { DollarSign, Sparkles } from "@presentation/components/ui/animated-icons";
 
 interface LogoProps {
   size?: "sm" | "md" | "lg" | "xl";

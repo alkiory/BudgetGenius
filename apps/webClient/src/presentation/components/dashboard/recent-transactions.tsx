@@ -19,7 +19,7 @@ import {
   Bus,
   Wifi,
   Activity,
-} from "lucide-react";
+} from "@presentation/components/ui/animated-icons";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 

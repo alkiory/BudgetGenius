@@ -47,7 +47,7 @@ import { markOnboardingJustFinished } from "@presentation/utils/appTour";
 import { APP_PATHS } from "@presentation/utils/routes";
 import { errorToast, successToast } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Clock, Coins, Globe } from "lucide-react";
+import { Check, Clock, Coins, Globe } from "@presentation/components/ui/animated-icons";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";

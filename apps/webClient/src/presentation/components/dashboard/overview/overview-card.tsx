@@ -1,5 +1,5 @@
 import { useLocale } from "@adapters/hooks/useLocale";
-import { ArrowDownRight, ArrowUpRight, DollarSign } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, DollarSign } from "@presentation/components/ui/animated-icons";
 import { useTranslation } from "react-i18next";
 
 interface OverviewCardProps {

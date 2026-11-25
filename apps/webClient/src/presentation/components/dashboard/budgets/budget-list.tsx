@@ -4,7 +4,7 @@ import Loader from "@presentation/components/loader";
 import { OverBudgetIcon } from "@presentation/components/ui/budget-status";
 import { Button } from "@presentation/components/ui/button";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
-import { CalendarIcon, Pencil, Trash2 } from "lucide-react";
+import { CalendarIcon, Pencil, Trash2 } from "@presentation/components/ui/animated-icons";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 

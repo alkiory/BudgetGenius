@@ -21,7 +21,7 @@ import { Separator } from "@presentation/components/ui/separator";
 import { goToLanding } from "@presentation/utils/landing";
 import { RoutePaths } from "@presentation/utils/routes";
 import { useMutation } from "@tanstack/react-query";
-import { Wallet } from "lucide-react";
+import { Wallet } from "@presentation/components/ui/animated-icons";
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch } from "react-redux";

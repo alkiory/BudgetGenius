@@ -1,4 +1,4 @@
-import { Sparkles, Wallet } from "lucide-react";
+import { Sparkles, Wallet } from "@presentation/components/ui/animated-icons";
 import { useTranslation } from "react-i18next";
 
 export default function LoadingPage() {

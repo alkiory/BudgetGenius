@@ -17,7 +17,7 @@ import {
   successToast,
 } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ListChecks, Plus } from "lucide-react";
+import { ListChecks, Plus } from "@presentation/components/ui/animated-icons";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 

@@ -5,7 +5,7 @@ import { Button } from "@presentation/components/ui/button";
 import { APP_PATHS } from "@presentation/utils/routes";
 import { successToast, errorToast } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus } from "@presentation/components/ui/animated-icons";
 import {
   cloneElement,
   isValidElement,

@@ -10,7 +10,7 @@ import { PageHeader } from "@presentation/components/ui/page-header";
 import Table from "@presentation/components/ui/table";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { translateCategory } from "@presentation/utils/display-translations";
-import { Plus, Filter, ArrowUpRight, Wallet, DollarSign } from "lucide-react";
+import { Plus, Filter, ArrowUpRight, Wallet, DollarSign } from "@presentation/components/ui/animated-icons";
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";

@@ -150,7 +150,7 @@ BudgetGenius/
 | **React Query (TanStack)** | Server state management and caching |
 | **React Router 7** | Client-side routing with lazy loading |
 | **Recharts** | Composable charting library |
-| **Lucide React** | Icon library |
+| **@animateicons/react** | Animated Lucide icons in the SPA |
 | **@animateicons/vanilla** | Animated Lucide icons in the Astro landing |
 | **Axios** | HTTP client with interceptors |
 

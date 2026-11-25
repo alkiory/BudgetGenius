@@ -28,6 +28,7 @@ const items = [
             <article
               class="card"
               data-reveal
+              data-icon-hover
               style={`--reveal-delay:${index * 90}ms`}
             >
               <div class="feature-head">
@@ -35,6 +36,7 @@ const items = [
                   <animate-icons
                     name={item.icon}
                     size="20"
+                    is-animated="false"
                     aria-hidden="true"
                   ></animate-icons>
                 </span>

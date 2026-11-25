@@ -1,7 +1,7 @@
 import { RootState } from "@adapters/store/rootStore";
 import { useChangelogUnseen } from "@presentation/hooks/useChangelogUnseen";
 import { landingHref, RoutePaths } from "@presentation/utils/routes";
-import { Menu, X } from "lucide-react";
+import { Menu, X } from "@presentation/components/ui/animated-icons";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";

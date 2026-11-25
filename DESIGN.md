@@ -22,11 +22,14 @@ landing.
 
 | Role | Family | Use |
 | --- | --- | --- |
-| Display | **Playfair Display** 700/900 + 700 italic | Hero, section headings, page titles |
-| Body / UI | **Manrope** 400–800 | Body copy, labels, buttons, nav, changelog entries |
+| Display | **Playfair Display** 700/900 + 700 italic | Landing hero headline only |
+| Body / UI | **Manrope** 400–800 | Everything else in the landing and the SPA |
 
-- Load both from the single Google Fonts request in
-  `apps/landing/src/layouts/Base.astro`.
+- Manrope is self-hosted from the Latin variable WOFF2 in each app's
+  `src/assets/fonts/` (with its OFL license) and declared in the app and
+  landing stylesheets. Playfair is loaded from Google Fonts in
+  `apps/landing/src/layouts/Base.astro` for the hero only. The SPA must not
+  load or use Playfair.
 - Never use `ui-sans-serif`, `system-ui`, Inter or Arial as the primary body
   face; they are fallbacks only.
 - Headings use `text-wrap: balance`; paragraphs use `text-wrap: pretty`.
@@ -56,11 +59,14 @@ landing.
   `/es/changelog/`). Mark the current language with `aria-current="page"`.
 - **Cards:** one level only. Chat bubbles inside the Finny card are transcript
   content, not nested cards.
-- **Icons:** use [`@animateicons/vanilla/lucide`](https://animateicons.in/icons/lucide)
-  and the `<animate-icons>` custom element (`name`, `size`). Icons are
-  registered once in `apps/landing/src/layouts/Base.astro`; do not add
-  hand-drawn SVG paths. Place the icon beside the heading, not inside a tile
-  above it.
+- **Icons:** both surfaces use the Lucide AnimateIcons set
+  ([gallery](https://animateicons.in/icons/lucide)). The landing uses
+  `@animateicons/vanilla` with `<animate-icons>` registered once in
+  `apps/landing/src/layouts/Base.astro`; the SPA uses `@animateicons/react`
+  through `apps/webClient/src/presentation/components/ui/animated-icons.tsx`.
+  Icons animate from the containing card/button hover, never only from the
+  icon hitbox. Do not import `lucide-react` or add hand-drawn SVG icon paths.
+  Place the icon beside the heading, not inside a tile above it.
 - **Navigation:** the landing nav includes Features, How it works, Trust &
   Security, FAQ, Changelog and Get the app. The changelog link is localized
   (`/changelog/` or `/es/changelog/`). Below 1180px the nav collapses into the

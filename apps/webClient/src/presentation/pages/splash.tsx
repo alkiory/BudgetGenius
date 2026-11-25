@@ -7,7 +7,7 @@ import api from "@infrastructure/api.config";
 import { isNativePlatform } from "@infrastructure/platform";
 import type { User } from "@domain/index";
 import { RoutePaths } from "@presentation/utils/routes";
-import { Sparkles, Wallet } from "lucide-react";
+import { Sparkles, Wallet } from "@presentation/components/ui/animated-icons";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";

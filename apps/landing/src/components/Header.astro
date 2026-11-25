@@ -64,17 +64,20 @@ const changelogHref = lang === "en" ? "/changelog/" : "/es/changelog/";
         aria-label={labels.themeToLight}
         data-label-light={labels.themeToLight}
         data-label-dark={labels.themeToDark}
+        data-icon-hover
       >
         <animate-icons
           class="icon theme-icon theme-icon--sun"
           name="sun"
           size="18"
+          is-animated="false"
           aria-hidden="true"
         ></animate-icons>
         <animate-icons
           class="icon theme-icon theme-icon--moon"
           name="moon"
           size="18"
+          is-animated="false"
           aria-hidden="true"
         ></animate-icons>
       </button>
@@ -92,11 +95,13 @@ const changelogHref = lang === "en" ? "/changelog/" : "/es/changelog/";
         aria-controls="primary-nav"
         data-open-label={labels.menu}
         data-close-label={labels.close}
+        data-icon-hover
       >
         <animate-icons
           class="icon"
           name="menu"
           size="18"
+          is-animated="false"
           aria-hidden="true"
         ></animate-icons>
       </button>

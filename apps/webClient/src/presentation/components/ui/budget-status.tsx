@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "@presentation/components/ui/animated-icons";
 import type { ReactNode } from "react";
 
 interface OverBudgetContainerProps {

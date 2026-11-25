@@ -5,7 +5,7 @@ import { deleteUser, updateUserSettings } from "@application/user/user.service";
 import { UserSettings } from "@domain/user/userSettings";
 import { errorToast, successToast } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "@presentation/components/ui/animated-icons";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector, useDispatch } from "react-redux";

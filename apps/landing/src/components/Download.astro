@@ -20,10 +20,16 @@ const d = t.sectionDownloadApp;
         <p>{d.subtitle}</p>
 
         <div class="download-actions">
-          <a class="btn btn-primary" href={apkHref} rel="noopener">
+          <a
+            class="btn btn-primary"
+            href={apkHref}
+            rel="noopener"
+            data-icon-hover
+          >
             <animate-icons
               name="download"
               size="18"
+              is-animated="false"
               aria-hidden="true"
             ></animate-icons>
             {d.buttonLabel}

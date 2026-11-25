@@ -37,7 +37,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,700;0,900;1,700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&display=swap"
       rel="stylesheet"
     />
 
@@ -88,6 +88,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
       import { ReceiptText } from "@animateicons/vanilla/lucide/receipt-text";
       import { Download } from "@animateicons/vanilla/lucide/download";
       import { Plus } from "@animateicons/vanilla/lucide/plus";
+      import { Coffee } from "@animateicons/vanilla/lucide/coffee";
 
       defineIcons({
         Sun,
@@ -103,7 +104,45 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
         ReceiptText,
         Download,
         Plus,
+        Coffee,
       });
+    </script>
+
+    <script is:inline>
+      (() => {
+        // Parent-level hover: the card/button owns the pointer area and the
+        // icon animates when the whole component is hovered or focused.
+        const groups = Array.from(
+          document.querySelectorAll("[data-icon-hover]"),
+        );
+        if (!groups.length) return;
+
+        const bound = new WeakSet();
+        const bind = () => {
+          groups.forEach((group) => {
+            if (bound.has(group)) return;
+            const icons = Array.from(group.querySelectorAll("animate-icons"));
+            if (!icons.length) return;
+
+            bound.add(group);
+            const play = () =>
+              icons.forEach((icon) => icon.startAnimation?.());
+            const stop = () =>
+              icons.forEach((icon) => icon.stopAnimation?.());
+
+            group.addEventListener("mouseenter", play);
+            group.addEventListener("mouseleave", stop);
+            group.addEventListener("focusin", play);
+            group.addEventListener("focusout", stop);
+          });
+        };
+
+        // Bind immediately; the tag may already be upgraded, and if it is not
+        // the listeners stay valid and `startAnimation` is available by the
+        // time the pointer reaches the component.
+        bind();
+        customElements.whenDefined("animate-icons").then(bind);
+      })();
     </script>
 
     <script is:inline>

@@ -29,6 +29,7 @@ const icons: Record<string, string> = {
           <article
             class="card"
             data-reveal
+            data-icon-hover
             style={`--reveal-delay:${index * 70}ms`}
           >
             <div class="feature-head">
@@ -36,6 +37,7 @@ const icons: Record<string, string> = {
                 <animate-icons
                   name={icons[key] ?? icons.auth}
                   size="20"
+                  is-animated="false"
                   aria-hidden="true"
                 ></animate-icons>
               </span>

@@ -1,7 +1,7 @@
 import { useLocale } from "@adapters/hooks/useLocale";
 import { periodTranslationKey } from "@domain/dashboard/budgets/budget.entity";
 import { Button } from "@presentation/components/ui/button";
-import { CalendarIcon, Edit2 } from "lucide-react";
+import { CalendarIcon, Edit2 } from "@presentation/components/ui/animated-icons";
 import { useTranslation } from "react-i18next";
 
 export default function BudgetHeader({

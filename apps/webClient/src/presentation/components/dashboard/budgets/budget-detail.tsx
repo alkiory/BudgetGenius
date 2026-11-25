@@ -16,7 +16,7 @@ import {
   infoToast,
 } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus } from "@presentation/components/ui/animated-icons";
 import { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";

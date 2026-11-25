@@ -19,7 +19,7 @@ import {
   SortingState,
   createColumnHelper,
 } from "@tanstack/react-table";
-import { Trash2, ArrowDown, ArrowUp } from "lucide-react";
+import { Trash2, ArrowDown, ArrowUp } from "@presentation/components/ui/animated-icons";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";

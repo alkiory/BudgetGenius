@@ -5,7 +5,7 @@ import {
   Info,
   X,
   XCircle,
-} from "lucide-react";
+} from "@presentation/components/ui/animated-icons";
 import toast from "react-hot-toast";
 
 interface CustomToastProps {

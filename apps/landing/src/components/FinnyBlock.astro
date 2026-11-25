@@ -34,9 +34,41 @@ const copy = t.sectionFeatures.items.finny;
 
         <div class="chat" aria-hidden="true" style="margin-top: 1.4rem;">
           <p class="bubble user">{t.sectionFeatures.finnyChat.tap}</p>
-          <p class="bubble assistant">{t.sectionFeatures.finnyChat.reply}</p>
+          <div class="bubble assistant">
+            <span class="typing" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </span>
+            <span class="bubble-text">{t.sectionFeatures.finnyChat.reply}</span>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </section>
+
+<script is:inline>
+  (() => {
+    const chat = document.querySelector(".chat");
+    if (!chat) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const play = () => chat.classList.add("is-live");
+    chat.classList.add("chat--animate");
+
+    if (!("IntersectionObserver" in window)) {
+      play();
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries, instance) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        play();
+        instance.disconnect();
+      },
+      { threshold: 0.35 },
+    );
+
+    observer.observe(chat);
+  })();
+</script>

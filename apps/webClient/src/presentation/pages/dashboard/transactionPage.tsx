@@ -17,7 +17,7 @@ import TransactionsLoading from "@presentation/components/dashboard/transactions
 import { Button } from "@presentation/components/ui/button";
 import { PageHeader } from "@presentation/components/ui/page-header";
 import { warningToast } from "@presentation/utils/toast";
-import { FileUp, Filter } from "lucide-react";
+import { FileUp, Filter } from "@presentation/components/ui/animated-icons";
 import { useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
