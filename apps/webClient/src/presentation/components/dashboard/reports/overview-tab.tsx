@@ -172,7 +172,7 @@ export default function OverviewTab({
             <PieChart>
               <Pie
                 data={categoryData}
-                dataKey="amount"
+                dataKey="value"
                 nameKey="name"
                 cx="50%"
                 cy="45%"
