@@ -2,7 +2,27 @@
 
 ---
 
-## [v1.10.0] — 2026-11-25
+## [v1.11.0] — 2026-11-25
+
+> Session: the animated-icon line and self-hosted typography across both surfaces. Every icon now animates from its parent component's hover/focus instead of its own, `lucide-react` is replaced by `@animateicons/react` (75-icon catalogue) and `@animateicons/vanilla`, Manrope ships locally in the SPA and the landing, Playfair Display is limited to the landing hero, and the footer credit reveals an animated coffee cup.
+
+### Added
+
+- **Parent-driven animated icons** — `apps/webClient/src/presentation/components/ui/animated-icon.tsx` wraps `@animateicons/react` behind the previous Lucide-style API and moves `hover`/`focus` to the nearest interactive ancestor (button, link, card), so hovering a card animates its icons instead of requiring the icon itself to be hovered. `animated-icons.tsx` is now the single icon catalogue/alias map, and the 43 files that imported `lucide-react` import from it instead.
+- **Animated coffee on the Alkiory credit** — `apps/landing/src/components/Footer.astro` animates the creator name on hover/`focus-visible` and reveals an `@animateicons/vanilla` coffee cup, steam included, at the end of the name. The cup sits in a zero-width wrapper because AnimateIcons does not animate an icon whose own box is 0 px wide.
+
+### Changed
+
+- **Typography** — Manrope (variable WOFF2 + OFL licence) is self-hosted from `apps/landing/src/assets/fonts` and `apps/webClient/src/assets/fonts`, replacing Google Fonts; the SPA no longer loads Google Fonts at all. Playfair Display styles only the landing hero `h1`, and every other landing section and the whole app render in Manrope, `CardDescription` included.
+- **Landing icon binding** — Features, Security, Download, Header and FAQ mark their containers with `data-icon-hover`, and `apps/landing/src/layouts/Base.astro` binds `mouseenter`/`mouseleave`/`focusin`/`focusout` immediately through a `WeakSet`, because waiting only on `customElements.whenDefined` left the listeners unbound on first paint. `prefers-reduced-motion` still disables every hover animation.
+
+### Fixed
+
+- **Cyrillic subset mixed into Latin text** — the Google Fonts Manrope response also served a Cyrillic `@font-face` with its own `unicode-range`, which some browsers picked for Latin copy and painted with a different face. Shipping the local Latin WOFF2 removes the mismatch.
+
+---
+
+## [v1.10.0] — 2026-11-24
 
 > Session: budget-attribution correctness, idempotent imports and the visual rewash. Transactions now carry an explicit `budgetCategoryId` FK with a deterministic fallback for legacy rows, the reconciliation screen lets the user assign the rows no rule can attribute, imports are replay-safe, and the whole UI moved to the teal token palette. This version also closes the quality gates: `check-types` is a real `tsc -b`, the API suite runs against a live database in CI, Swagger is development-only and Postgres is no longer published in production.
 

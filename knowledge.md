@@ -1449,6 +1449,8 @@ git push origin main --tags
 
 > **Why annotated tags (`-a`)?** `git describe` ignores lightweight tags by default in some configurations. Annotated tags also carry a message for the release log.
 
+> **Automated path:** `.github/workflows/release-android.yml` also runs on every push to `main` and publishes only when the root `package.json` version has no GitHub Release yet. It builds the APK, creates the annotated tag `vX.Y.Z` at that commit, uses the matching `## [vX.Y.Z]` section of `docs/changelog.md` as the release body, and attaches both `BudgetGenius-vX.Y.Z.apk` and the stable `BudgetGenius.apk` alias under the title `BudgetGenius vX.Y.Z`. The landing download button points at `releases/latest/download/BudgetGenius.apk`, so it always serves the newest stable APK without an env change or redeploy; the landing probes that URL at build time and falls back to the release page while the alias does not exist yet, so an early deploy never ships a 404. The manual tag + push below still works and simply re-publishes that tag (`workflow_dispatch` forces it too).
+
 ### 16.4 CI auto-versioning reminder
 
 The CI workflows (`firebase-hosting-merge.yml`, `build-apk.yml`, `firebase-pull-request.yml`) already inject `VITE_APP_VERSION` from `git describe --tags --always --dirty`. Once the tag exists, the version badge in the web UI and APK will display the correct version automatically.
@@ -1459,8 +1461,8 @@ The CI workflows (`firebase-hosting-merge.yml`, `build-apk.yml`, `firebase-pull-
 - [ ] Bump version in root `package.json`
 - [ ] Update `docs/changelog.md` with release notes
 - [ ] Commit: `chore: bump version to vX.Y.Z`
-- [ ] Create annotated tag: `git tag -a vX.Y.Z -m "vX.Y.Z — ..."`
-- [ ] Push: `git push origin main --tags`
+- [ ] Push to `main` — `release-android.yml` creates the annotated tag and the GitHub Release with the APK
+- [ ] (Optional) `git tag -a vX.Y.Z -m "vX.Y.Z — ..."` + `git push origin main --tags` to release without a new commit
 - [ ] Verify CI/CD completes successfully
 - [ ] Confirm version badge in web UI shows the new version
 ```

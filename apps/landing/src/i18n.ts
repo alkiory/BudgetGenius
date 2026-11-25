@@ -85,6 +85,55 @@ export function alternateLangHref(pathname: string): {
   };
 }
 
-export const apkHref =
-  import.meta.env.PUBLIC_APK_URL ??
-  "https://github.com/alkiory/BudgetGenius/releases/latest";
+const githubRepo = "https://github.com/alkiory/BudgetGenius";
+
+/** Stable asset published by every release since the automated pipeline. */
+const stableApkHref = `${githubRepo}/releases/latest/download/BudgetGenius.apk`;
+
+/** Always exists, even before the first release with the stable alias. */
+const latestReleaseHref = `${githubRepo}/releases/latest`;
+
+const apkOverride = (import.meta.env.PUBLIC_APK_URL ?? "").trim();
+
+/**
+ * Direct download of the newest stable APK. The release workflow publishes the
+ * build twice — `BudgetGenius-vX.Y.Z.apk` and the stable `BudgetGenius.apk`
+ * alias — so this URL keeps serving the latest release with no env change and
+ * no redeploy. Set PUBLIC_APK_URL only to pin a specific build.
+ */
+export const apkHref = apkOverride || stableApkHref;
+
+let resolvedApkHref: Promise<string> | undefined;
+
+/**
+ * True when `url` serves bytes. A range GET (not HEAD) is used because GitHub's
+ * asset CDN does not always answer HEAD reliably, and it keeps the probe to a
+ * single byte. Any network/HTTP problem counts as "missing".
+ */
+async function servesBytes(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(url, {
+      headers: { Range: "bytes=0-0" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(5000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolves the download destination once, at build time. The stable alias only
+ * exists from the first release published with it, so a landing deployed before
+ * that release falls back to the newest release page instead of shipping a 404.
+ * Cached so a dev server or a many-page build probes GitHub at most once.
+ */
+export function resolveApkHref(): Promise<string> {
+  resolvedApkHref ??= apkOverride
+    ? Promise.resolve(apkOverride)
+    : servesBytes(stableApkHref).then((available) =>
+        available ? stableApkHref : latestReleaseHref,
+      );
+  return resolvedApkHref;
+}

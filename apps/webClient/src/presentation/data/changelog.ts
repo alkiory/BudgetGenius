@@ -63,40 +63,52 @@ export interface ChangelogEntry {
  */
 export const changelog: ChangelogEntry[] = [
   {
-    version: "1.10",
-    date: "2026-11-13",
+    version: "1.11",
+    date: "2026-11-25",
     highlight: true,
     title: {
-      en: "Import your finances and explore clearer reports",
-      es: "Importa tus finanzas y consulta informes más claros",
+      en: "A livelier interface, down to the details",
+      es: "Una interfaz más viva, hasta en los detalles",
     },
     description: {
-      en: "Bring in transactions and categories from your finance exports, including older formats. Reports now follow the period you select and show clearer income, expense, and savings figures. Dark mode also keeps the dashboard’s balance, income, and expense colors easy to distinguish.",
-      es: "Importa movimientos y categorías desde tus archivos financieros, incluidos formatos antiguos. Los informes ahora respetan el período seleccionado y muestran con más claridad los ingresos, gastos y ahorros. Además, el modo oscuro mantiene bien diferenciados los colores del saldo, los ingresos y los gastos en el panel.",
+      en: "Icons across the app and the site now animate when you hover or focus the card, button, or link that holds them, and the new typeface makes every screen easier to read. The creator’s name in the footer also answers your cursor with a small animated coffee cup.",
+      es: "Los iconos de la app y de la web ahora se animan al pasar el cursor o enfocar la tarjeta, el botón o el enlace que los contiene, y la nueva tipografía hace que cada pantalla se lea mejor. El nombre del creador en el pie de página también responde a tu cursor con una pequeña taza de café animada.",
+    },
+  },
+  {
+    version: "1.10",
+    date: "2026-11-24",
+    title: {
+      en: "Every expense lands in the right budget",
+      es: "Cada gasto cae en el presupuesto correcto",
+    },
+    description: {
+      en: "Expenses are linked to a budget category automatically, and when a row can’t be matched you get a short review list to assign it yourself, so totals never drift. Importing the same file twice no longer duplicates anything. The dashboard also wears a calmer new look with clearer loading states.",
+      es: "Los gastos se vinculan automáticamente a una categoría del presupuesto y, cuando una fila no se puede asociar, aparece una breve lista de revisión para asignarla tú, así los totales no se desvían. Importar el mismo archivo dos veces ya no duplica nada. El panel también estrena un look más sereno, con estados de carga más claros.",
     },
   },
   {
     version: "1.9",
-    date: "2026-10-22",
+    date: "2026-11-23",
     title: {
-      en: "Budgets for spending and saving",
-      es: "Presupuestos para gastar y ahorrar",
+      en: "Your account and data, better protected",
+      es: "Tu cuenta y tus datos, mejor protegidos",
     },
     description: {
-      en: "You can now choose between a spending budget and a savings goal. Spending limits are filled automatically from your transactions, while savings goals grow as you add money. The budget form is simpler: just pick a category and set its limit or goal.",
-      es: "Ahora puedes elegir entre un presupuesto de gasto y una meta de ahorro. Los límites de gasto se completan automáticamente con tus transacciones, mientras que las metas de ahorro crecen a medida que añades dinero. El formulario es más sencillo: solo eliges la categoría y defines su límite u objetivo.",
+      en: "On the web, your session no longer keeps tokens in local storage — it relies on secure cookies instead. Account responses only include the fields the app needs, every request passes stricter security rules, and emails are stored in a single normalised form so signing in works regardless of capitalization.",
+      es: "En la web, tu sesión ya no guarda tokens en el almacenamiento local — usa cookies seguras. Las respuestas de tu cuenta solo incluyen los campos que la app necesita, cada petición pasa reglas de seguridad más estrictas y los correos se guardan en una única forma normalizada, así que iniciar sesión funciona sin importar las mayúsculas.",
     },
   },
   {
     version: "1.8",
-    date: "2026-10-22",
+    date: "2026-11-13",
     title: {
-      en: "Better numbers, forms, and a fresh look",
-      es: "Mejores números, formularios y un nuevo look",
+      en: "Clearer numbers, simpler forms, and budgets that fit",
+      es: "Números más claros, formularios más simples y presupuestos a tu medida",
     },
     description: {
-      en: "Everything now works in euros (€) without external conversions. Dashboard numbers always show two decimals, and chart labels no longer overlap. Transaction forms now include a date field, retain your data when switching types, and scroll neatly. Plus, the registration screen has a fresh new look with a full animated background.",
-      es: "Todo funciona ahora en euros (€) sin conversiones externas. Los números del panel siempre muestran dos decimales y las etiquetas del gráfico ya no se superponen. Los formularios de transacciones ahora incluyen fecha, mantienen tus datos al cambiar de tipo y se desplazan correctamente. Además, la pantalla de registro tiene un nuevo look con fondo animado a pantalla completa.",
+      en: "Everything works in your own currency (€, $ or COP) without external conversions, and dashboard figures always show two decimals. Transaction forms now include a date field and keep your data when you switch types. You can choose between a spending budget and a savings goal, bring in transactions from your finance exports, and read reports for the period you select.",
+      es: "Todo funciona en tu propia moneda (€, $ o COP) sin conversiones externas, y las cifras del panel muestran siempre dos decimales. Los formularios de movimientos incluyen fecha y conservan tus datos al cambiar de tipo. Puedes elegir entre un presupuesto de gasto y una meta de ahorro, importar movimientos desde tus archivos financieros y consultar informes del período que selecciones.",
     },
   },
   {
