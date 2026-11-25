@@ -9,7 +9,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/status-active-brightgreen" alt="Status" />
   <img src="https://img.shields.io/badge/license-UNLICENSED-blue" alt="License" />
-  <img src="https://img.shields.io/badge/version-v1.7.3-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v1.10.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen" alt="Node" />
 </p>
 ---
@@ -68,9 +68,9 @@ The application follows a **Clean Architecture** pattern across both its fronten
                                     │
                         ┌───────────▼───────────┐
                         │         api           │
-                        │      NestJS 10        │
+                        │      NestJS 11        │
                         │  TypeORM + Passport   │
-                        │      Port 3000        │
+                        │      Port 5000        │
                         └───┬───────┬───────┬───┘
                             │       │       │
                     ┌───────▼──┐ ┌──▼───┐ ┌▼──────┐
@@ -120,7 +120,7 @@ BudgetGenius/
 ### Backend (`apps/api`)
 | Technology | Purpose |
 |-----------|---------|
-| **NestJS 10** | Server-side framework with modular architecture |
+| **NestJS 11** | Server-side framework with modular architecture |
 | **TypeScript 5.7** | Type-safe development |
 | **TypeORM 0.3** | Object-Relational Mapping for PostgreSQL |
 | **PostgreSQL 15** | Primary relational database |
@@ -303,8 +303,8 @@ This starts both the **NestJS backend** and the **Vite frontend** with hot reloa
 | Service | URL (Mode A — local dev) | URL (Mode B — Docker) | Description |
 |---------|--------------------------|----------------------|-------------|
 | 🌐 **Frontend** | http://localhost:5173 (Vite) | http://localhost:3001 (nginx) | React SPA |
-| 🚂 **Backend API** | http://localhost:5000 | http://localhost:3000 | NestJS REST API (binds `process.env.PORT \|\| 5000`, see `apps/api/src/main.ts`) |
-| 📚 **Swagger Docs** | http://localhost:5000/docs | http://localhost:3000/docs | Interactive API documentation |
+| 🚂 **Backend API** | http://localhost:5000 | http://localhost:3000 → container `5000` | NestJS REST API. The process always listens on **5000**; `docker-compose.dev.yml` publishes `3000:5000` |
+| 📚 **Swagger Docs** | http://localhost:5000/docs | http://localhost:3000/docs → container `5000` | Interactive API documentation (development only) |
 | 🐘 **PostgreSQL** | localhost:5432 | localhost:5432 (via Docker port mapping) | Schema `bg_public` (`user: postgres_admin_dev`, `pass: dev_password`, `db: budgetgenius_dev`) |
 | 🔴 **Redis** | localhost:6379 | localhost:6379 (via Docker port mapping) | Cache, refresh tokens, throttle buckets |
 
@@ -863,7 +863,8 @@ FIREBASE_AUTH_DOMAIN=
 ### Frontend (`apps/webClient/.env.development`)
 
 ```env
-VITE_API_URL=http://localhost:3000/api
+# Mode A (pnpm dev): the API listens on 5000. Docker/Mode B publishes it on 3000.
+VITE_API_URL=http://localhost:5000/api
 VITE_FRONTEND_URL=http://localhost:3001
 
 # Firebase (optional)
@@ -892,8 +893,9 @@ See `.env.example` files in each app directory for the full list of available va
 
 When the backend is running, Swagger API documentation is available at:
 
-- **Development:** http://localhost:3000/docs
-- **Production:** https://your-domain.com/docs
+- **Development (Mode A):** http://localhost:5000/docs
+- **Docker (Mode B):** http://localhost:3000/docs (host `3000` → container `5000`)
+- **Production:** not served. Since v1.10.0 `SwaggerModule` is registered only when `NODE_ENV !== 'production'`, so `/api/docs` returns 404 on the deployed API.
 
 ---
 
