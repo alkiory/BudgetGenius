@@ -1,0 +1,42 @@
+---
+import { Image } from "astro:assets";
+import finny from "../assets/finny.webp";
+import { getCopy, ui, type Lang } from "../i18n";
+
+interface Props {
+  t: ReturnType<typeof getCopy>;
+  lang: Lang;
+}
+
+const { t, lang } = Astro.props;
+const labels = ui[lang];
+const copy = t.sectionFeatures.items.finny;
+---
+
+<section class="section" id="finny">
+  <div class="container">
+    <div class="finny" data-reveal>
+      <div class="finny-art">
+        <Image
+          src={finny}
+          alt={labels.finnyAlt}
+          format="webp"
+          widths={[240, 320, 420]}
+          sizes="(max-width: 960px) 60vw, 320px"
+          loading="lazy"
+          quality={80}
+        />
+      </div>
+
+      <div class="finny-copy">
+        <h2>{copy.title}</h2>
+        <p>{copy.description}</p>
+
+        <div class="chat" aria-hidden="true" style="margin-top: 1.4rem;">
+          <p class="bubble user">{t.sectionFeatures.finnyChat.tap}</p>
+          <p class="bubble assistant">{t.sectionFeatures.finnyChat.reply}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

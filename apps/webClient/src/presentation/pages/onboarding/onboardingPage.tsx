@@ -43,6 +43,7 @@ import {
   prefersReducedMotion,
 } from "@presentation/utils/deviceCapabilities";
 import type { SupportedLocaleTag } from "@presentation/utils/deviceCapabilities";
+import { markOnboardingJustFinished } from "@presentation/utils/appTour";
 import { APP_PATHS } from "@presentation/utils/routes";
 import { errorToast, successToast } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -141,6 +142,8 @@ export default function OnboardingPage() {
       // RecentTransactions currency, etc.) see the new values
       // without re-fetching.
       if (data) dispatch(setSettingsAction(data));
+      // Arms the dashboard product tour for this first visit only.
+      markOnboardingJustFinished();
       queryClient.invalidateQueries({ queryKey: ["user-settings"] });
       successToast(t("onboarding.savedSuccess"), 3000, "onboarding");
     },
@@ -337,7 +340,12 @@ export default function OnboardingPage() {
         </section>
 
         <div className="flex justify-end pt-2">
-          <Button type="submit" disabled={!canSubmit} size="lg">
+          <Button
+            type="submit"
+            disabled={!canSubmit}
+            size="lg"
+            className="star-cta"
+          >
             {isSaving ? t("common.loading") : t("onboarding.submit")}
           </Button>
         </div>

@@ -754,4 +754,187 @@ body {
   .skeleton::after {
     animation: none;
   }
+
+  .star-cta::before,
+  .driver-popover.bg-tour .driver-popover-next-btn::before {
+    animation: none;
+  }
+}
+
+/* ── Star border (React Bits' StarBorder, CSS-only) ─────────────────
+   A bright head drags a fading trail around any pill-shaped CTA using a
+   masked conic gradient. `--star-angle` is registered so the leading
+   angle can be animated rather than swapping backgrounds frame by frame.
+   Browsers without @property keep a static luminous rim. */
+
+@property --star-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes app-star-lap {
+  to {
+    --star-angle: 360deg;
+  }
+}
+
+.star-cta,
+.driver-popover.bg-tour .driver-popover-next-btn {
+  position: relative;
+  isolation: isolate;
+}
+
+.star-cta::before,
+.driver-popover.bg-tour .driver-popover-next-btn::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--star-angle),
+    transparent 0deg 226deg,
+    rgb(45 212 191 / 0.32) 292deg,
+    rgb(45 212 191 / 0.85) 334deg,
+    #eafffb 356deg,
+    #ffffff 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  filter: drop-shadow(0 0 5px rgb(45 212 191 / 0.75));
+  animation: app-star-lap 5s linear infinite;
+  pointer-events: none;
+}
+
+/* ── driver.js product tour theme ──────────────────────────────────
+   The library ships an unopinionated white popover; this dresses it in
+   the app's card tokens so it reads as part of the product in both
+   themes, with the same star-border CTA for the Next / Done action. */
+
+.driver-popover.bg-tour {
+  max-width: 340px;
+  padding: 18px 20px;
+  border: 1px solid rgb(var(--border));
+  border-radius: 16px;
+  background-color: rgb(var(--card));
+  color: rgb(var(--card-foreground));
+  box-shadow: 0 34px 80px -34px rgb(2 8 20 / 0.9);
+}
+
+.driver-popover.bg-tour .driver-popover-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  padding-right: 18px;
+}
+
+.driver-popover.bg-tour .driver-popover-description {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgb(var(--muted-foreground));
+}
+
+.driver-popover.bg-tour .bg-tour__changelog-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid rgb(13 148 136 / 0.35);
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.driver-popover.bg-tour .bg-tour__changelog-link::after {
+  content: "↗";
+  font-size: 11px;
+}
+
+.driver-popover.bg-tour .bg-tour__changelog-link:hover,
+.driver-popover.bg-tour .bg-tour__changelog-link:focus-visible {
+  border-bottom-color: currentColor;
+  color: #115e59;
+}
+
+.dark .driver-popover.bg-tour .bg-tour__changelog-link {
+  border-bottom-color: rgb(45 212 191 / 0.4);
+  color: #5eead4;
+}
+
+.dark .driver-popover.bg-tour .bg-tour__changelog-link:hover,
+.dark .driver-popover.bg-tour .bg-tour__changelog-link:focus-visible {
+  color: #99f6e4;
+}
+
+.driver-popover.bg-tour .driver-popover-close-btn {
+  width: 24px;
+  height: 24px;
+  font-size: 16px;
+  color: rgb(var(--muted-foreground));
+}
+
+.driver-popover.bg-tour .driver-popover-close-btn:hover,
+.driver-popover.bg-tour .driver-popover-close-btn:focus-visible {
+  color: rgb(var(--foreground));
+}
+
+.driver-popover.bg-tour .driver-popover-footer {
+  margin-top: 16px;
+}
+
+.driver-popover.bg-tour .driver-popover-progress-text {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgb(var(--muted-foreground));
+}
+
+.driver-popover.bg-tour .driver-popover-footer-btn {
+  padding: 6px 12px;
+  border: 1px solid rgb(var(--border));
+  border-radius: 8px;
+  background-color: transparent;
+  color: rgb(var(--foreground));
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.driver-popover.bg-tour .driver-popover-footer-btn:hover,
+.driver-popover.bg-tour .driver-popover-footer-btn:focus-visible {
+  background-color: rgb(var(--muted));
+}
+
+.driver-popover.bg-tour .driver-popover-next-btn {
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 14px;
+  background: linear-gradient(135deg, #2dd4bf, #38bdf8);
+  color: #04211d;
+}
+
+.driver-popover.bg-tour .driver-popover-next-btn:hover,
+.driver-popover.bg-tour .driver-popover-next-btn:focus-visible {
+  background: linear-gradient(135deg, #2dd4bf, #38bdf8);
+  filter: brightness(1.08);
+}
+
+.driver-popover.bg-tour .driver-popover-arrow {
+  display: none;
+}
+
+.driver-popover.bg-tour .driver-popover-footer .driver-popover-btn-disabled {
+  opacity: 0.5;
 }

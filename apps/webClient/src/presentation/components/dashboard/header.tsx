@@ -14,7 +14,7 @@ export function DashboardHeader() {
     <header className="sticky top-0 z-20 flex min-h-16 flex-shrink-0 border-b border-slate-200/70 bg-white/65 pt-[max(env(safe-area-inset-top),0.5rem)] backdrop-blur-2xl dark:border-white/[0.06] dark:bg-[#050a12]/65 md:pt-0">
       <div className="flex flex-1 justify-end px-4">
         <div className="flex items-center gap-3">
-          <div className="hidden md:block">
+          <div className="hidden md:block" data-tour="quick-add">
             <AddTransactionModal isHeader />
           </div>
           <div className="ml-3">

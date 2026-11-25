@@ -177,64 +177,6 @@ async function mockApi(
     });
   });
 }
-  // /auth/verify returns 200 (the user just signed up, the JWT
-  // is in localStorage on the Capacitor path or in cookies on
-  // the web path; either way the backend issues a fresh 200 on
-  // verify). We don't need to shape the body — useLoadUser
-  // reads /user/profile next, but we mock that too.
-  await request.post("**/api/auth/verify", {
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify({ isValid: true, user: { userId: 42 } }),
-  });
-
-  await request.get("**/api/user/profile", {
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify({
-      id: 42,
-      name: "Sergio",
-      surname: "Campbell",
-      email: "sergio@example.com",
-      authProvider: "email",
-      role: "user",
-      isPremium: false,
-    }),
-  });
-
-  if (options.settings === "transient-error") {
-    // Three failures to exhaust React Query's `retry: 3`. The
-    // spec still asserts the gate routes a FRESH user to
-    // /app/onboarding under this condition (the bypass
-    // regression).
-    await request.get("**/api/user-settings", {
-      status: 500,
-      contentType: "application/json",
-      body: JSON.stringify({ message: "mocked transient failure" }),
-    });
-    await request.get("**/api/user-settings", {
-      status: 500,
-      contentType: "application/json",
-      body: JSON.stringify({ message: "mocked transient failure" }),
-    });
-    await request.get("**/api/user-settings", {
-      status: 500,
-      contentType: "application/json",
-      body: JSON.stringify({ message: "mocked transient failure" }),
-    });
-  } else {
-    await request.get("**/api/user-settings", {
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        timezone: options.settings ? "America/Bogota" : "UTC",
-        currency: options.settings ? "COP" : "USD",
-        locale: options.settings ? "es-CO" : "en-US",
-        hasCompletedOnboarding: options.settings,
-      }),
-    });
-  }
-}
 
 test.describe("OnboardingGuard v1.7.0 truth-table regression net", () => {
   // Standardized 8-second timeout across all four cells. Cells

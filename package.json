@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "npx turbo dev",
     "build": "npx turbo build",
+    "build:web": "pnpm --filter landing build && pnpm --filter frontend-web build && node scripts/assemble-web.mjs",
     "start": "node apps/api/dist/src/main.js",
     "test": "npx turbo test",
     "test:all": "pnpm --filter api test && pnpm --filter frontend-web test",

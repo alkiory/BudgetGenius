@@ -896,7 +896,10 @@
             "subtitle": "How the app got better, one release at a time.",
             "regionAria": "Changelog timeline",
             "footerLink": "What's new",
-            "newBadge": "New"
+            "newBadge": "New",
+            "latestBadge": "Latest",
+            "latestRelease": "Latest release",
+            "backHome": "Back to home"
         }
     },
     "demo": {
@@ -1091,6 +1094,31 @@
         "offlineMessage": "You're offline — changes will sync when reconnected",
         "syncingPending": "Syncing pending changes...",
         "savedOffline": "Saved offline — will sync when connection returns"
+    },
+    "tour": {
+        "progress": "{{current}} of {{total}}",
+        "next": "Next",
+        "previous": "Back",
+        "done": "Got it",
+        "changelogCta": "Open the full changelog",
+        "onboarding": {
+            "welcomeTitle": "You're all set",
+            "welcomeBody": "Your preferences are saved. Here's a 60-second tour of where everything lives.",
+            "navTitle": "Every area, one click away",
+            "navBody": "Dashboard, transactions, budgets, reports and income all live in this sidebar.",
+            "addTitle": "Log your first transaction",
+            "addBody": "Use the + button to record income or an expense. Categorizing takes a second.",
+            "finnyTitle": "Meet Finny",
+            "finnyBody": "Ask Finny about spending, budgets or trends in English or Spanish.",
+            "releaseTitle": "Release notes live here",
+            "releaseBody": "The version badge opens the changelog whenever something new ships."
+        },
+        "whatsNew": {
+            "title": "What's new in v{{version}}",
+            "body": "A refreshed landing page, password recovery by email and a smoother dashboard.",
+            "changelogTitle": "See the full changelog",
+            "changelogBody": "Every release is documented here — open it any time from the version badge."
+        }
     },
     "maintenance": {
         "title": "We're down for maintenance",

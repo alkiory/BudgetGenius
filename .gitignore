@@ -9,6 +9,8 @@
 # Build output
 /dist
 /build
+/apps/*/dist/
+**/.astro/
 /.firebase
 
 # environments
@@ -30,3 +32,18 @@ google-services.json
 # Python
 __pycache__/
 *.pyc
+
+# Local agent tooling and design-review artifacts (never commit)
+.claude/
+.cursor/
+.agents/
+.impeccable/
+.screenshots/
+/screenshots/
+/.cloud-attachments/
+
+# Test/browser captures
+playwright-report/
+test-results/
+.DS_Store
+Thumbs.db

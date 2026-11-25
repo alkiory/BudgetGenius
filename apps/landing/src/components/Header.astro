@@ -1,0 +1,147 @@
+---
+import logo from "../assets/logo.webp";
+import {
+  alternateLangHref,
+  appHref,
+  getCopy,
+  ui,
+  type Lang,
+} from "../i18n";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = getCopy(lang);
+const labels = ui[lang];
+const homeHref = lang === "en" ? "/" : "/es/";
+const languagePaths = alternateLangHref(Astro.url.pathname);
+const suffix = `${Astro.url.search}${Astro.url.hash}`;
+const enHref = `${languagePaths.en === "/" ? "/" : languagePaths.en}${suffix}`;
+const esHref = `${languagePaths.es}${suffix}`;
+const changelogHref = lang === "en" ? "/changelog/" : "/es/changelog/";
+---
+
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href={homeHref} aria-label="BudgetGenius">
+      <img src={logo.src} width="30" height="30" alt="" loading="eager" />
+      <span>BudgetGenius</span>
+    </a>
+
+    <nav class="nav" id="primary-nav" aria-label={labels.nav}>
+      <a href={`${homeHref}#features`}>{t.features}</a>
+      <a href={`${homeHref}#how-it-works`}>{t.sectionHow?.badge ?? "How it works"}</a>
+      <a href={`${homeHref}#security`}>{t.sectionSecurity?.badge ?? "Security"}</a>
+      <a href={`${homeHref}#faq`}>FAQ</a>
+      <a href={changelogHref}>{t.changelog.footerLink}</a>
+      <a href={`${homeHref}#download`}>{t.sectionDownloadApp?.badge ?? "Get the app"}</a>
+    </nav>
+
+    <div class="header-actions">
+      <div class="lang-switch" role="group" aria-label={labels.language}>
+        <a
+          class="lang-link"
+          href={enHref}
+          aria-current={lang === "en" ? "page" : undefined}
+          hreflang="en"
+          lang="en">EN</a
+        >
+        <a
+          class="lang-link"
+          href={esHref}
+          aria-current={lang === "es" ? "page" : undefined}
+          hreflang="es"
+          lang="es">ES</a
+        >
+      </div>
+
+      <button
+        class="theme-toggle"
+        id="theme-toggle"
+        type="button"
+        aria-label={labels.themeToLight}
+        data-label-light={labels.themeToLight}
+        data-label-dark={labels.themeToDark}
+      >
+        <animate-icons
+          class="icon theme-icon theme-icon--sun"
+          name="sun"
+          size="18"
+          aria-hidden="true"
+        ></animate-icons>
+        <animate-icons
+          class="icon theme-icon theme-icon--moon"
+          name="moon"
+          size="18"
+          aria-hidden="true"
+        ></animate-icons>
+      </button>
+
+      <a class="btn btn-primary header-cta" href={appHref("/auth/signup")}>
+        {t.getStarted}
+      </a>
+
+      <button
+        class="menu-button"
+        id="menu-button"
+        type="button"
+        aria-label={labels.menu}
+        aria-expanded="false"
+        aria-controls="primary-nav"
+        data-open-label={labels.menu}
+        data-close-label={labels.close}
+      >
+        <animate-icons
+          class="icon"
+          name="menu"
+          size="18"
+          aria-hidden="true"
+        ></animate-icons>
+      </button>
+    </div>
+  </div>
+</header>
+
+<script is:inline>
+  (() => {
+    const root = document.documentElement;
+    const toggle = document.getElementById("theme-toggle");
+    const syncThemeLabel = () => {
+      if (!toggle) return;
+      const isDark = root.dataset.theme !== "light";
+      toggle.setAttribute(
+        "aria-label",
+        (isDark
+          ? toggle.dataset.labelLight
+          : toggle.dataset.labelDark) || "Toggle theme",
+      );
+    };
+
+    syncThemeLabel();
+    toggle?.addEventListener("click", () => {
+      const next = root.dataset.theme === "light" ? "dark" : "light";
+      root.dataset.theme = next;
+      try {
+        localStorage.setItem("theme", next);
+      } catch {
+        /* storage can be blocked; the theme still applies for this page */
+      }
+      syncThemeLabel();
+    });
+
+    const menuButton = document.getElementById("menu-button");
+    const nav = document.getElementById("primary-nav");
+    menuButton?.addEventListener("click", () => {
+      if (!nav) return;
+      const open = nav.dataset.open === "true";
+      nav.dataset.open = String(!open);
+      menuButton.setAttribute("aria-expanded", String(!open));
+      menuButton.setAttribute(
+        "aria-label",
+        open ? menuButton.dataset.openLabel : menuButton.dataset.closeLabel,
+      );
+    });
+  })();
+</script>

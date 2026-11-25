@@ -6,13 +6,12 @@ import {
 import api from "@infrastructure/api.config";
 import { isNativePlatform } from "@infrastructure/platform";
 import type { User } from "@domain/index";
-import CTAPage from "@presentation/pages/cta";
 import { RoutePaths } from "@presentation/utils/routes";
 import { Sparkles, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router";
+import { Navigate, useNavigate } from "react-router";
 
 /** Total time the splash is visible before auto-redirecting. */
 const SPLASH_DURATION_MS = 1800;
@@ -286,5 +285,14 @@ export function RootRoute() {
   if (native && !alreadyShown) {
     return <SplashPage />;
   }
-  return <CTAPage />;
+  // The marketing site is a static Astro app served from the origin root; the
+  // SPA no longer ships a landing page. On the web, `/` only happens in local
+  // dev (production rewrites `/` to the Astro build), so send the visitor into
+  // the app — AuthGuard decides between login and dashboard from there.
+  return (
+    <Navigate
+      to={`${RoutePaths.App}/${RoutePaths.Dashboard}`}
+      replace
+    />
+  );
 }

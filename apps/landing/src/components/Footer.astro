@@ -1,0 +1,46 @@
+---
+import logo from "../assets/logo.webp";
+import { getCopy, ui, type Lang } from "../i18n";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = getCopy(lang);
+const labels = ui[lang];
+const home = lang === "en" ? "/" : "/es/";
+const changelogHref =
+  lang === "en" ? "/changelog/" : "/es/changelog/";
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-top">
+      <div>
+        <a class="brand" href={home}>
+          <img src={logo.src} width="26" height="26" alt="" loading="lazy" />
+          <span>BudgetGenius</span>
+        </a>
+        <p style="margin-top: 0.6rem; max-width: 34ch; font-size: 0.85rem;">
+          {t.heroBadgeSub}
+        </p>
+      </div>
+
+      <nav class="footer-links" aria-label={labels.footerNav}>
+        <a href={`${home}#features`}>{t.features}</a>
+        <a href={`${home}#security`}>{t.sectionSecurity.badge}</a>
+        <a href="/privacy-policy">{labels.privacy}</a>
+        <a href="/terms-and-conditions">{labels.terms}</a>
+        <a href={changelogHref}>{t.changelog.footerLink}</a>
+        <a href="mailto:support@budgetgenius.com">{labels.support}</a>
+      </nav>
+    </div>
+
+    <div class="footer-bottom">
+      <span>© {year} BudgetGenius. {t.allRightsReserved}</span>
+      <span>{t.developedBy} Alkiory</span>
+    </div>
+  </div>
+</footer>

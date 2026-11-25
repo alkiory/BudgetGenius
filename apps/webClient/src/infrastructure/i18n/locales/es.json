@@ -896,7 +896,10 @@
       "subtitle": "Cómo la app fue mejorando, una release a la vez.",
       "regionAria": "Cronología del changelog",
       "footerLink": "Novedades",
-      "newBadge": "Nuevo"
+      "newBadge": "Nuevo",
+      "latestBadge": "Última",
+      "latestRelease": "Última versión",
+      "backHome": "Volver al inicio"
     }
   },
   "demo": {
@@ -1091,6 +1094,31 @@
     "offlineMessage": "Estás desconectado — los cambios se sincronizarán cuando te reconectes",
     "syncingPending": "Sincronizando cambios pendientes...",
     "savedOffline": "Guardado sin conexión — se sincronizará cuando la conexión regrese"
+  },
+  "tour": {
+    "progress": "{{current}} de {{total}}",
+    "next": "Siguiente",
+    "previous": "Atrás",
+    "done": "Entendido",
+    "changelogCta": "Abrir el changelog completo",
+    "onboarding": {
+      "welcomeTitle": "Todo listo",
+      "welcomeBody": "Tus preferencias están guardadas. Aquí tienes un recorrido de 60 segundos por la app.",
+      "navTitle": "Cada sección, a un clic",
+      "navBody": "Panel, transacciones, presupuestos, reportes e ingresos viven en esta barra lateral.",
+      "addTitle": "Registra tu primera transacción",
+      "addBody": "Usa el botón + para registrar un ingreso o un gasto. Categorizar toma un segundo.",
+      "finnyTitle": "Conoce a Finny",
+      "finnyBody": "Pregúntale a Finny por gastos, presupuestos o tendencias en inglés o español.",
+      "releaseTitle": "Las novedades viven aquí",
+      "releaseBody": "La insignia de versión abre el changelog cada vez que sale algo nuevo."
+    },
+    "whatsNew": {
+      "title": "Novedades en la v{{version}}",
+      "body": "Una landing renovada, recuperación de contraseña por correo y un panel más fluido.",
+      "changelogTitle": "Mira el changelog completo",
+      "changelogBody": "Cada versión está documentada aquí — ábrelo cuando quieras desde la insignia de versión."
+    }
   },
   "maintenance": {
     "title": "Estamos en mantenimiento",

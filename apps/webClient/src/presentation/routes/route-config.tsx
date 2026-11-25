@@ -102,7 +102,6 @@ const TermsOfServicePage = lazy(
 const ContactSalesPage = lazy(
   () => import("@presentation/pages/contact/contact-sales-page"),
 );
-const ChangelogPage = lazy(() => import("@presentation/pages/changelog"));
 
 const RouteConfig = () => {
   // Single Suspense boundary covering every React.lazy()-loaded
@@ -129,7 +128,6 @@ const RouteConfig = () => {
             path={RoutePaths.ContactSales}
             element={<ContactSalesPage />}
           />
-          <Route path={RoutePaths.Changelog} element={<ChangelogPage />} />
         </Route>
         <Route path={RoutePaths.Auth} element={<AuthLayout />}>
           <Route path={RoutePaths.Login} element={<LoginPage />} />

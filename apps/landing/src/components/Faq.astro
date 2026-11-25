@@ -1,0 +1,146 @@
+---
+import { getCopy } from "../i18n";
+
+interface Props {
+  t: ReturnType<typeof getCopy>;
+}
+
+const { t } = Astro.props;
+const items = t.sectionFaq.items;
+const order = [
+  "reallyFree",
+  "dataStorage",
+  "mobileApp",
+  "bankConnection",
+  "language",
+  "export",
+] as const;
+---
+
+<section class="section" id="faq">
+  <div class="container">
+    <div class="section-head center" data-reveal>
+      <h2>{t.sectionFaq.title}</h2>
+      <p>{t.sectionFaq.subtitle}</p>
+    </div>
+
+    <div class="faq-list">
+      {
+        order.map((key, index) => {
+          const item = items[key];
+          if (!item) return null;
+          return (
+            <details
+              class="faq-item"
+              data-reveal
+              style={`--reveal-delay:${index * 60}ms`}
+            >
+              <summary>
+                <span>{item.question}</span>
+                <span class="faq-icon" aria-hidden="true">
+                  <animate-icons name="plus" size="16"></animate-icons>
+                </span>
+              </summary>
+              <div class="faq-answer">
+                <p>
+                  {item.answerPre ? (
+                    <>
+                      {item.answerPre}
+                      <a href="#download">{item.answerLink}</a>
+                      {item.answerPost}
+                    </>
+                  ) : (
+                    item.answer
+                  )}
+                </p>
+              </div>
+            </details>
+          );
+        })
+      }
+    </div>
+  </div>
+</section>
+
+<script is:inline>
+  (() => {
+    const items = Array.from(document.querySelectorAll("details.faq-item"));
+    if (!items.length) return;
+
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const answerOf = (item) => item.querySelector(".faq-answer");
+
+    const collapse = (item) => {
+      const answer = answerOf(item);
+      if (!answer || !item.open) return;
+
+      if (reduceMotion) {
+        item.open = false;
+        return;
+      }
+
+      const height = answer.offsetHeight;
+      const animation = answer.animate(
+        [
+          { height: `${height}px`, opacity: 1 },
+          { height: "0px", opacity: 0 },
+        ],
+        { duration: 220, easing: "cubic-bezier(0.4, 0, 1, 1)" },
+      );
+
+      animation.onfinish = () => {
+        item.open = false;
+        answer.style.height = "";
+      };
+      animation.oncancel = () => {
+        answer.style.height = "";
+      };
+    };
+
+    const expand = (item) => {
+      const answer = answerOf(item);
+      if (!answer) return;
+
+      item.open = true;
+      if (reduceMotion) return;
+
+      const height = answer.scrollHeight;
+      const animation = answer.animate(
+        [
+          { height: "0px", opacity: 0 },
+          { height: `${height}px`, opacity: 1 },
+        ],
+        { duration: 320, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
+      );
+
+      animation.onfinish = () => {
+        answer.style.height = "";
+      };
+      animation.oncancel = () => {
+        answer.style.height = "";
+      };
+    };
+
+    items.forEach((item) => {
+      const summary = item.querySelector("summary");
+      if (!summary) return;
+
+      summary.addEventListener("click", (event) => {
+        // Own the toggle so the row can animate; native <details> behaviour
+        // still works when scripting is unavailable.
+        event.preventDefault();
+        if (item.open) {
+          collapse(item);
+          return;
+        }
+
+        items.forEach((other) => {
+          if (other !== item) collapse(other);
+        });
+        expand(item);
+      });
+    });
+  })();
+</script>

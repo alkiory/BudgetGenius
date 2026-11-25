@@ -1,0 +1,45 @@
+---
+import { getCopy } from "../i18n";
+
+interface Props {
+  t: ReturnType<typeof getCopy>;
+}
+
+const { t } = Astro.props;
+const testimonials = Object.values(t.sectionTestimonials.realTestimonials.items);
+---
+
+<section class="section" id="testimonials">
+  <div class="container">
+    <div class="section-head" data-reveal>
+      <h2>{t.sectionTestimonials.title}</h2>
+      <p>{t.sectionTestimonials.subtitle}</p>
+    </div>
+
+    <div class="grid testimonials-grid" role="list" aria-label={t.sectionTestimonials.regionAria}>
+      {
+        testimonials.map((item, index) => (
+          <article
+            class="card quote"
+            role="listitem"
+            data-reveal
+            style={`--reveal-delay:${index * 80}ms`}
+          >
+            <span class="quote-rating">{item.rating}</span>
+            <p class="quote-body">“{item.body}”</p>
+            <p class="quote-person">
+              <strong>{item.name}</strong>
+              <span>{item.role ?? t.sectionTestimonials.placeholder.role}</span>
+            </p>
+          </article>
+        ))
+      }
+    </div>
+
+    <p style="margin-top: 1.6rem; text-align: center;">
+      <a class="btn btn-ghost" href={t.sectionTestimonials.ctaHref}>
+        {t.sectionTestimonials.cta}
+      </a>
+    </p>
+  </div>
+</section>

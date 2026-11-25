@@ -1,0 +1,50 @@
+---
+import { getCopy } from "../i18n";
+
+interface Props {
+  t: ReturnType<typeof getCopy>;
+}
+
+const { t } = Astro.props;
+const items = t.sectionSecurity.items;
+const icons: Record<string, string> = {
+  auth: "shield-check",
+  encryption: "lock-keyhole",
+  ownership: "database",
+  bilingual: "languages",
+  transparency: "receipt-text",
+};
+---
+
+<section class="section" id="security">
+  <div class="container">
+    <div class="section-head" data-reveal>
+      <h2>{t.sectionSecurity.title}</h2>
+      <p>{t.sectionSecurity.subtitle}</p>
+    </div>
+
+    <div class="grid security-grid">
+      {
+        Object.entries(items).map(([key, item], index) => (
+          <article
+            class="card"
+            data-reveal
+            style={`--reveal-delay:${index * 70}ms`}
+          >
+            <div class="feature-head">
+              <span class="feature-icon">
+                <animate-icons
+                  name={icons[key] ?? icons.auth}
+                  size="20"
+                  aria-hidden="true"
+                ></animate-icons>
+              </span>
+              <h3>{item.title}</h3>
+            </div>
+            <p>{item.description}</p>
+          </article>
+        ))
+      }
+    </div>
+  </div>
+</section>

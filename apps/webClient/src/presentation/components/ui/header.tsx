@@ -1,6 +1,6 @@
 import { RootState } from "@adapters/store/rootStore";
 import { useChangelogUnseen } from "@presentation/hooks/useChangelogUnseen";
-import { RoutePaths } from "@presentation/utils/routes";
+import { landingHref, RoutePaths } from "@presentation/utils/routes";
 import { Menu, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -168,13 +168,13 @@ export default function HeaderComponent() {
           <nav className="hidden md:flex md:items-center md:gap-4">
             <ThemeToggle />
             <LanguageSwitcher />
-            <Link
-              to={RoutePaths.Changelog}
+            <a
+              href={landingHref(RoutePaths.Changelog)}
               className="text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white"
             >
               {t("landing.changelog.footerLink")}
               {hasUnseenChangelog && <ChangelogUnseenDot />}
-            </Link>
+            </a>
             {user ? (
               <div className="relative ml-3">
                 <div>
@@ -221,14 +221,14 @@ export default function HeaderComponent() {
           className="md:hidden border-t bg-slate-50 dark:bg-slate-800 shadow-lg"
         >
           <div className="container mx-auto flex flex-col gap-1 px-4 py-3">
-            <Link
-              to={RoutePaths.Changelog}
+            <a
+              href={landingHref(RoutePaths.Changelog)}
               onClick={closeMenu}
               className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200/60 dark:text-slate-200 dark:hover:bg-slate-700/60"
             >
               {t("landing.changelog.footerLink")}
               {hasUnseenChangelog && <ChangelogUnseenDot />}
-            </Link>
+            </a>
 
             {user ? (
               <Link

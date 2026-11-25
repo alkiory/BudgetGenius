@@ -64,6 +64,9 @@ jobs:
           REDIS_PORT: "6379"
           COOKIE_DOMAIN: localhost
           FRONTEND_URL: http://localhost:5173
+          # The mailer refuses to construct without a key (fail-fast against
+          # silent forgot-password failures). Tests never hit the Resend API.
+          RESEND_API_KEY: re_ci_placeholder
 
       - name: Run Tests (api)
         run: pnpm --filter api test
@@ -139,5 +142,7 @@ jobs:
       - name: Typecheck (frontend)
         run: pnpm --filter frontend-web check-types
 
-      - name: Build (frontend)
-        run: pnpm --filter frontend-web build
+      # Builds both web surfaces: the Astro landing (root) and the SPA
+      # (base /app/), then merges them into dist/ exactly as deploy does.
+      - name: Build (landing + SPA)
+        run: pnpm build:web

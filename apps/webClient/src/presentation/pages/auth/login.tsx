@@ -15,6 +15,7 @@ import {
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
 import { Separator } from "@presentation/components/ui/separator";
+import { goToLanding } from "@presentation/utils/landing";
 import { RoutePaths } from "@presentation/utils/routes";
 import { useMutation } from "@tanstack/react-query";
 import React, { useState } from "react";
@@ -112,7 +113,7 @@ export default function LoginPage() {
         <Button
           variant="default"
           className="absolute left-4 top-[max(env(safe-area-inset-top),1rem)] md:left-8 md:top-8 animate-shake"
-          onClick={() => navigate(RoutePaths.Home)}
+          onClick={goToLanding}
         >
           {t("auth.goBack")}
         </Button>
@@ -173,7 +174,11 @@ export default function LoginPage() {
               />
             </div>
             {error && <p className="text-rose-500">{error}</p>}
-            <Button variant="default" type="submit" className="w-full">
+            <Button
+              variant="default"
+              type="submit"
+              className="star-cta w-full"
+            >
               {t("auth.signIn")}
             </Button>
           </form>

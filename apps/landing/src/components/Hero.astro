@@ -1,0 +1,52 @@
+---
+import { Image } from "astro:assets";
+import dashboard from "../assets/presentation_dashboard.png";
+import { appHref, getCopy, type Lang } from "../i18n";
+
+interface Props {
+  t: ReturnType<typeof getCopy>;
+  lang: Lang;
+}
+
+const { t, lang } = Astro.props;
+const titleLead = t.heroTitleLead ?? t.heroTitle;
+---
+
+<section class="section hero">
+  <div class="container hero-grid">
+    <div data-reveal>
+      <h1>
+        {titleLead}{" "}
+        <em>{t.heroTitleAccent1}</em>{" "}
+        {t.heroTitleBody}{" "}
+        <em>{t.heroTitleAccent2}</em>
+      </h1>
+      <p class="hero-sub">{t.heroSubtitle}</p>
+
+      <div class="hero-actions">
+        <a class="btn btn-primary" href={appHref("/auth/signup")}>{t.getStarted}</a>
+        <a class="btn btn-ghost" href="#how-it-works">{t.seeHowItWorks}</a>
+      </div>
+
+      <div class="hero-meta">
+        <span>{t.heroBadgeSub}</span>
+        <span>{t.noCreditCard}</span>
+      </div>
+    </div>
+
+    <div class="hero-art" data-reveal style="--reveal-delay: 120ms">
+      <div class="frame">
+        <Image
+          src={dashboard}
+          alt={t.dashboardTitle}
+          format="webp"
+          widths={[420, 640, 900]}
+          sizes="(max-width: 960px) 92vw, 520px"
+          loading="eager"
+          fetchpriority="high"
+          quality={78}
+        />
+      </div>
+    </div>
+  </div>
+</section>

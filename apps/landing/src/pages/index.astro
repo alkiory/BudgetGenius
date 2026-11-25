@@ -1,0 +1,31 @@
+---
+import Base from "../layouts/Base.astro";
+import Hero from "../components/Hero.astro";
+import Features from "../components/Features.astro";
+import FinnyBlock from "../components/FinnyBlock.astro";
+import HowItWorks from "../components/HowItWorks.astro";
+import Showcase from "../components/Showcase.astro";
+import Security from "../components/Security.astro";
+import Testimonials from "../components/Testimonials.astro";
+import Faq from "../components/Faq.astro";
+import Download from "../components/Download.astro";
+import { getCopy } from "../i18n";
+
+const t = getCopy("en");
+---
+
+<Base
+  lang="en"
+  title="BudgetGenius — Take control of your money, 100% free"
+  description={t.heroSubtitle}
+>
+  <Hero t={t} lang="en" />
+  <Features t={t} />
+  <FinnyBlock t={t} lang="en" />
+  <HowItWorks t={t} />
+  <Showcase t={t} lang="en" />
+  <Security t={t} />
+  <Testimonials t={t} />
+  <Faq t={t} />
+  <Download t={t} lang="en" />
+</Base>

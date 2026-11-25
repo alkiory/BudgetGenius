@@ -18,6 +18,7 @@ import { Checkbox } from "@presentation/components/ui/checkbox";
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
 import { Separator } from "@presentation/components/ui/separator";
+import { goToLanding } from "@presentation/utils/landing";
 import { RoutePaths } from "@presentation/utils/routes";
 import { useMutation } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
@@ -113,7 +114,7 @@ export default function SignupPage() {
         <Button
           variant="default"
           className="fixed left-4 top-[max(env(safe-area-inset-top),1rem)] md:left-8 md:top-8 animate-shake"
-          onClick={() => navigate(RoutePaths.Home)}
+          onClick={goToLanding}
         >
           {t("auth.goBack")}
         </Button>
@@ -205,7 +206,7 @@ export default function SignupPage() {
               type="submit"
               variant="default"
               disabled={!name || !surname || !email || !password || isPending}
-              className="w-full"
+              className="star-cta w-full"
             >
               {t("auth.createAccount")}
             </Button>

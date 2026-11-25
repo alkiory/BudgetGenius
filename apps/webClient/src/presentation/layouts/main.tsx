@@ -4,6 +4,7 @@ import { DashboardHeader } from "@presentation/components/dashboard/header";
 import { FinnyRail } from "@presentation/components/dashboard/finny-rail";
 import { MainContent } from "@presentation/components/dashboard/main-content";
 import { DashboardSidebar } from "@presentation/components/dashboard/sidebar";
+import { AppTour } from "@presentation/components/tour/app-tour";
 import { Outlet } from "react-router";
 
 export default function MainLayout() {
@@ -36,6 +37,7 @@ export default function MainLayout() {
           </MainContent>
           <FinnyRail />
         </div>
+        <AppTour />
       </div>
     </SidebarProvider>
   );

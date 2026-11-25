@@ -226,7 +226,10 @@ export function DashboardSidebar() {
         </div>
 
         <div className="flex flex-1 flex-col overflow-y-auto pt-5 pb-4">
-          <nav className={`mt-2 flex-1 ${isCollapsed ? "px-1" : "px-2"}`}>
+          <nav
+            data-tour="sidebar-nav"
+            className={`mt-2 flex-1 ${isCollapsed ? "px-1" : "px-2"}`}
+          >
             <div className="relative space-y-1">
               <span
                 aria-hidden="true"
@@ -302,6 +305,7 @@ export function DashboardSidebar() {
 
         {/* Version badge — always visible at the bottom of the sidebar */}
         <div
+          data-tour="version-badge"
           className={`flex flex-shrink-0 border-t border-slate-200/80 px-4 py-2 dark:border-white/[0.07] ${
             isCollapsed ? "justify-center" : "justify-center"
           }`}

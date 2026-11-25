@@ -1,0 +1,15 @@
+---
+import Base from "../layouts/Base.astro";
+import Changelog from "../components/Changelog.astro";
+import { getCopy } from "../i18n";
+
+const t = getCopy("en");
+---
+
+<Base
+  lang="en"
+  title="Changelog — BudgetGenius"
+  description={t.changelog.subtitle}
+>
+  <Changelog lang="en" />
+</Base>

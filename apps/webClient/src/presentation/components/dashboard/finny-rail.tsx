@@ -363,6 +363,7 @@ export function FinnyRail() {
 
       <button
         type="button"
+        data-tour="finny"
         onClick={handleLaunch}
         aria-label={t("finny.open")}
         title={t("finny.open")}
@@ -617,6 +618,7 @@ export function FinnyRail() {
       {!isDesktop && !panelOpen && (
         <button
           type="button"
+          data-tour="finny"
           onClick={handleLaunch}
           aria-label={t("finny.open")}
           className={`fixed bottom-[calc(max(env(safe-area-inset-bottom),1rem)+9rem)] right-4 z-40 rounded-full focus:outline-none md:bottom-6 md:right-6 ${

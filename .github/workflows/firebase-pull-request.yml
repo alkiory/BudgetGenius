@@ -28,9 +28,10 @@ jobs:
         id: version
         run: echo "version=$(git describe --tags --always --dirty 2>/dev/null || git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Build
-        run: pnpm --filter frontend-web build
+      - name: Build (landing + SPA)
+        run: pnpm build:web
         env:
+          PUBLIC_APK_URL: ${{ secrets.VITE_APK_DOWNLOAD_URL }}
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_APP_VERSION: ${{ steps.version.outputs.version }}
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
