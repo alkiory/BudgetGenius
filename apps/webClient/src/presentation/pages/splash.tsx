@@ -5,6 +5,7 @@ import {
 } from "@adapters/slices/auth/authSlice";
 import api from "@infrastructure/api.config";
 import { isNativePlatform } from "@infrastructure/platform";
+import type { User } from "@domain/index";
 import CTAPage from "@presentation/pages/cta";
 import { RoutePaths } from "@presentation/utils/routes";
 import { Sparkles, Wallet } from "lucide-react";
@@ -27,7 +28,7 @@ const AUTH_READY_FALLBACK_MS = 3000;
  * navigation flicker (no "/app/dashboard" → "/app/onboarding"
  * bounce on the first paint).
  */
-async function fetchHasCompletedOnboarding(userId: number): Promise<boolean> {
+async function fetchHasCompletedOnboarding(): Promise<boolean> {
   try {
     // We don't have access to the React Query cache from inside the
     // splash — its `queryFn` parameter is an axios call against the
@@ -144,7 +145,7 @@ export default function SplashPage() {
       try {
         const response = await api.get("/auth/verify", { _retry: true });
         if (cancelled) return;
-        let profile: { id: number } | null = null;
+        let profile: User | null = null;
         if (response.status === 200) {
           const userProfile = await api.get("/user/profile", {
             _retry: true,
@@ -164,7 +165,7 @@ export default function SplashPage() {
         // /app/onboarding on its first paint.
         let onboardingComplete: boolean | null = null;
         if (profile?.id && response.status === 200) {
-          onboardingComplete = await fetchHasCompletedOnboarding(profile.id);
+          onboardingComplete = await fetchHasCompletedOnboarding();
         }
         if (cancelled) return;
         go(onboardingComplete);

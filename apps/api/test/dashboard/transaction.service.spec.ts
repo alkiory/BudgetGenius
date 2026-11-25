@@ -103,7 +103,20 @@ describe('TransactionService', () => {
     it('should throw an error when creation fails', async () => {
       repo.create = jest.fn().mockRejectedValue(new Error('DB Error'));
 
-      await expect(service.createTransaction(1, {} as any)).rejects.toThrow(
+      // A valid-shaped DTO: the service resolves the calendar day and the
+      // budget-category attribution BEFORE hitting `repo.create`, so an
+      // empty payload would fail on `dto.date` instead of reaching the
+      // repository rejection this test is about.
+      const dto = {
+        date: new Date(),
+        description: 'Exploding row',
+        category: 'Food',
+        amount: 10,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await expect(service.createTransaction(1, dto)).rejects.toThrow(
         'DB Error',
       );
     });

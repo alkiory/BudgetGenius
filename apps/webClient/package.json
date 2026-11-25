@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "check-types": "tsc --noEmit",
+    "check-types": "tsc -b",
     "lint": "eslint . --cache --cache-location .eslintcache --ext .ts,.tsx",
     "preview": "vite preview",
     "test": "vitest run --reporter=dot && pnpm exec playwright test --reporter=dot",

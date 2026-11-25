@@ -42,6 +42,7 @@ import {
   detectTimezone,
   prefersReducedMotion,
 } from "@presentation/utils/deviceCapabilities";
+import type { SupportedLocaleTag } from "@presentation/utils/deviceCapabilities";
 import { APP_PATHS } from "@presentation/utils/routes";
 import { errorToast, successToast } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -55,6 +56,11 @@ const LOCALE_LABELS: Record<(typeof SUPPORTED_LOCALE_TAGS)[number], string> = {
   "en-US": "English",
   "es-CO": "Español",
 };
+
+/** Narrow an arbitrary server/browser string to a supported locale tag. */
+const isSupportedLocale = (value?: string): value is SupportedLocaleTag =>
+  value !== undefined &&
+  (SUPPORTED_LOCALE_TAGS as readonly string[]).includes(value);
 
 export default function OnboardingPage() {
   const { t, i18n } = useTranslation();
@@ -107,10 +113,9 @@ export default function OnboardingPage() {
         ? settings.timezone
         : detected.timezone,
     );
+    const serverLocale = settings?.locale;
     setLocale(
-      settings?.locale && SUPPORTED_LOCALE_TAGS.includes(settings.locale)
-        ? settings.locale
-        : detected.language,
+      isSupportedLocale(serverLocale) ? serverLocale : detected.language,
     );
     setCurrency(toCurrency(settings?.currency));
     setFeInitialised(true);

@@ -87,16 +87,22 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.set('trust proxy', 'loopback');
 
-  // Swagger setup
-  const config = new DocumentBuilder()
-    .setTitle('Budget Genius API')
-    .setDescription('Documentación de la API de Budget Genius')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
+  // ── Swagger (development only) ─────────────────────────────────────────
+  // The docs describe every endpoint, payload and role. Serving them from
+  // the public production API handed an unauthenticated map of the surface
+  // to anyone who guessed `/api/docs`. Production now returns 404 there;
+  // local development keeps the interactive docs.
+  if (!isProduction) {
+    const config = new DocumentBuilder()
+      .setTitle('Budget Genius API')
+      .setDescription('Documentación de la API de Budget Genius')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document);
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('docs', app, document);
+  }
 
   // Start server
   await app.listen(process.env.PORT || 5000, '0.0.0.0');

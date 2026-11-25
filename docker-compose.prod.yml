@@ -38,8 +38,10 @@ services:
       - POSTGRES_USER=postgres_admin_prod
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=budgetgenius_prod
-    ports:
-      - "4002:5432"
+    # Sin `ports`: Postgres solo se alcanza desde la red interna
+    # `app-network`. Publicar 4002:5432 exponía la base a Internet en
+    # cualquier host cuyo firewall no bloqueara el puerto; el backend ya
+    # habla con `database:5432` por la red de Docker.
     networks:
       - app-network
     volumes:

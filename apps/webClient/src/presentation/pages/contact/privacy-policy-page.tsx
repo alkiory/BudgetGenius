@@ -5,6 +5,12 @@ import { Link } from "react-router";
 
 export default function PrivacyPolicyPage() {
   const { t } = useTranslation();
+
+  // `returnObjects` lists are typed by i18next as `$SpecialObject`, not as
+  // `string[]`. One helper keeps the cast in a single place instead of at
+  // every `<ul>` in the page.
+  const tList = (key: string): string[] =>
+    t(key, { returnObjects: true }) as unknown as string[];
   return (
     <div className="container mx-auto px-4 py-12 text-primary dark:text-neutral">
       <div className="mb-8 flex items-center justify-between">
@@ -35,7 +41,7 @@ export default function PrivacyPolicyPage() {
           </h2>
           <p>{t("contact.privacyInfoCollectIntro")}</p>
           <ul className="list-disc pl-6">
-            {t("contact.privacyInfoCollectList", { returnObjects: true }).map(
+            {tList("contact.privacyInfoCollectList").map(
               (item: string, i: number) => (
                 <li key={i} className="mb-2">
                   {item}
@@ -49,7 +55,7 @@ export default function PrivacyPolicyPage() {
           </h2>
           <p>{t("contact.privacyHowWeUseIntro")}</p>
           <ul className="list-disc pl-6">
-            {t("contact.privacyHowWeUseList", { returnObjects: true }).map(
+            {tList("contact.privacyHowWeUseList").map(
               (item: string, i: number) => (
                 <li key={i} className="mb-2">
                   {item}
@@ -63,7 +69,7 @@ export default function PrivacyPolicyPage() {
           </h2>
           <p>{t("contact.privacyAIIntro")}</p>
           <ul className="list-disc pl-6">
-            {t("contact.privacyAIList", { returnObjects: true }).map(
+            {tList("contact.privacyAIList").map(
               (item: string, i: number) => (
                 <li key={i} className="mb-2">
                   {item}
@@ -84,7 +90,7 @@ export default function PrivacyPolicyPage() {
           </h2>
           <p>{t("contact.privacyYourRightsIntro")}</p>
           <ul className="list-disc pl-6">
-            {t("contact.privacyYourRightsList", { returnObjects: true }).map(
+            {tList("contact.privacyYourRightsList").map(
               (item: string, i: number) => (
                 <li key={i} className="mb-2">
                   {item}

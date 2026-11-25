@@ -91,7 +91,7 @@ export function NotificationSettings() {
               <Switch
                 id={setting.id}
                 checked={setting.enabled}
-                onCheckedChange={() => handleToggle(setting.id)}
+                onChange={() => handleToggle(setting.id)}
               />
               <div className="space-y-1">
                 <Label htmlFor={setting.id} className="text-base font-medium">

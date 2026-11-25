@@ -3,6 +3,9 @@ import { compilerOptions } from './tsconfig.json';
 
 export default {
   rootDir: './',
+  // Loads .env.development (or CI-provided env) before any module import so
+  // the e2e specs can boot AppModule. See test/setup-env.ts.
+  setupFiles: ['<rootDir>/test/setup-env.ts'],
   moduleFileExtensions: ['js', 'json', 'ts'],
   testRegex: '.*\\.spec\\.ts$',
   transform: {

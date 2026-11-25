@@ -5,6 +5,11 @@ import { Link } from "react-router";
 
 export default function TermsOfServicePage() {
   const { t } = useTranslation();
+
+  // i18next types `returnObjects` lists as `$SpecialObject`; one helper keeps
+  // the cast in a single place instead of at every list in the page.
+  const tList = (key: string): string[] =>
+    t(key, { returnObjects: true }) as unknown as string[];
   return (
     <div className="container mx-auto px-4 py-12 text-primary dark:text-neutral">
       <div className="mb-8 flex items-center justify-between">
@@ -42,7 +47,7 @@ export default function TermsOfServicePage() {
           <h2>{t("contact.tosFinancialData")}</h2>
           <p>{t("contact.tosFinancialDataBody")}</p>
           <ul>
-            {t("contact.tosFinancialDataList", { returnObjects: true }).map(
+            {tList("contact.tosFinancialDataList").map(
               (item: string, i: number) => (
                 <li key={i}>{item}</li>
               ),
@@ -52,7 +57,7 @@ export default function TermsOfServicePage() {
           <h2>{t("contact.tosAI")}</h2>
           <p>{t("contact.tosAIBody")}</p>
           <ul>
-            {t("contact.tosAIList", { returnObjects: true }).map(
+            {tList("contact.tosAIList").map(
               (item: string, i: number) => (
                 <li key={i}>{item}</li>
               ),
@@ -65,7 +70,7 @@ export default function TermsOfServicePage() {
           <h2>{t("contact.tosProhibitedConduct")}</h2>
           <p>{t("contact.tosProhibitedConductIntro")}</p>
           <ul>
-            {t("contact.tosProhibitedConductList", { returnObjects: true }).map(
+            {tList("contact.tosProhibitedConductList").map(
               (item: string, i: number) => (
                 <li key={i}>{item}</li>
               ),

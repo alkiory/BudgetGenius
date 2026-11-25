@@ -12,7 +12,8 @@ import { AiController } from '@adapters/ai/http/ai.controller';
  *     removed.
  *  2. AiController does NOT import or apply PremiumGuard in its
  *     `@UseGuards(...)` decorator chain (compile-time introspectable via
- *     source read + the controller's constructor argument count).
+ *     source read + the controller's constructor argument count). The
+ *     MVP guard is the plain `JwtAuthGuard`, which only authenticates.
  */
 describe('AI surface — MVP isPremium gate removed (T3.27)', () => {
   describe('JwtAiGuard', () => {
@@ -61,7 +62,7 @@ describe('AI surface — MVP isPremium gate removed (T3.27)', () => {
       const src = fs.readFileSync(controllerPath, 'utf8');
       expect(src).not.toMatch(/PremiumGuard/);
       expect(src).not.toMatch(/premiumAccess/);
-      expect(src).toMatch(/JwtAiGuard/);
+      expect(src).toMatch(/JwtAuthGuard/);
     });
 
     it('controller constructor takes only the AI service (no Reflector)', () => {

@@ -61,9 +61,12 @@ describe('ReportService — MVP isPremium gate removed (T3.26)', () => {
             getMonthlyOverview: jest
               .fn()
               .mockResolvedValue([{ month: 'Jan', income: 100, expenses: 50 }]),
-            getCategoryBreakdown: jest
+            // The repository exposes `getCategoryBreakdowns` (plural) and
+            // returns raw aggregate rows (`expenses` / `income`); the
+            // service maps them to `{ category, total|amount }`.
+            getCategoryBreakdowns: jest
               .fn()
-              .mockResolvedValue([{ category: 'Food', total: 100 }]),
+              .mockResolvedValue([{ category: 'Food', expenses: 100, income: 0 }]),
             getWeeklyTrend: jest
               .fn()
               .mockResolvedValue([{ day: 'Mon', amount: 25 }]),
@@ -98,7 +101,10 @@ describe('ReportService — MVP isPremium gate removed (T3.26)', () => {
       end: new Date('2026-01-31'),
       userId: 1,
     });
-    expect(result).toEqual([{ category: 'Food', total: 100 }]);
+    expect(result).toEqual({
+      expenses: [{ category: 'Food', total: 100 }],
+      incomeSources: [],
+    });
     expect(userRepo.findById).not.toHaveBeenCalled();
   });
 

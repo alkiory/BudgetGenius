@@ -8,6 +8,32 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    # The e2e spec (`user-delete-permission.spec.ts`) boots the real
+    # AppModule and signs users up through HTTP, so the API suite needs a
+    # live Postgres (schema + migrations) and Redis (throttler storage).
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: budgetgenius_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -22,8 +48,26 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
+      # Creates the `bg_public` schema (premigration) and applies every
+      # migration, so the DB-backed e2e assertions run against real tables.
+      - name: Migrate test database (api)
+        run: pnpm --filter api migration:run
+        env: &backend-test-env
+          NODE_ENV: development
+          JWT_SECRET: test-secret
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_USER: postgres
+          DB_PASS: postgres
+          DB_NAME: budgetgenius_test
+          REDIS_HOST: localhost
+          REDIS_PORT: "6379"
+          COOKIE_DOMAIN: localhost
+          FRONTEND_URL: http://localhost:5173
+
       - name: Run Tests (api)
         run: pnpm --filter api test
+        env: *backend-test-env
 
       - name: Login to DockerHub
         if: github.ref == 'refs/heads/main'
@@ -72,3 +116,28 @@ jobs:
 
             # Start/Restart services (omitting frontend)
             docker compose -f docker-compose.yml -f docker-compose.gce.yml up -d backend database redis
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        run: npm install -g pnpm@12.18.0
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      # `check-types` is `tsc -b`. The old `tsc --noEmit` ran against a
+      # solution tsconfig with `files: []` and exited 0 without checking a
+      # single source file (false green).
+      - name: Typecheck (frontend)
+        run: pnpm --filter frontend-web check-types
+
+      - name: Build (frontend)
+        run: pnpm --filter frontend-web build
