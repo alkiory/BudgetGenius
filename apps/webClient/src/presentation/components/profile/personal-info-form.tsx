@@ -20,8 +20,20 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { ProfileAvatar } from "./profile-avatar";
 
-// Mock user data
-const userData = {
+// Shape the form owns. `User` is structurally assignable to it, so the
+// initial state can come from Redux without dragging the required
+// persistence fields (`password`, `role`, `authProvider`) into the form.
+type PersonalInfoFormData = {
+  name: string;
+  surname?: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  imageUrl?: string;
+};
+
+// Mock user data (used until the profile query hydrates Redux).
+const userData: PersonalInfoFormData = {
   name: "John",
   surname: "Doe",
   email: "john.doe@example.com",
@@ -30,12 +42,27 @@ const userData = {
   imageUrl: undefined,
 };
 
+/** Redux user → form state, with the mock as the signed-out fallback. */
+const toFormData = (user: PersonalInfoFormData | null): PersonalInfoFormData =>
+  user
+    ? {
+        name: user.name,
+        surname: user.surname,
+        email: user.email,
+        phone: user.phone,
+        address: user.address,
+        imageUrl: user.imageUrl,
+      }
+    : userData;
+
 export function PersonalInfoForm() {
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const queryClient = useQueryClient();
   const user = useSelector((state: RootState) => state.auth.user);
-  const [formData, setFormData] = useState(user ? user : userData);
+  const [formData, setFormData] = useState<PersonalInfoFormData>(() =>
+    toFormData(user),
+  );
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -49,7 +76,9 @@ export function PersonalInfoForm() {
     mutationFn: updateUser,
     onSuccess: (data) => {
       setIsSaving(true);
-      dispatch(updateUserAction(data));
+      // `updateUser` resolves `null` when the API returns no body; Redux
+      // cannot merge `null`, so only dispatch a real payload.
+      if (data) dispatch(updateUserAction(data));
       queryClient.invalidateQueries({ queryKey: ["user"] });
       successToast(t("profile.updateSuccess"), 3000, "user-update");
       setIsEditing(false);
@@ -60,7 +89,7 @@ export function PersonalInfoForm() {
       errorToast(t("profile.updateError"), 3000, "user-update");
       setIsSaving(false);
       setIsEditing(true);
-      setFormData(user ? user : userData);
+      setFormData(toFormData(user));
     },
   });
 

@@ -16,6 +16,12 @@ import {
   BarChart,
   LineChart,
 } from "recharts";
+import {
+  chartAxisProps,
+  chartGridProps,
+  chartLineTooltipProps,
+  chartTooltipProps,
+} from "@presentation/utils/chart-theme";
 import { ChartContainer, ProgressBar, InsightBox } from "./inner-componets";
 
 interface IncomeExpensesTabProps {
@@ -48,10 +54,11 @@ export default function IncomeExpensesTab({
       <ChartContainer title={t("reports.monthlyIncomeVsExpenses")}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={overview?.monthly || []}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="month" />
-            <YAxis />
+            <CartesianGrid {...chartGridProps} />
+            <XAxis dataKey="month" {...chartAxisProps} />
+            <YAxis {...chartAxisProps} />
             <Tooltip
+              {...chartTooltipProps}
               formatter={(value) => [formatCurrency(Number(value)), ""]}
             />
             <Legend />
@@ -63,7 +70,7 @@ export default function IncomeExpensesTab({
             <Bar
               dataKey="expenses"
               name={t("reports.totalExpenses")}
-              fill="#ef4444"
+              fill="#f43f5e"
             />
           </BarChart>
         </ResponsiveContainer>
@@ -73,7 +80,7 @@ export default function IncomeExpensesTab({
       {isLoadingInsights && <Loader />}
       {overview && (
         <div className="grid gap-6 md:grid-cols-2">
-          <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
+          <div className="glass-panel hover-glow rounded-xl p-6">
             <h3 className="mb-4 text-lg font-medium">
               {t("reports.incomeBreakdown")}
             </h3>
@@ -102,10 +109,11 @@ export default function IncomeExpensesTab({
           <ChartContainer title={t("reports.savingsGrowth")}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={savings?.monthly || []}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
+                <CartesianGrid {...chartGridProps} />
+                <XAxis dataKey="month" {...chartAxisProps} />
+                <YAxis {...chartAxisProps} />
                 <Tooltip
+                  {...chartLineTooltipProps}
                   formatter={(value) => [
                     formatCurrency(Number(value)),
                     t("transactions.amount"),
@@ -124,7 +132,7 @@ export default function IncomeExpensesTab({
       )}
 
       {insights && (
-        <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
+        <div className="glass-panel hover-glow rounded-xl p-6">
           <h3 className="mb-4 text-lg font-medium">
             {t("reports.financialRatios")}
           </h3>

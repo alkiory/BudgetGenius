@@ -135,7 +135,7 @@ export const EditableBudgetCategory: React.FC<Props> = ({
             variant={isSavings ? "primary" : "default"}
             size="sm"
             className={
-              isSavings ? "bg-green-600 hover:bg-green-700" : undefined
+              isSavings ? "bg-emerald-600 hover:bg-emerald-700" : undefined
             }
             onClick={handleAddClick}
           >
@@ -154,7 +154,7 @@ export const EditableBudgetCategory: React.FC<Props> = ({
         <Button
           variant="ghost"
           size="sm"
-          className="text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+          className="text-rose-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20"
           onClick={(e) => {
             e.stopPropagation();
             onDeleteCategory(category);

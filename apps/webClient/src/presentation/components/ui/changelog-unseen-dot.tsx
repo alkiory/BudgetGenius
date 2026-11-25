@@ -17,8 +17,8 @@ export function ChangelogUnseenDotMark({
     >
       {/* Expanding halo draws the eye without moving layout. Disabled
           for visitors who prefer reduced motion. */}
-      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-purple-400 opacity-75 motion-reduce:animate-none" />
-      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-purple-500" />
+      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-400 opacity-75 motion-reduce:animate-none" />
+      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-teal-400" />
     </span>
   );
 }

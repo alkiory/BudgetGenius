@@ -20,7 +20,7 @@ export function StatCardSkeleton({
   valueWidth = "w-32",
 }: StatCardSkeletonProps) {
   return (
-    <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800">
+    <div className="glass-panel rounded-xl p-6">
       <div className="flex items-center gap-2">
         <Skeleton
           className={`${iconSizeMap[iconSize]} rounded-full shrink-0`}

@@ -1,0 +1,60 @@
+---
+import { Image } from "astro:assets";
+import dashboard from "../assets/presentation_dashboard.png";
+import mobile from "../assets/dashboard_mobile.png";
+import { getCopy, ui, type Lang } from "../i18n";
+
+interface Props {
+  t: ReturnType<typeof getCopy>;
+  lang: Lang;
+}
+
+const { t, lang } = Astro.props;
+const labels = ui[lang];
+---
+
+<section class="section" id="showcase">
+  <div class="container">
+    <div class="section-head" data-reveal>
+      <h2>{t.sectionShowcase.title}</h2>
+      <p>{t.sectionShowcase.subtitle}</p>
+    </div>
+
+    <div class="showcase-grid">
+      <figure style="margin: 0;" data-reveal>
+        <div class="frame">
+          <Image
+            src={dashboard}
+            alt={t.dashboardTitle}
+            format="webp"
+            widths={[520, 760, 1040]}
+            sizes="(max-width: 960px) 92vw, 640px"
+            loading="lazy"
+            quality={76}
+          />
+        </div>
+        <figcaption class="showcase-label">{labels.desktop}</figcaption>
+      </figure>
+
+      <figure
+        style="margin: 0; --reveal-delay: 120ms"
+        data-reveal
+      >
+        <div class="frame phone-frame">
+          <Image
+            src={mobile}
+            alt={labels.screenshots}
+            format="webp"
+            widths={[200, 280, 360]}
+            sizes="(max-width: 960px) 55vw, 240px"
+            loading="lazy"
+            quality={76}
+          />
+        </div>
+        <figcaption class="showcase-label" style="text-align: center;">
+          {labels.mobile}
+        </figcaption>
+      </figure>
+    </div>
+  </div>
+</section>

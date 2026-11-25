@@ -1,5 +1,6 @@
-import { X } from "lucide-react";
+import { X } from "@presentation/components/ui/animated-icons";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 interface ModalProps {
   isOpen: boolean;
@@ -30,18 +31,36 @@ export function Modal({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen && !isShowing) return null;
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  // Rendered into <body>: the trigger usually sits inside the header, whose
+  // `backdrop-filter` creates a containing block for `position: fixed`.
+  // Without the portal the dialog was positioned inside the header and got
+  // clipped, leaving no full-screen backdrop.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4
-        ${isOpen ? "animate-in fade-in" : "animate-out fade-out"}
-        ${className}`}
+      className={`fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 ${
+        isOpen ? "animate-in fade-in" : "animate-out fade-out"
+      } ${className ?? ""}`}
     >
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div
+        className="fixed inset-0 bg-slate-950/65 backdrop-blur-sm"
+        onClick={onClose}
+      />
       {/*
         The panel owns the height budget: it never grows past the
         viewport, the header stays pinned, and only the body scrolls.
@@ -51,7 +70,7 @@ export function Modal({
         and pushing the action buttons off-screen.
       */}
       <div
-        className={`relative z-50 flex max-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-lg bg-slate-50 p-4 shadow-lg sm:max-h-[calc(100dvh-2rem)] sm:p-6 dark:bg-slate-800 ${
+        className={`relative z-50 flex max-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-[0_30px_80px_-30px_rgb(0_0_0/0.8)] backdrop-blur-xl sm:max-h-[calc(100dvh-2rem)] sm:p-6 dark:border-white/10 dark:bg-[#0b1424]/95 ${
           isOpen ? "animate-in zoom-in-95" : "animate-out zoom-out-95"
         }`}
       >
@@ -60,8 +79,10 @@ export function Modal({
             {title}
           </h2>
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+            aria-label="Close"
+            className="rounded-full p-1 text-slate-400 transition-colors hover:bg-teal-500/10 hover:text-teal-600 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-teal-300"
           >
             <X className="h-5 w-5" />
           </button>
@@ -74,6 +95,7 @@ export function Modal({
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

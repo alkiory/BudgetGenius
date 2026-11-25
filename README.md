@@ -9,7 +9,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/status-active-brightgreen" alt="Status" />
   <img src="https://img.shields.io/badge/license-UNLICENSED-blue" alt="License" />
-  <img src="https://img.shields.io/badge/version-v1.7.3-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v1.11.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen" alt="Node" />
 </p>
 ---
@@ -28,6 +28,7 @@
 - [RPI Development Framework](#-rpi-development-framework)
 - [Project Structure](#-project-structure)
 - [Environment Variables](#-environment-variables)
+- [Web Surfaces & Password Recovery](#-web-surfaces--password-recovery)
 - [API Documentation](#-api-documentation)
 - [Contributing](#-contributing)
 
@@ -68,9 +69,9 @@ The application follows a **Clean Architecture** pattern across both its fronten
                                     │
                         ┌───────────▼───────────┐
                         │         api           │
-                        │      NestJS 10        │
+                        │      NestJS 11        │
                         │  TypeORM + Passport   │
-                        │      Port 3000        │
+                        │      Port 5000        │
                         └───┬───────┬───────┬───┘
                             │       │       │
                     ┌───────▼──┐ ┌──▼───┐ ┌▼──────┐
@@ -101,7 +102,8 @@ This project uses a **pnpm workspace monorepo** with **Turbo** for build orchest
 BudgetGenius/
 ├── apps/
 │   ├── api/              # NestJS backend (TypeScript)
-│   ├── webClient/        # React frontend (TypeScript + Vite)
+│   ├── webClient/        # React app / SPA, served under /app/ (Vite)
+│   ├── landing/          # Static marketing site, served at / (Astro 7.4)
 │   └── mobile/           # Capacitor native wrapper (Android APK)
 ├── docs/
 │   └── rpi/              # RPI Development Framework docs
@@ -120,7 +122,7 @@ BudgetGenius/
 ### Backend (`apps/api`)
 | Technology | Purpose |
 |-----------|---------|
-| **NestJS 10** | Server-side framework with modular architecture |
+| **NestJS 11** | Server-side framework with modular architecture |
 | **TypeScript 5.7** | Type-safe development |
 | **TypeORM 0.3** | Object-Relational Mapping for PostgreSQL |
 | **PostgreSQL 15** | Primary relational database |
@@ -132,17 +134,24 @@ BudgetGenius/
 | **Winston + Morgan** | Structured logging and HTTP request logging |
 
 ### Frontend (`apps/webClient`)
+
+> The marketing landing moved to [`apps/landing`](apps/landing) (Astro 7.4,
+> static). The SPA keeps the authenticated app, auth screens and public legal
+> pages. The changelog is now a static Astro page. See
+> [Web Surfaces](#-web-surfaces--password-recovery).
 | Technology | Purpose |
 |-----------|---------|
 | **React 19** | UI library with functional components |
 | **Vite 6** | Fast development server and build tool |
 | **TypeScript 5.7** | Type-safe development |
 | **Tailwind CSS 3** | Utility-first CSS framework |
+| **Astro 7.4** | Static landing in `apps/landing` (EN/ES, responsive WebP) |
 | **Redux Toolkit** | Client-side state management (auth, settings) |
 | **React Query (TanStack)** | Server state management and caching |
 | **React Router 7** | Client-side routing with lazy loading |
 | **Recharts** | Composable charting library |
-| **Lucide React** | Icon library |
+| **@animateicons/react** | Animated Lucide icons in the SPA |
+| **@animateicons/vanilla** | Animated Lucide icons in the Astro landing |
 | **Axios** | HTTP client with interceptors |
 
 ### Mobile (`apps/mobile`)
@@ -215,8 +224,8 @@ BudgetGenius/
 
 ### Prerequisites
 
-- **Node.js** v18 or higher
-- **pnpm** v10.x (install: `npm install -g pnpm`)
+- **Node.js** v22.22 or higher (Astro 7.4 minimum; the API and SPA also run on it)
+- **pnpm** v12.23.0 (install: `npm install -g pnpm@12.23.0`; the exact version is pinned by `packageManager` in the root `package.json`)
 - **Docker** & **Docker Compose** (for PostgreSQL and Redis)
 
 ---
@@ -303,8 +312,8 @@ This starts both the **NestJS backend** and the **Vite frontend** with hot reloa
 | Service | URL (Mode A — local dev) | URL (Mode B — Docker) | Description |
 |---------|--------------------------|----------------------|-------------|
 | 🌐 **Frontend** | http://localhost:5173 (Vite) | http://localhost:3001 (nginx) | React SPA |
-| 🚂 **Backend API** | http://localhost:5000 | http://localhost:3000 | NestJS REST API (binds `process.env.PORT \|\| 5000`, see `apps/api/src/main.ts`) |
-| 📚 **Swagger Docs** | http://localhost:5000/docs | http://localhost:3000/docs | Interactive API documentation |
+| 🚂 **Backend API** | http://localhost:5000 | http://localhost:3000 → container `5000` | NestJS REST API. The process always listens on **5000**; `docker-compose.dev.yml` publishes `3000:5000` |
+| 📚 **Swagger Docs** | http://localhost:5000/docs | http://localhost:3000/docs → container `5000` | Interactive API documentation (development only) |
 | 🐘 **PostgreSQL** | localhost:5432 | localhost:5432 (via Docker port mapping) | Schema `bg_public` (`user: postgres_admin_dev`, `pass: dev_password`, `db: budgetgenius_dev`) |
 | 🔴 **Redis** | localhost:6379 | localhost:6379 (via Docker port mapping) | Cache, refresh tokens, throttle buckets |
 
@@ -432,6 +441,33 @@ echo $DB_HOST $DB_USER $DB_PASSWORD $REDIS_HOST
 ```
 
 > **The bootstrap script no longer creates a root `.env` file** to avoid this issue.
+
+---
+
+### ⚠️ Common Pitfall: Root-Owned Build Artifacts (`EACCES` on `dist` / `.vite`)
+
+Containers run as **root** by default. When a one-off container or a Compose service builds or starts the app over the bind-mounted checkout, it leaves files owned by `root` in your working tree. Your host user cannot replace or unlink them, and the next local run fails with:
+
+```text
+Error: EACCES: permission denied, unlink '.../apps/api/dist/jest.config.d.ts'
+Error: EACCES: permission denied, unlink '.../apps/webClient/node_modules/.vite/deps/<hash>.js'
+```
+
+The usual offenders are `apps/api/dist` (written by `nest build` / `nest start`) and `apps/webClient/node_modules/.vite` (Vite's dependency cache).
+
+**Fix (no sudo needed)** — remove or re-own the artifacts from a container:
+
+```bash
+# Delete the regenerable artifacts; the next build/dev run recreates them
+docker run --rm -v "$PWD:/app" -w /app node:20-alpine \
+  rm -rf apps/api/dist apps/webClient/node_modules/.vite
+
+# ...or keep them and give them back to your host user
+docker run --rm -v "$PWD:/app" -w /app node:20-alpine \
+  chown -R "$(id -u):$(id -g)" apps/api/dist apps/webClient/node_modules/.vite
+```
+
+**Prevention:** avoid alternating root containers and host-side `pnpm dev` over the same working tree. If you need both, run the helper container as your user (`--user "$(id -u):$(id -g)"`), or clean the artifacts *before* switching back to the host. `dist` and `.vite` are build outputs, never source, so deleting them is always safe.
 
 ---
 
@@ -811,6 +847,11 @@ FRONTEND_URL=http://localhost:3001
 # JWT (REQUIRED — app won't start without it)
 JWT_SECRET=<generate-with-openssl-rand-hex-32>
 
+# Password recovery email (Resend)
+# Required for the API to boot; the sandbox sender only reaches the account owner.
+RESEND_API_KEY=re_xxxxxxxxx
+MAIL_FROM="BudgetGenius <no-reply@your-verified-domain>"
+
 # Redis (localhost for local dev; Docker overrides to 'redis' via compose)
 REDIS_HOST=localhost
 REDIS_PORT=6379
@@ -836,7 +877,8 @@ FIREBASE_AUTH_DOMAIN=
 ### Frontend (`apps/webClient/.env.development`)
 
 ```env
-VITE_API_URL=http://localhost:3000/api
+# Mode A (pnpm dev): the API listens on 5000. Docker/Mode B publishes it on 3000.
+VITE_API_URL=http://localhost:5000/api
 VITE_FRONTEND_URL=http://localhost:3001
 
 # Firebase (optional)
@@ -858,6 +900,55 @@ VITE_FIREBASE_MEASUREMENT_ID=
 See `.env.example` files in each app directory for the full list of available variables:
 - [`apps/api/.env.example`](apps/api/.env.example)
 - [`apps/webClient/.env.example`](apps/webClient/.env.example)
+- [`apps/landing/.env.example`](apps/landing/.env.example)
+
+---
+
+## 🌐 Web Surfaces & Password Recovery
+
+Since 1.10 the web deploy is a **single tree with two surfaces**:
+
+| Path | Served by | Notes |
+|---|---|---|
+| `/`, `/es/` | Astro landing (`apps/landing`) | Static HTML, no client framework |
+| `/app/**` | React SPA (`apps/webClient`) | Built with `base: '/app/'`; deep links rewrite to `/app/index.html` |
+| `/auth/**` | React SPA | Reset links point here, so they survive the split |
+| `/privacy-policy`, `/terms-and-conditions`, `/contact-sales` | React SPA | Rewritten to `/app/index.html` |
+| `/changelog`, `/es/changelog` | Astro landing | Static; exact rewrite to `changelog/index.html` |
+
+Commands:
+
+```bash
+pnpm --filter landing dev     # Astro on :4321
+pnpm --filter frontend-web dev # SPA on :5173 (base "/" locally)
+pnpm build:web                 # landing + SPA → dist/ (landing at /, SPA at /app/)
+```
+
+`pnpm dev` (Turbo) starts both. `firebase.json` and
+`apps/webClient/nginx.conf` carry the same rewrite map; the Capacitor build
+still uses `base: './'` and is not assembled into `dist/`.
+
+### Password recovery with Resend
+
+The reset flow is `POST /auth/forgot-password` → token (1 h TTL) → email with
+`${FRONTEND_URL}/auth/reset-password?token=…` → `POST /auth/reset-password`.
+Delivery goes through `ResendMailerService` ([Resend Node SDK docs](https://resend.com/docs/send-with-nodejs)):
+
+1. **Verify a domain** at <https://resend.com/domains> (add the DKIM/SPF DNS
+   records Resend shows). Without a verified domain, Resend only accepts
+   `onboarding@resend.dev`.
+2. **Create an API key** at <https://resend.com/api-keys> with *Sending access*
+   and set `RESEND_API_KEY` in `apps/api/.env.*`.
+3. **Set `MAIL_FROM`** to a sender on the verified domain, e.g.
+   `MAIL_FROM="BudgetGenius <no-reply@budgetgenius.com>"`.
+4. Keep `FRONTEND_URL` pointing at the origin users open (comma-separated
+   origins are accepted; the first one builds the link).
+
+> ⚠️ **Sandbox sender limitation:** mail sent from `onboarding@resend.dev` is
+> delivered **only to the Resend account owner's own address**. Real users
+> cannot receive a reset link until step 1 is done. The mailer logs a loud
+> warning (error level in production) when it boots with a `@resend.dev`
+> sender, and refuses to start at all without `RESEND_API_KEY`.
 
 ---
 
@@ -865,8 +956,9 @@ See `.env.example` files in each app directory for the full list of available va
 
 When the backend is running, Swagger API documentation is available at:
 
-- **Development:** http://localhost:3000/docs
-- **Production:** https://your-domain.com/docs
+- **Development (Mode A):** http://localhost:5000/docs
+- **Docker (Mode B):** http://localhost:3000/docs (host `3000` → container `5000`)
+- **Production:** not served. Since v1.10.0 `SwaggerModule` is registered only when `NODE_ENV !== 'production'`, so `/api/docs` returns 404 on the deployed API.
 
 ---
 

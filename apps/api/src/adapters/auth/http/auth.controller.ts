@@ -7,7 +7,11 @@ import {
   UseGuards,
   Req,
   Res,
+  ForbiddenException,
+  NotFoundException,
   UnauthorizedException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthService } from '@application/auth/auth.service';
@@ -32,6 +36,7 @@ import { LoginDto } from '@application/auth/dto/login.dto';
 import { CookieService } from '@infrastructure/config/cookie.service';
 import { AuthGuard } from '@nestjs/passport';
 import { User } from '@domain/user/user.entity';
+import { toPublicUser } from '@application/user/public-user';
 
 /** 7 días en milisegundos — coincide con el JWT expiry del refreshToken. */
 const REFRESH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
@@ -119,10 +124,22 @@ export class AuthController {
       const frontendUrl =
         this.configService.get<string>('FRONTEND_URL')?.split(',')[0]?.trim() ||
         fallbackUrl;
-      return res.redirect(
-        301,
-        `${frontendUrl}/auth/login?error=google_auth_failed`,
-      );
+
+      // This handler is a browser navigation (Chrome Custom Tab), so a JSON
+      // 409 body would be useless to the client. The conflict of a concurrent
+      // Google signup — UNIQUE index on LOWER(email), see
+      // `AuthService.validateOAuthUser` — is forwarded as a distinguishable
+      // error code instead, so the login screen can point at email/password.
+      //
+      // 302 and NOT 301: a permanent redirect is cached by the browser and
+      // would replay this failure on every later attempt, even after the
+      // cause is gone.
+      const errorCode =
+        error instanceof HttpException && error.getStatus() === HttpStatus.CONFLICT
+          ? 'email_in_use'
+          : 'google_auth_failed';
+
+      return res.redirect(302, `${frontendUrl}/auth/login?error=${errorCode}`);
     }
   }
 
@@ -205,10 +222,18 @@ export class AuthController {
         // successful auth response. See rpi/mobile-cookies-persistence/.
         accessToken,
         refreshToken,
-        user: userEntity,
+        // QA-0.2 — never echo the raw entity: it carries the bcrypt
+        // `password` hash and the hashed `refreshToken`.
+        user: toPublicUser(userEntity),
       };
     } catch (error) {
       this.logger.error(`🚨 Falló el login con Firebase: ${error.message}`);
+      // This is the path the web Google button uses (Firebase ID token), and
+      // it hits the same UNIQUE-index race as `/auth/signup`: flattening that
+      // 409 into "Token inválido" told the user their credential was bad when
+      // the real cause was the email. Any deliberate HttpException keeps its
+      // status; only unexpected failures become a 401.
+      if (error instanceof HttpException) throw error;
       throw new UnauthorizedException('Token inválido');
     }
   }
@@ -274,7 +299,7 @@ export class AuthController {
     return {
       accessToken,
       refreshToken,
-      user,
+      user: toPublicUser(user),
       isNewUser,
       message: isNewUser
         ? '🪪 Successfully signed up and logged in'
@@ -282,7 +307,35 @@ export class AuthController {
     };
   }
 
+  /**
+   * Session probe consumed by `useRestoreSession` on every app boot.
+   *
+   * Declared BEFORE `@Get(':email')` on purpose: Nest/Express register
+   * routes in declaration order, so the catch-all `:email` param used to
+   * match `GET /auth/verify` first and answer the probe with a 200 +
+   * `null` body instead of running `JwtAuthGuard`. Every boot then read
+   * "login succeeded" from a public endpoint — the session seemed valid
+   * while the token was not.
+   */
+  @Get('verify')
+  @UseGuards(JwtAuthGuard)
+  async getCurrentUser(@Req() req) {
+    // `JwtStrategy.validate` exposes only `{ userId, email, role }` —
+    // no password hash, no refresh token.
+    return {
+      isValid: true,
+      user: req.user,
+    };
+  }
+
+  /**
+   * Profile lookup by email. Was public (no guard, raw entity): anyone
+   * could enumerate accounts and read the bcrypt hash + hashed refresh
+   * token. Now authenticated, self-only (admins may read any), and
+   * projected through `toPublicUser`.
+   */
   @Get(':email')
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Obtener información de un usuario por correo electrónico',
@@ -301,9 +354,26 @@ export class AuthController {
       },
     },
   })
+  @ApiResponse({ status: 401, description: 'No autenticado' })
+  @ApiResponse({
+    status: 403,
+    description: 'Solo el propio usuario (o un admin) puede consultarlo',
+  })
   @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
-  findOne(@Param('email') email: string) {
-    return this.authService.findOne(email);
+  async findOne(@Param('email') email: string, @Req() req) {
+    if (req.user?.email !== email && req.user?.role !== 'admin') {
+      this.logger.warn(
+        `Auth lookup blocked: ${req.user?.email} tried to read ${email}`,
+      );
+      throw new ForbiddenException('⛔ You can only read your own profile');
+    }
+
+    const user = await this.authService.findOne(email);
+    if (!user) {
+      throw new NotFoundException('⚠️ User not found');
+    }
+
+    return toPublicUser(user);
   }
 
   @Post('login')
@@ -372,7 +442,7 @@ export class AuthController {
       // set above for same-site browsers. See rpi/mobile-cookies-persistence/.
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
-      user: result.user,
+      user: toPublicUser(result.user),
       message: '🔓 Login successful',
     };
   }
@@ -552,8 +622,19 @@ export class AuthController {
       await this.authService.refreshToken(userId, token);
 
       // ... generar nuevo accessToken y setearlo en cookie
+      //
+      // Claims explícitos, NO `{ ...payload }`: el token de refresco ya
+      // trae `iat`/`exp`, y jsonwebtoken rechaza `expiresIn` cuando el
+      // payload los incluye ("Bad options.expiresIn option the payload
+      // already has an exp property"). Ese throw caía en el catch de
+      // abajo, así que /auth/refresh devolvía 401 con cualquier token
+      // válido y ninguna sesión podía rotar tras los 30 min de la cookie.
       const newAccessToken = this.jwtService.sign(
-        { ...payload },
+        {
+          id: payload['id'],
+          email: payload['email'],
+          role: payload['role'],
+        },
         { expiresIn: '1h' },
       );
 
@@ -569,39 +650,14 @@ export class AuthController {
       // re-emit it. See rpi/mobile-cookies-persistence/.
       return { success: true, accessToken: newAccessToken };
     } catch (error) {
+      // Breadcrumb for the flat 401 below: the client only ever sees
+      // "Invalid refresh token", which is indistinguishable from an
+      // expired/revoked session, a signature mismatch or a Redis outage.
+      this.logger.warn(
+        `🔒 /auth/refresh rejected: ${(error as Error)?.message ?? error}`,
+      );
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
 
-  @Post('set-cookies')
-  @ApiOperation({
-    summary: 'Establecer cookies JWT desde el WebView de Capacitor',
-  })
-  @ApiResponse({ status: 200, description: 'Cookies seteadas correctamente' })
-  async setCookies(
-    @Body() body: { accessToken: string; refreshToken: string },
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    if (!body.accessToken || !body.refreshToken) {
-      throw new UnauthorizedException(
-        'Access token and refresh token are required',
-      );
-    }
-
-    this.cookieService.setCookie(res, 'accessToken', body.accessToken);
-    this.cookieService.setCookie(res, 'refreshToken', body.refreshToken, {
-      maxAge: REFRESH_COOKIE_MAX_AGE,
-    });
-
-    return { success: true, message: 'Cookies set successfully' };
-  }
-
-  @Get('verify')
-  @UseGuards(JwtAuthGuard)
-  async getCurrentUser(@Req() req) {
-    return {
-      isValid: true,
-      user: req.user,
-    };
-  }
 }

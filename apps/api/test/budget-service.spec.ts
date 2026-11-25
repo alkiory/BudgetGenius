@@ -2,15 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BudgetService } from '@application/dashboard/services/budget.service';
 import { BudgetRepository } from '@adapters/dashboard/persistence/budget.repository';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
-import {
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggingService } from '@infrastructure/log/logger.service';
-import { UserSettingsService } from '@application/user/user-settings.service';
 import { QueryFailedError } from 'typeorm';
 import { BUDGET_CATEGORY_UNIQUE_CONSTRAINT_NAME } from '@domain/dashboard/budget-category.entity';
-import { SupportedCurrency } from '@domain/user/user-settings.entity';
 
 // Full mock User object matching the User entity
 const mockUser = {
@@ -99,7 +94,6 @@ const mockCategoryShape = {
   allocated: 550,
   spent: 250,
   manualSpent: 250,
-  currency: 'USD' as SupportedCurrency,
   createdAt: new Date(),
   updatedAt: new Date(),
   budget: { ...categoryBudget },
@@ -152,6 +146,9 @@ describe('BudgetService', () => {
             updateBudgetCategory: jest.fn(),
             deleteBudgetCategory: jest.fn(),
             deleteBudget: jest.fn(),
+            linkUnlinkedTransactionsToCategory: jest.fn(),
+            findReconciliationRows: jest.fn(),
+            setTransactionBudgetCategory: jest.fn(),
           },
         },
         {
@@ -168,18 +165,6 @@ describe('BudgetService', () => {
             error: jest.fn(),
           },
         },
-        {
-          provide: UserSettingsService,
-          useValue: {
-            getCurrencyForUser: jest.fn().mockResolvedValue('USD'),
-            getOrCreateSettings: jest.fn().mockResolvedValue({
-              id: 1,
-              timezone: 'UTC',
-              currency: 'USD',
-              locale: 'en-US',
-            }),
-          },
-        },
       ],
     }).compile();
 
@@ -187,6 +172,7 @@ describe('BudgetService', () => {
     repo = module.get(BudgetRepository);
     userRepo = module.get(UserRepositoryImpl);
     logger = module.get(LoggingService);
+
   });
 
   describe('createBudget', () => {
@@ -402,6 +388,53 @@ describe('BudgetService', () => {
       await expect(service.updateBudget(1, dto)).rejects.toThrow(
         BadRequestException,
       );
+    });
+
+    it('should reject an endDate earlier than the stored startDate on a partial update', async () => {
+      const existing = buildBudget({
+        id: 1,
+        startDate: new Date('2026-06-15'),
+        endDate: new Date('2026-06-30'),
+      });
+      repo.findById.mockResolvedValue(existing);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [existing],
+      });
+
+      // No `startDate` in the payload: the comparison must use the stored one.
+      await expect(
+        service.updateBudget(1, {
+          id: 1,
+          endDate: new Date('2026-06-10'),
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(repo.updateBudget).not.toHaveBeenCalled();
+    });
+
+    it('should compare a stored date string with a DTO Date on a partial update', async () => {
+      // Postgres `date` columns hydrate as `YYYY-MM-DD` strings even though
+      // the entity type says Date; `Date < string` is always false.
+      const existing = buildBudget({
+        id: 1,
+        startDate: '2026-06-15' as unknown as Date,
+        endDate: '2026-06-30' as unknown as Date,
+      });
+      repo.findById.mockResolvedValue(existing);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [existing],
+      });
+
+      await expect(
+        service.updateBudget(1, {
+          id: 1,
+          endDate: new Date('2026-06-10'),
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(repo.updateBudget).not.toHaveBeenCalled();
     });
   });
 
@@ -908,8 +941,222 @@ describe('BudgetService', () => {
     });
   });
 
-  describe('single-currency budget totals', () => {
-    it('sums mixed-currency entries unchanged when listing budgets', async () => {
+  describe('overlapping spending budgets (D2.2)', () => {
+    it('creates a spending budget that overlaps another one', async () => {
+      // D2.2 freezes attribution in transactions, so overlapping spending
+      // budgets no longer double-count and must not be rejected.
+      userRepo.findById.mockResolvedValue({ ...mockUser, budgets: [] });
+      repo.createBudget.mockResolvedValue(buildBudget());
+
+      await service.createBudget(1, {
+        name: 'Overlapping',
+        period: 'Monthly',
+        startDate: new Date('2026-06-15'),
+        endDate: new Date('2026-07-15'),
+        totalAllocated: 100,
+        categories: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      expect(repo.createBudget).toHaveBeenCalledTimes(1);
+    });
+
+    it('moves a spending budget onto another window without blocking the edit', async () => {
+      const existing = buildBudget({ id: 1 });
+      repo.findById.mockResolvedValue(existing);
+      userRepo.findById.mockResolvedValue({
+        ...mockUser,
+        budgets: [existing],
+      });
+      repo.updateBudget.mockResolvedValue(existing);
+
+      await service.updateBudget(1, {
+        id: 1,
+        startDate: new Date('2026-06-10'),
+        endDate: new Date('2026-06-20'),
+      });
+
+      expect(repo.updateBudget).toHaveBeenCalledTimes(1);
+    });
+
+    it('links unlinked expenses matching the old name before renaming a spending category', async () => {
+      const category = buildCategory({ id: 7, name: 'Transportation' });
+      category.budget = buildBudget({ id: 1, type: 'spending' }) as never;
+      repo.getBudgetCategory.mockResolvedValue(category);
+      repo.updateBudgetCategory.mockResolvedValue({
+        ...category,
+        name: 'Transporte',
+      });
+      repo.linkUnlinkedTransactionsToCategory.mockResolvedValue(2);
+
+      await service.updateBudgetCategory(1, {
+        id: 7,
+        name: 'Transporte',
+        allocated: 100,
+        spent: 0,
+      });
+
+      expect(repo.linkUnlinkedTransactionsToCategory).toHaveBeenCalledWith(
+        1,
+        1,
+        'Transportation',
+        7,
+      );
+    });
+  });
+
+  describe('historical reconciliation', () => {
+    const unlinkedRow = {
+      id: 279,
+      date: '2026-10-21',
+      description: 'cumple1',
+      category: 'Gifts',
+      amount: '-43.25',
+      budgetId: 21,
+      budgetName: 'Servicios',
+      categoryId: 49,
+      categoryName: 'Utilities',
+    };
+
+    it('returns one item per unlinked expense with the winning budget candidates', async () => {
+      repo.findReconciliationRows.mockResolvedValue([
+        unlinkedRow,
+        // A row whose text already matches a category is attributed by the
+        // legacy fallback, so it must not ask the user for a decision.
+        {
+          ...unlinkedRow,
+          id: 280,
+          category: 'Utilities',
+        },
+      ]);
+
+      const result = await service.getReconciliation(1);
+
+      expect(result.total).toBe(1);
+      expect(result.items[0]).toEqual({
+        id: 279,
+        date: '2026-10-21',
+        description: 'cumple1',
+        category: 'Gifts',
+        amount: -43.25,
+        budgetId: 21,
+        budgetName: 'Servicios',
+        candidates: [{ id: 49, name: 'Utilities' }],
+      });
+    });
+
+    it('assigns an expense to a category of its winning budget', async () => {
+      repo.findReconciliationRows.mockResolvedValue([unlinkedRow]);
+      repo.setTransactionBudgetCategory.mockResolvedValue(true);
+
+      const result = await service.reconcileExpense(1, 279, 49);
+
+      expect(repo.setTransactionBudgetCategory).toHaveBeenCalledWith(
+        1,
+        279,
+        49,
+      );
+      expect(result).toEqual({ id: 279, budgetCategoryId: 49 });
+    });
+
+    it('rejects a category that is not a candidate of that budget', async () => {
+      repo.findReconciliationRows.mockResolvedValue([unlinkedRow]);
+
+      await expect(
+        service.reconcileExpense(1, 279, 999),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repo.setTransactionBudgetCategory).not.toHaveBeenCalled();
+    });
+
+    it('rejects an expense that is no longer unlinked', async () => {
+      repo.findReconciliationRows.mockResolvedValue([]);
+
+      await expect(
+        service.reconcileExpense(1, 279, 49),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(repo.setTransactionBudgetCategory).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Cross-user isolation. The fake repository mirrors the production
+     * WHERE scoping: each user only sees their own pending rows. A regression
+     * that drops `userId` from either call surfaces as a leak here.
+     */
+    describe('cross-user isolation', () => {
+      const userAId = 1;
+      const userBId = 2;
+      const userBRow = {
+        id: 901,
+        date: '2026-11-02',
+        description: 'B expense',
+        category: 'Other',
+        amount: '-12.00',
+        budgetId: 77,
+        budgetName: 'B Budget',
+        categoryId: 88,
+        categoryName: 'B Category',
+      };
+
+      const rowsByUser: Record<number, (typeof unlinkedRow)[]> = {
+        [userAId]: [unlinkedRow],
+        [userBId]: [userBRow],
+      };
+      const scopeRows = (userId: number, transactionId?: number) => {
+        const rows = rowsByUser[userId] ?? [];
+        return transactionId == null
+          ? rows
+          : rows.filter((row) => Number(row.id) === transactionId);
+      };
+
+      beforeEach(() => {
+        repo.findReconciliationRows.mockImplementation(
+          async (userId: number, transactionId?: number) =>
+            scopeRows(userId, transactionId),
+        );
+        repo.setTransactionBudgetCategory.mockResolvedValue(true);
+      });
+
+      it('returns only the requesting user queue', async () => {
+        const asUserA = await service.getReconciliation(userAId);
+        const asUserB = await service.getReconciliation(userBId);
+
+        expect(asUserA.items.map((item) => item.id)).toEqual([279]);
+        expect(asUserB.items.map((item) => item.id)).toEqual([901]);
+        expect(repo.findReconciliationRows).toHaveBeenNthCalledWith(1, userAId);
+        expect(repo.findReconciliationRows).toHaveBeenNthCalledWith(2, userBId);
+      });
+
+      it('does not assign another user expense', async () => {
+        await expect(
+          service.reconcileExpense(userAId, userBRow.id, userBRow.categoryId),
+        ).rejects.toBeInstanceOf(NotFoundException);
+
+        expect(repo.setTransactionBudgetCategory).not.toHaveBeenCalled();
+      });
+
+      it('does not accept a category from another user budget', async () => {
+        await expect(
+          service.reconcileExpense(userAId, unlinkedRow.id, userBRow.categoryId),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        expect(repo.setTransactionBudgetCategory).not.toHaveBeenCalled();
+      });
+
+      it('scopes the successful write to the authenticated user', async () => {
+        await service.reconcileExpense(userAId, unlinkedRow.id, 49);
+
+        expect(repo.setTransactionBudgetCategory).toHaveBeenCalledWith(
+          userAId,
+          unlinkedRow.id,
+          49,
+        );
+      });
+    });
+  });
+
+  describe('single-currency budget totals (D1)', () => {
+    it('sums every category at face value under one account currency', async () => {
       const mixedBudget = buildBudget({
         id: 1,
         totalSpent: 0,
@@ -921,15 +1168,12 @@ describe('BudgetService', () => {
             spent: 50,
             allocated: 50,
           }),
-          {
-            ...buildCategory({
-              id: 2,
-              name: 'Sweets',
-              spent: 200000,
-              allocated: 200000,
-            }),
-            currency: 'COP',
-          },
+          buildCategory({
+            id: 2,
+            name: 'Sweets',
+            spent: 200000,
+            allocated: 200000,
+          }),
         ],
       });
       repo.findByUser.mockResolvedValue([mixedBudget]);
@@ -941,7 +1185,7 @@ describe('BudgetService', () => {
       const result = await service.getBudgets(1);
 
       expect(result).toHaveLength(1);
-      // Switching currency does not alter the source numeric values.
+      // No conversion is applied: totals are the plain sum of stored values.
       expect(result[0].totalSpent).toBe(200050);
       expect(result[0].totalAllocated).toBe(200050);
     });
@@ -969,18 +1213,15 @@ describe('BudgetService', () => {
       expect(result[0].totalAllocated).toBe(550);
     });
 
-    it('keeps category values unchanged even when their currency differs from the user setting', async () => {
+    it('keeps category values unchanged and exposes no per-category currency', async () => {
       const copBudget = buildBudget({
         id: 1,
         categories: [
-          {
-            ...buildCategory({
-              id: 1,
-              spent: 50,
-              allocated: 50,
-            }),
-            currency: 'COP' as SupportedCurrency,
-          },
+          buildCategory({
+            id: 1,
+            spent: 50,
+            allocated: 50,
+          }),
         ],
       });
       repo.findByUser.mockResolvedValue([copBudget]);
@@ -993,18 +1234,17 @@ describe('BudgetService', () => {
 
       expect(result[0].totalSpent).toBe(50);
       expect(result[0].totalAllocated).toBe(50);
+      // D1: the column is gone, so the API contract no longer leaks it.
+      expect(result[0].categories?.[0]).not.toHaveProperty('currency');
     });
 
-    it('recalculates mixed-currency category totals without conversion', async () => {
-      const copCategory = {
-        ...buildCategory({
-          id: 1,
-          spent: 200000,
-          allocated: 200000,
-          budget: { ...categoryBudget, id: 1 },
-        }),
-        currency: 'COP' as SupportedCurrency,
-      };
+    it('recalculates category totals without conversion', async () => {
+      const copCategory = buildCategory({
+        id: 1,
+        spent: 200000,
+        allocated: 200000,
+        budget: { ...categoryBudget, id: 1 },
+      });
       const copBudget = buildBudget({
         id: 1,
         totalSpent: 0,
@@ -1024,7 +1264,6 @@ describe('BudgetService', () => {
         name: 'Sweets',
         allocated: 200000,
         spent: 200000,
-        currency: 'COP',
       } as any);
 
       expect(repo.updateBudget).toHaveBeenCalledTimes(1);

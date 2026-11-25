@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "@presentation/components/ui/animated-icons";
 import type { ReactNode } from "react";
 
 interface OverBudgetContainerProps {
@@ -20,8 +20,8 @@ export function OverBudgetContainer({
     <div
       className={`rounded-lg border p-4 transition-colors ${
         isOverBudget
-          ? "border-red-300 bg-red-50/60 dark:border-red-800 dark:bg-red-950/30"
-          : "border-slate-200 dark:border-slate-700"
+          ? "border-rose-300 bg-rose-50/60 dark:border-rose-500/35 dark:bg-rose-950/30"
+          : "border-slate-200 dark:border-white/10"
       } ${className}`}
     >
       {children}
@@ -48,7 +48,7 @@ export function OverBudgetIcon({
   if (!isOverBudget) return null;
   return (
     <AlertTriangle
-      className={`${sizeMap[size]} shrink-0 text-red-500 dark:text-red-400 ${className}`}
+      className={`${sizeMap[size]} shrink-0 text-rose-500 dark:text-rose-400 ${className}`}
     />
   );
 }
@@ -71,7 +71,7 @@ export function OverBudgetBadge({
   if (!isOverBudget) return null;
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/50 dark:text-red-300 ${className}`}
+      className={`inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/50 dark:text-rose-300 ${className}`}
     >
       <AlertTriangle className="h-3 w-3" />
       {text}

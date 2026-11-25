@@ -5,7 +5,7 @@ import { Button } from "@presentation/components/ui/button";
 import { APP_PATHS } from "@presentation/utils/routes";
 import { successToast, errorToast } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus } from "@presentation/components/ui/animated-icons";
 import {
   cloneElement,
   isValidElement,
@@ -69,8 +69,7 @@ export function AddTransactionModal({
     });
   };
 
-  const modalTitle =
-    !trigger && !isHeader ? "" : t("transactions.addNewTransaction");
+  const modalTitle = t("transactions.addNewTransaction");
 
   return (
     <>
@@ -113,7 +112,7 @@ export function AddTransactionModal({
           variant="primary"
           onClick={() => setIsOpen(true)}
           size="icon"
-          className="rounded-full bg-purple-50 p-1 text-purple-600 hover:text-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:bg-slate-800 dark:text-purple-400 dark:hover:text-purple-300"
+          className="rounded-full bg-teal-500/10 p-1 text-teal-600 hover:text-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 dark:bg-slate-800 dark:text-teal-400 dark:hover:text-teal-300"
         >
           <Plus className="h-4 w-4" />
         </Button>

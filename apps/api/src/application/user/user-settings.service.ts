@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import { UserSettingsRepository } from '@adapters/user/persistence/user-settings.repository';
 import {
   SupportedCurrency,
@@ -18,6 +22,16 @@ import { validate } from 'class-validator';
  * the onboarding wizard ("Euro (€)").
  */
 const DEFAULT_CURRENCY: SupportedCurrency = 'EUR';
+
+/**
+ * D1: stable, client-mappable message for the currency lock. A stored amount
+ * has no unit of its own, so changing the profile currency after money exists
+ * would re-label history instead of converting it (1.000 EUR would suddenly
+ * read as 1.000 USD). Clients can match this string to show a translated
+ * explanation; changing it is a breaking change.
+ */
+export const CURRENCY_LOCKED_HAS_HISTORY =
+  'Currency cannot be changed once the account has transactions or budgets';
 
 @Injectable()
 export class UserSettingsService {
@@ -94,6 +108,21 @@ export class UserSettingsService {
         createdAt: new Date(),
         updatedAt: new Date(),
       } as UserSettings);
+    }
+
+    // D1 guard: only an account without money can change its currency.
+    // Re-sending the current value stays allowed (onboarding wizards PATCH
+    // the whole settings object), so the check compares before counting.
+    //
+    // Check-then-write window: a transaction inserted between the count and
+    // the save still slips through. Closing it would need a lock shared by
+    // every financial write; the exposure is one racing PATCH and the next
+    // write is the only thing affected, so it is documented and accepted.
+    if (dto.currency && dto.currency !== settings.currency) {
+      const history = await this.repo.countFinancialHistory(userId);
+      if (history > 0) {
+        throw new ConflictException(CURRENCY_LOCKED_HAS_HISTORY);
+      }
     }
 
     // Use patch approach to update only the specified properties

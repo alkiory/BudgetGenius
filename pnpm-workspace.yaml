@@ -18,3 +18,20 @@ allowBuilds:
   '@swc/core': true
   esbuild: true
   protobufjs: false
+  # sharp verifies its libvips binding on install; CI installs it as a direct
+  # landing dependency, so an unapproved script turns `pnpm install` into
+  # ERR_PNPM_IGNORED_BUILDS and fails the APK/CI jobs before the build starts.
+  sharp: true
+
+permissions:
+  dotenv:
+    skills: [dotenv]
+
+skills:
+  dirs:
+    - .agent/skills
+    - .agents/skills
+    - .claude/skills
+    - .cursor/skills
+    - .gemini/skills
+    - .github/skills

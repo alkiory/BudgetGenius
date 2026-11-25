@@ -1,3 +1,5 @@
+import { isNativePlatform } from "@infrastructure/native";
+
 export enum RouteNames {
   Dashboard = "Dashboard",
   Transactions = "Transactions",
@@ -64,3 +66,18 @@ export const APP_PATHS = {
   transactions: `${RoutePaths.App}/${RoutePaths.Transactions}`,
   onboarding: `${RoutePaths.App}/${RoutePaths.Onboarding}`,
 } as const;
+
+/**
+ * The changelog is a static Astro page, not an SPA route. In local dev the
+ * landing runs on :4321, so anchor links need that origin; production serves
+ * the static page from the same origin. Set VITE_LANDING_URL to override.
+ */
+const publicSite =
+  import.meta.env.VITE_PUBLIC_SITE_URL ?? "https://budgetgenius.com";
+const landingBase = () =>
+  isNativePlatform()
+    ? publicSite
+    : (import.meta.env.VITE_LANDING_URL ??
+      (import.meta.env.DEV ? "http://localhost:4321" : ""));
+
+export const landingHref = (path: string) => `${landingBase()}${path}`;

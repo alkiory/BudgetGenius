@@ -1,0 +1,14 @@
+# Secrets — env files are injected at runtime by the platform / compose
+# (`env_file:`), never copied into the image. Without this, `COPY . .` in
+# apps/api/Dockerfile pulls apps/api/.env.production into a layer and the
+# credentials stay readable with `docker save` + `tar` (or `docker run
+# cat .env`).
+**/.env
+**/.env.*
+!**/.env.example
+
+# Installed and built inside the image (pnpm install / nest build);
+# copying the host copies would overwrite them with host-platform files.
+**/node_modules
+**/dist
+**/logs

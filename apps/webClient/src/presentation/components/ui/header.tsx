@@ -1,7 +1,7 @@
 import { RootState } from "@adapters/store/rootStore";
 import { useChangelogUnseen } from "@presentation/hooks/useChangelogUnseen";
-import { RoutePaths } from "@presentation/utils/routes";
-import { Menu, X } from "lucide-react";
+import { landingHref, RoutePaths } from "@presentation/utils/routes";
+import { Menu, X } from "@presentation/components/ui/animated-icons";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
@@ -168,19 +168,19 @@ export default function HeaderComponent() {
           <nav className="hidden md:flex md:items-center md:gap-4">
             <ThemeToggle />
             <LanguageSwitcher />
-            <Link
-              to={RoutePaths.Changelog}
+            <a
+              href={landingHref(RoutePaths.Changelog)}
               className="text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white"
             >
               {t("landing.changelog.footerLink")}
               {hasUnseenChangelog && <ChangelogUnseenDot />}
-            </Link>
+            </a>
             {user ? (
               <div className="relative ml-3">
                 <div>
                   <button
                     type="button"
-                    className="flex max-w-xs items-center rounded-full bg-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:bg-slate-950"
+                    className="flex max-w-xs items-center rounded-full bg-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 dark:bg-slate-950"
                     id="user-menu-button"
                   >
                     <span className="sr-only">
@@ -188,7 +188,7 @@ export default function HeaderComponent() {
                     </span>
                     <Link
                       to={RoutePaths.App + "/" + RoutePaths.Profile}
-                      className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 dark:bg-purple-900 dark:text-purple-400 font-medium"
+                      className="h-8 w-8 rounded-full bg-teal-500/10 flex items-center justify-center text-teal-600 dark:bg-teal-400/15 dark:text-teal-400 font-medium"
                     >
                       {(user?.name?.charAt(0)?.toUpperCase() || "") +
                         (user?.surname?.charAt(0)?.toUpperCase() || "")}
@@ -221,14 +221,14 @@ export default function HeaderComponent() {
           className="md:hidden border-t bg-slate-50 dark:bg-slate-800 shadow-lg"
         >
           <div className="container mx-auto flex flex-col gap-1 px-4 py-3">
-            <Link
-              to={RoutePaths.Changelog}
+            <a
+              href={landingHref(RoutePaths.Changelog)}
               onClick={closeMenu}
               className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200/60 dark:text-slate-200 dark:hover:bg-slate-700/60"
             >
               {t("landing.changelog.footerLink")}
               {hasUnseenChangelog && <ChangelogUnseenDot />}
-            </Link>
+            </a>
 
             {user ? (
               <Link
@@ -250,7 +250,7 @@ export default function HeaderComponent() {
                 <Link
                   to="/auth/signup"
                   onClick={closeMenu}
-                  className="rounded-md px-3 py-2 text-sm font-semibold text-purple-700 hover:bg-purple-50 dark:text-purple-300 dark:hover:bg-purple-900/30"
+                  className="rounded-md px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-500/10 dark:text-teal-300 dark:hover:bg-teal-400/10"
                 >
                   {t("auth.signUp")}
                 </Link>

@@ -5,10 +5,8 @@ import {
   IsNumber,
   ValidateNested,
   IsDate,
-  IsEnum,
   IsIn,
 } from 'class-validator';
-import { SupportedCurrency } from '@domain/user/user-settings.entity';
 
 export class UpdateBudgetDto {
   @IsNumber()
@@ -75,10 +73,4 @@ export class UpdateBudgetCategoryDto {
   @IsOptional()
   @IsNumber({ allowInfinity: false, allowNaN: false })
   spent: number;
-
-  @IsOptional()
-  @IsEnum(['USD', 'EUR', 'COP'], {
-    message: 'currency must be one of USD|EUR|COP',
-  })
-  currency?: SupportedCurrency;
 }

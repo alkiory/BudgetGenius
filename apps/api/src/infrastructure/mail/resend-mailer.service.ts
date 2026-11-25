@@ -78,6 +78,24 @@ export class ResendMailerService {
     this.from =
       configService.get<string>('MAIL_FROM') ??
       'BudgetGenius <onboarding@resend.dev>';
+
+    // Resend's sandbox sender only delivers to the address that owns the
+    // Resend account (see https://resend.com/docs/send-with-nodejs): using it
+    // for password recovery silently fails for every other user. Warn loudly
+    // instead of throwing so an existing deployment keeps booting, but make it
+    // impossible to miss in production logs.
+    if (/@resend\.dev/i.test(this.from)) {
+      const warning =
+        `MAIL_FROM is using Resend's test sender ("${this.from}"). ` +
+        'Resend only delivers @resend.dev mail to the Resend account owner. ' +
+        'Verify a domain at https://resend.com/domains and set MAIL_FROM to a ' +
+        'sender on that domain before relying on password recovery.';
+      if (configService.get<string>('NODE_ENV') === 'production') {
+        this.logger.error(`🚨 ${warning}`);
+      } else {
+        this.logger.warn(`⚠️ ${warning}`);
+      }
+    }
     // Env-configurable milestone so ops can tune log density without
     // a redeploy. Falls back to the static default when unset or zero
     // (e.g., an empty string from the env file).

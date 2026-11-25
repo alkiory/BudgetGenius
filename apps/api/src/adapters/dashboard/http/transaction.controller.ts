@@ -11,11 +11,13 @@ import {
   Body,
   Req,
   UseGuards,
+  UseFilters,
   Put,
   Delete,
   BadRequestException,
   NotFoundException,
   Query,
+  Headers,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -24,11 +26,16 @@ import {
   ApiParam,
   ApiBody,
   ApiQuery,
+  ApiHeader,
 } from '@nestjs/swagger';
+import { EntityNotFoundExceptionFilter } from './filters/entity-not-found.filter';
 
 @ApiTags('Transactions')
 @Controller('transactions')
 @UseGuards(JwtAuthGuard)
+// Repos here use `findOneOrFail`, whose `EntityNotFoundError` would otherwise
+// surface as a 500 on a foreign/unknown id instead of a 404.
+@UseFilters(EntityNotFoundExceptionFilter)
 export class TransactionController {
   constructor(
     private readonly transactionService: TransactionService,
@@ -121,12 +128,28 @@ export class TransactionController {
   }
 
   @Post('import')
-  @ApiOperation({ summary: 'Import transactions in one request' })
+  @ApiOperation({
+    summary: 'Import transactions in one request',
+    description:
+      'Send an Idempotency-Key (8-128 chars of [A-Za-z0-9_-]) to make retries safe: the same key + payload replays the stored outcome; a reused key with a different payload returns 409.',
+  })
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    description:
+      'Optional idempotency key. Required for replay-safe imports; retries with the same payload are not inserted twice.',
+    required: false,
+  })
   @ApiResponse({ status: 201, description: 'Transactions imported' })
-  async importTransactions(@Body() dto: ImportTransactionsDto, @Req() req) {
+  @ApiResponse({ status: 409, description: 'Idempotency-Key reused with a different payload' })
+  async importTransactions(
+    @Body() dto: ImportTransactionsDto,
+    @Req() req,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
     return this.transactionService.importTransactions(
       req.user.userId,
       dto.transactions,
+      idempotencyKey,
     );
   }
   // #endregion Create Transaction
@@ -272,7 +295,8 @@ export class TransactionController {
   })
   async updateTransaction(@Body() dto: UpdateTransactionDto, @Req() req) {
     const userId = req.user.userId;
-    this.transactionService.updateTransaction(userId, dto);
+    // Awaited so a failed write is an error, not a silent 200 (audit I1 / T0.7).
+    await this.transactionService.updateTransaction(userId, dto);
     return {
       message: '📈 Transaction updated successfully',
       transaction: dto,
@@ -292,20 +316,20 @@ export class TransactionController {
       },
     },
   })
-  async deleteAllTransactions(@Req() req, @Body() transactionId: number[]) {
+  async deleteAllTransactions(
+    @Req() req,
+    @Body() body: { transactions?: number[] },
+  ) {
     const userId = req.user.userId;
-    try {
-      await this.transactionService.deleteAllTransactions(
-        userId,
-        transactionId,
-      );
-      return {
-        message: '🗑️ All transactions deleted successfully',
-      };
-    } catch (error) {
-      this.logger.error('Error deleting all transactions', error);
-      throw new Error('Error deleting all transactions');
-    }
+    // Single wire shape: the web client — and the Capacitor WebView, which
+    // bundles the same build — always sends `{ transactions: [...] }`.
+    await this.transactionService.deleteAllTransactions(
+      userId,
+      body?.transactions ?? [],
+    );
+    return {
+      message: '🗑️ All transactions deleted successfully',
+    };
   }
 
   // #endregion Delete Transactions

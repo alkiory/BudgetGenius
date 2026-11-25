@@ -23,7 +23,7 @@ export function CardSkeleton({
 }: CardSkeletonProps) {
   return (
     <div
-      className={`rounded-lg bg-white p-6 shadow-sm dark:bg-slate-800 ${className}`}
+      className={`glass-panel rounded-xl p-6 ${className}`}
     >
       {hasTitle && (
         <div className="flex items-center justify-between mb-4">

@@ -7,7 +7,7 @@ import { Modal } from "@presentation/components/modal/modal";
 import { Button } from "@presentation/components/ui/button";
 import { successToast, errorToast } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
+import { Pencil } from "@presentation/components/ui/animated-icons";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TransactionForm } from "./transaction-form";

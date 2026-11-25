@@ -11,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       HAS_FIREBASE_SECRET: ${{ secrets.FIREBASE_SERVICES_BASE64 }}
-      HAS_KEYSTORE_SECRET: ${{ secrets.KEYSTORE_BASE64 }}
 
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +67,7 @@ jobs:
           node-version: 22
 
       - name: Install pnpm
-        run: npm install -g pnpm@12.18.0
+        run: npm install -g pnpm@12.23.0
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
@@ -176,24 +175,6 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-      # ── (Optional) Build release APK on push to main ─────────────────────
-      - name: Build release APK
-        if: ${{ github.ref == 'refs/heads/main' && env.HAS_KEYSTORE_SECRET != '' }}
-        run: |
-          # Decode the keystore from a base64-encoded secret
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > keystore.jks
-          cd apps/mobile/android
-          ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/keystore.jks \
-            -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
-            -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
-            -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
-
-      - name: Upload release APK
-        if: ${{ github.ref == 'refs/heads/main' && env.HAS_KEYSTORE_SECRET != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: budgetgenius-release-${{ steps.version.outputs.version }}
-          path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
-          retention-days: 30
-          if-no-files-found: warn
+      # Signed release builds are owned by `.github/workflows/release-android.yml`,
+      # which publishes the signed APK on the GitHub Release. This job keeps
+      # producing only the debug artifact for PRs and main pushes.

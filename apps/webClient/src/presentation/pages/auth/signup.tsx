@@ -18,9 +18,10 @@ import { Checkbox } from "@presentation/components/ui/checkbox";
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
 import { Separator } from "@presentation/components/ui/separator";
+import { goToLanding } from "@presentation/utils/landing";
 import { RoutePaths } from "@presentation/utils/routes";
 import { useMutation } from "@tanstack/react-query";
-import { Wallet } from "lucide-react";
+import { Wallet } from "@presentation/components/ui/animated-icons";
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch } from "react-redux";
@@ -113,19 +114,19 @@ export default function SignupPage() {
         <Button
           variant="default"
           className="fixed left-4 top-[max(env(safe-area-inset-top),1rem)] md:left-8 md:top-8 animate-shake"
-          onClick={() => navigate(RoutePaths.Home)}
+          onClick={goToLanding}
         >
           {t("auth.goBack")}
         </Button>
       )}
-      <Card className="relative mx-auto w-full max-w-2xl border-white/30 bg-white/95 shadow-2xl shadow-indigo-950/30 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+      <Card className="relative mx-auto w-full max-w-2xl border-white/30 bg-white/95 shadow-2xl shadow-slate-950/40 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center">
             <div className="rounded-full bg-primary/10 p-2">
               <Wallet className="h-6 w-6 text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold text-indigo-950 dark:text-indigo-100">
+          <CardTitle className="text-2xl font-bold text-slate-900 dark:text-white">
             {t("auth.createAccount")}
           </CardTitle>
           <CardDescription>{t("auth.startTracking")}</CardDescription>
@@ -187,25 +188,25 @@ export default function SignupPage() {
                 {t("auth.agreeToTerms")}{" "}
                 <Link
                   to={RoutePaths.PrivacyPolicy}
-                  className="text-purple-600 hover:underline dark:text-purple-400"
+                  className="text-teal-600 hover:underline dark:text-teal-400"
                 >
                   {t("auth.privacyPolicy")}
                 </Link>{" "}
                 {t("auth.and")}{" "}
                 <Link
                   to={RoutePaths.TersmsAndConditions}
-                  className="text-purple-600 hover:underline dark:text-purple-400"
+                  className="text-teal-600 hover:underline dark:text-teal-400"
                 >
                   {t("auth.termsOfService")}
                 </Link>
               </label>
             </div>
-            {error && <p className="text-red-500">{error}</p>}
+            {error && <p className="text-rose-500">{error}</p>}
             <Button
               type="submit"
               variant="default"
               disabled={!name || !surname || !email || !password || isPending}
-              className="w-full"
+              className="star-cta w-full"
             >
               {t("auth.createAccount")}
             </Button>

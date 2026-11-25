@@ -1,0 +1,177 @@
+---
+import "../styles/global.css";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import { ui, type Lang } from "../i18n";
+
+interface Props {
+  lang: Lang;
+  title: string;
+  description: string;
+}
+
+const { lang, title, description } = Astro.props;
+const t = ui[lang];
+const canonical = new URL(Astro.url.pathname, Astro.site);
+---
+
+<!doctype html>
+<html lang={lang} data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/webp" href="/favicon.webp" />
+    <meta name="theme-color" content="#04070f" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="BudgetGenius" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={new URL("/finny.webp", Astro.site)} />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Apply the stored theme before first paint so the page never flashes;
+         `js` arms the scroll-reveal styles only when scripting works. -->
+    <script is:inline>
+      (() => {
+        document.documentElement.classList.add("js");
+        try {
+          const stored = localStorage.getItem("theme");
+          document.documentElement.dataset.theme =
+            stored === "light" ? "light" : "dark";
+        } catch {
+          document.documentElement.dataset.theme = "dark";
+        }
+      })();
+    </script>
+  </head>
+
+  <body>
+    <div class="aurora" aria-hidden="true">
+      <span class="aurora__blob aurora__blob--a"></span>
+      <span class="aurora__blob aurora__blob--b"></span>
+      <span class="aurora__blob aurora__blob--c"></span>
+      <span class="aurora__blob aurora__blob--d"></span>
+      <span class="aurora__blob aurora__blob--e"></span>
+    </div>
+
+    <a class="skip-link" href="#main">{t.skip}</a>
+    <Header lang={lang} />
+    <main id="main">
+      <slot />
+    </main>
+    <Footer lang={lang} />
+
+    <script>
+      import { defineIcons } from "@animateicons/vanilla";
+      import { Sun } from "@animateicons/vanilla/lucide/sun";
+      import { Moon } from "@animateicons/vanilla/lucide/moon";
+      import { Menu } from "@animateicons/vanilla/lucide/menu";
+      import { TrendingUp } from "@animateicons/vanilla/lucide/trending-up";
+      import { MessageCircle } from "@animateicons/vanilla/lucide/message-circle";
+      import { Target } from "@animateicons/vanilla/lucide/target";
+      import { ShieldCheck } from "@animateicons/vanilla/lucide/shield-check";
+      import { LockKeyhole } from "@animateicons/vanilla/lucide/lock-keyhole";
+      import { Database } from "@animateicons/vanilla/lucide/database";
+      import { Languages } from "@animateicons/vanilla/lucide/languages";
+      import { ReceiptText } from "@animateicons/vanilla/lucide/receipt-text";
+      import { Download } from "@animateicons/vanilla/lucide/download";
+      import { Plus } from "@animateicons/vanilla/lucide/plus";
+      import { Coffee } from "@animateicons/vanilla/lucide/coffee";
+
+      defineIcons({
+        Sun,
+        Moon,
+        Menu,
+        TrendingUp,
+        MessageCircle,
+        Target,
+        ShieldCheck,
+        LockKeyhole,
+        Database,
+        Languages,
+        ReceiptText,
+        Download,
+        Plus,
+        Coffee,
+      });
+    </script>
+
+    <script is:inline>
+      (() => {
+        // Parent-level hover: the card/button owns the pointer area and the
+        // icon animates when the whole component is hovered or focused.
+        const groups = Array.from(
+          document.querySelectorAll("[data-icon-hover]"),
+        );
+        if (!groups.length) return;
+
+        const bound = new WeakSet();
+        const bind = () => {
+          groups.forEach((group) => {
+            if (bound.has(group)) return;
+            const icons = Array.from(group.querySelectorAll("animate-icons"));
+            if (!icons.length) return;
+
+            bound.add(group);
+            const play = () =>
+              icons.forEach((icon) => icon.startAnimation?.());
+            const stop = () =>
+              icons.forEach((icon) => icon.stopAnimation?.());
+
+            group.addEventListener("mouseenter", play);
+            group.addEventListener("mouseleave", stop);
+            group.addEventListener("focusin", play);
+            group.addEventListener("focusout", stop);
+          });
+        };
+
+        // Bind immediately; the tag may already be upgraded, and if it is not
+        // the listeners stay valid and `startAnimation` is available by the
+        // time the pointer reaches the component.
+        bind();
+        customElements.whenDefined("animate-icons").then(bind);
+      })();
+    </script>
+
+    <script is:inline>
+      (() => {
+        const targets = Array.from(document.querySelectorAll("[data-reveal]"));
+        if (!targets.length) return;
+
+        const reduceMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+
+        if (reduceMotion || !("IntersectionObserver" in window)) {
+          targets.forEach((element) => element.classList.add("is-revealed"));
+          return;
+        }
+
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (!entry.isIntersecting) return;
+              entry.target.classList.add("is-revealed");
+              observer.unobserve(entry.target);
+            });
+          },
+          { threshold: 0.12, rootMargin: "0px 0px -6% 0px" },
+        );
+
+        targets.forEach((element) => observer.observe(element));
+      })();
+    </script>
+  </body>
+</html>

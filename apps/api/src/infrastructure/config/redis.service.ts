@@ -54,7 +54,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       } else {
         // Si es Docker/Local, vamos por vía directa sin TLS
         this.logger.log('🐳 Configurando conexión para Redis Local (Docker)');
-        // En Docker local, usualmente no hay password ni TLS
+      }
+
+      // QA-0.6 — Redis con `--requirepass` exige AUTH también sin TLS, y
+      // `REDIS_URL` no lleva el secreto: misma variable que ya lee el
+      // ThrottlerModule en app.module.ts.
+      if (process.env.REDIS_PASSWORD) {
+        redisConfig.password = process.env.REDIS_PASSWORD;
       }
 
       // Inicializamos el cliente

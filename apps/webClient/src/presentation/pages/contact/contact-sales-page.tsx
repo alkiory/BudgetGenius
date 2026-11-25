@@ -1,10 +1,11 @@
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
+import { Select } from "@presentation/components/ui/select";
 import { Textarea } from "@presentation/components/ui/textarea";
 import { RoutePaths } from "@presentation/utils/routes";
 import { errorToast } from "@presentation/utils/toast";
-import { ArrowLeft, Building, Mail, Phone, User, Check } from "lucide-react";
+import { ArrowLeft, Building, Mail, Phone, User, Check } from "@presentation/components/ui/animated-icons";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
@@ -40,6 +41,11 @@ export default function ContactSalesPage() {
       /^\+?([0-9]{1,3})\s?\(?([0-9]{3})\)?[-. ]?([0-9]{3})[-. ]?([0-9]{4})$/;
     if (!formState.phone.match(regex)) {
       errorToast(t("contact.invalidPhone"), 3000, "invalid-phone");
+      return;
+    }
+
+    if (!formState.employees) {
+      errorToast(t("contact.selectSize"), 3000, "invalid-size");
       return;
     }
 
@@ -82,8 +88,8 @@ export default function ContactSalesPage() {
 
           <div className="mt-8 space-y-6">
             <div className="flex items-start gap-3">
-              <div className="rounded-full bg-purple-100 p-2 dark:bg-purple-900">
-                <Check className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              <div className="rounded-full bg-teal-500/10 p-2 dark:bg-teal-400/15">
+                <Check className="h-5 w-5 text-teal-600 dark:text-teal-400" />
               </div>
               <div>
                 <h3 className="font-medium">
@@ -96,8 +102,8 @@ export default function ContactSalesPage() {
             </div>
 
             <div className="flex items-start gap-3">
-              <div className="rounded-full bg-purple-100 p-2 dark:bg-purple-900">
-                <Check className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              <div className="rounded-full bg-teal-500/10 p-2 dark:bg-teal-400/15">
+                <Check className="h-5 w-5 text-teal-600 dark:text-teal-400" />
               </div>
               <div>
                 <h3 className="font-medium">
@@ -110,8 +116,8 @@ export default function ContactSalesPage() {
             </div>
 
             <div className="flex items-start gap-3">
-              <div className="rounded-full bg-purple-100 p-2 dark:bg-purple-900">
-                <Check className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              <div className="rounded-full bg-teal-500/10 p-2 dark:bg-teal-400/15">
+                <Check className="h-5 w-5 text-teal-600 dark:text-teal-400" />
               </div>
               <div>
                 <h3 className="font-medium">
@@ -124,8 +130,8 @@ export default function ContactSalesPage() {
             </div>
 
             <div className="flex items-start gap-3">
-              <div className="rounded-full bg-purple-100 p-2 dark:bg-purple-900">
-                <Check className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              <div className="rounded-full bg-teal-500/10 p-2 dark:bg-teal-400/15">
+                <Check className="h-5 w-5 text-teal-600 dark:text-teal-400" />
               </div>
               <div>
                 <h3 className="font-medium">{t("contact.dedicatedSupport")}</h3>
@@ -140,8 +146,8 @@ export default function ContactSalesPage() {
         <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
           {isSubmitted ? (
             <div className="flex h-full flex-col items-center justify-center text-center">
-              <div className="rounded-full bg-green-100 p-3 dark:bg-green-900">
-                <Check className="h-6 w-6 text-green-600 dark:text-green-400" />
+              <div className="rounded-full bg-emerald-100 p-3 dark:bg-emerald-900">
+                <Check className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
               </div>
               <h2 className="mt-4 text-xl font-semibold">
                 {t("contact.thankYou")}
@@ -231,31 +237,28 @@ export default function ContactSalesPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="employees">{t("contact.companySize")}</Label>
-                  <select
+                  <Select
                     id="employees"
                     name="employees"
                     value={formState.employees}
-                    onChange={handleChange}
-                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                    required
-                  >
-                    <option value="" disabled>
-                      {t("contact.selectSize")}
-                    </option>
-                    <option value="1-10">{t("contact.employees1to10")}</option>
-                    <option value="11-50">
-                      {t("contact.employees11to50")}
-                    </option>
-                    <option value="51-200">
-                      {t("contact.employees51to200")}
-                    </option>
-                    <option value="201-500">
-                      {t("contact.employees201to500")}
-                    </option>
-                    <option value="501+">
-                      {t("contact.employees501plus")}
-                    </option>
-                  </select>
+                    placeholder={t("contact.selectSize")}
+                    onChange={(value) =>
+                      setFormState((prev) => ({ ...prev, employees: value }))
+                    }
+                    options={[
+                      { value: "1-10", label: t("contact.employees1to10") },
+                      { value: "11-50", label: t("contact.employees11to50") },
+                      {
+                        value: "51-200",
+                        label: t("contact.employees51to200"),
+                      },
+                      {
+                        value: "201-500",
+                        label: t("contact.employees201to500"),
+                      },
+                      { value: "501+", label: t("contact.employees501plus") },
+                    ]}
+                  />
                 </div>
               </div>
 
@@ -282,14 +285,14 @@ export default function ContactSalesPage() {
                 {t("contact.legalAgreement")}{" "}
                 <Link
                   to={RoutePaths.PrivacyPolicy}
-                  className="text-purple-600 hover:underline dark:text-purple-400"
+                  className="text-teal-600 hover:underline dark:text-teal-400"
                 >
                   {t("contact.privacyPolicy")}
                 </Link>{" "}
                 {t("common.and")}{" "}
                 <Link
                   to={RoutePaths.TersmsAndConditions}
-                  className="text-purple-600 hover:underline dark:text-purple-400"
+                  className="text-teal-600 hover:underline dark:text-teal-400"
                 >
                   {t("contact.termsOfService")}
                 </Link>

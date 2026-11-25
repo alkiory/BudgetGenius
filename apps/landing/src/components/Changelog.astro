@@ -1,0 +1,94 @@
+---
+import { changelog } from "../../../webClient/src/presentation/data/changelog";
+import { appHref, getCopy, type Lang } from "../i18n";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = getCopy(lang);
+const copy = t.changelog;
+const homeHref = lang === "en" ? "/" : "/es/";
+const latest = changelog[0];
+const dateFormatter = new Intl.DateTimeFormat(lang === "es" ? "es" : "en", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+});
+---
+
+<section class="changelog" aria-labelledby="changelog-title">
+  <div class="container changelog-layout">
+    <header class="changelog-hero" data-reveal>
+      <h1 id="changelog-title">{copy.title}</h1>
+      <p class="changelog-lede">{copy.subtitle}</p>
+      {
+        latest && (
+          <p class="changelog-meta">
+            <span class="dot" aria-hidden="true" />
+            <span>
+              {copy.latestRelease}{" "}
+              <strong>v{latest.version}</strong>
+            </span>
+            <time datetime={latest.date}>
+              {dateFormatter.format(new Date(latest.date))}
+            </time>
+          </p>
+        )
+      }
+    </header>
+
+    <ol class="changelog-list" aria-label={copy.regionAria}>
+      {
+        changelog.map((entry, index) => (
+          <li
+            class:list={["release", entry.highlight && "release--latest"]}
+            data-reveal
+            style={`--reveal-delay:${Math.min(index, 5) * 55}ms`}
+          >
+            <div class="release-meta">
+              <span class="release-version">v{entry.version}</span>
+              {entry.highlight && (
+                <span class="release-latest">{copy.latestBadge}</span>
+              )}
+              <time datetime={entry.date}>
+                {dateFormatter.format(new Date(entry.date))}
+              </time>
+            </div>
+            <div class="release-body">
+              <h2>{entry.title[lang]}</h2>
+              <p>{entry.description[lang]}</p>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+
+    <footer class="changelog-footer">
+      <a class="btn btn-ghost" href={homeHref}>← {copy.backHome}</a>
+      <a class="btn btn-primary" href={appHref("/auth/signup")}>
+        {t.getStarted}
+      </a>
+    </footer>
+  </div>
+</section>
+
+<script
+  is:inline
+  define:vars={{
+    latestVersion: latest?.version ?? "",
+    seenKey: "changelogLastSeenVersion",
+    seenEvent: "changelog:seen",
+  }}
+>
+  (() => {
+    if (!latestVersion) return;
+    try {
+      localStorage.setItem(seenKey, latestVersion);
+      window.dispatchEvent(new Event(seenEvent));
+    } catch {
+      /* storage can be blocked; the timeline still renders */
+    }
+  })();
+</script>

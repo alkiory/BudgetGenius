@@ -4,7 +4,7 @@ import { Budget } from '@domain/dashboard/budget.entity';
 import { ExpenseCategory } from '@domain/dashboard/expense-category.entity';
 import { Overview } from '@domain/dashboard/overview.entity';
 import { Transaction } from '@domain/dashboard/transaction.entity';
-import { User } from '@domain/user/user.entity';
+import { User, normalizeEmail } from '@domain/user/user.entity';
 import { UserSettings } from '@domain/user/user-settings.entity';
 import { UserRepositoryPort } from '@domain/user/user.repository.port';
 import { LoggingService } from '@infrastructure/log/logger.service';
@@ -30,7 +30,7 @@ export class UserRepositoryImpl implements UserRepositoryPort {
 
     user.name = name;
     user.surname = surname;
-    user.email = email;
+    user.email = normalizeEmail(email);
     user.password = password;
     user.role = role;
     user.authProvider = authProvider;
@@ -40,13 +40,23 @@ export class UserRepositoryImpl implements UserRepositoryPort {
   }
 
   async save(user: UserDto): Promise<User> {
+    // Single write choke point for every path that persists a user (signup,
+    // OAuth, profile update, seed): stored addresses are always canonical, so
+    // the UNIQUE index on LOWER(email) and lookups cannot disagree.
+    if (typeof user.email === 'string') {
+      user.email = normalizeEmail(user.email);
+    }
     const savedUser = await this.repo.save(user);
     return savedUser;
   }
 
   async findByEmail(email: string): Promise<User | null> {
     try {
-      const user = await this.repo.findOne({ where: { email } });
+      // `email` is NOT UNIQUE at column level, only `LOWER(email)` is indexed;
+      // comparing the canonical form is what makes `Foo@x.com` find `foo@x.com`.
+      const user = await this.repo.findOne({
+        where: { email: normalizeEmail(email) },
+      });
       return user;
     } catch (error) {
       this.logger.error(error);

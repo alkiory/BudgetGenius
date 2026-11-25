@@ -28,7 +28,7 @@ function TableSkeletonRow({
   hasActions: boolean;
 }) {
   return (
-    <div className="flex items-center gap-4 border-b border-slate-100 px-6 py-4 last:border-0 dark:border-slate-700">
+    <div className="flex items-center gap-4 border-b border-slate-200/60 px-6 py-4 last:border-0 dark:border-white/[0.06]">
       {columns.map((col, i) =>
         col.isCheckbox ? (
           <Skeleton key={i} className="h-4 w-4 rounded shrink-0" />
@@ -63,9 +63,9 @@ export function DataTableSkeleton({
 }: DataTableSkeletonProps) {
   return (
     <>
-      <div className="rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+      <div className="glass-panel overflow-hidden rounded-xl">
         {/* Header row */}
-        <div className="border-b border-slate-200 dark:border-slate-700">
+        <div className="border-b border-slate-200/70 dark:border-white/[0.06]">
           <div className="flex items-center gap-4 px-6 py-3">
             {columns.map((col, i) =>
               col.isCheckbox ? (

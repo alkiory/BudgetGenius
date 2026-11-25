@@ -205,15 +205,12 @@ async function snapshot(browser, target) {
     // auth state left over from prior runs.
   });
 
-  // Inject tokens + X-Device-Id header stub BEFORE any page script
-  // runs. The request interceptor in infrastructure/api.config.ts
-  // reads `localStorage.accessToken` to attach Authorization. We
-  // don't need a real JWT — the mocks below short-circuit the
-  // backend's verify path.
+  // Inject the per-install device id BEFORE any page script runs: the
+  // request interceptor emits it as `X-Device-Id`. No token seeding —
+  // JWTs are no longer read from localStorage (the API surface below is
+  // mocked, so these calls never need an Authorization header).
   await ctx.addInitScript(() => {
     try {
-      window.localStorage.setItem("accessToken", "mock-access-token");
-      window.localStorage.setItem("refreshToken", "mock-refresh-token");
       localStorage.setItem("bgDeviceId", "capture-script-device-id");
     } catch {
       // ignore — localStorage unavailable

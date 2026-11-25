@@ -3,7 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { BudgetRepository } from '@adapters/dashboard/persistence/budget.repository';
+import {
+  BudgetRepository,
+  ReconciliationRow,
+} from '@adapters/dashboard/persistence/budget.repository';
 import { Budget } from '@domain/dashboard/budget.entity';
 import {
   CreateBudgetCategoryDto,
@@ -19,8 +22,6 @@ import {
   BudgetCategory,
 } from '@domain/dashboard/budget-category.entity';
 import { User } from '@domain/user/user.entity';
-import { UserSettingsService } from '@application/user/user-settings.service';
-import { SupportedCurrency } from '@domain/user/user-settings.entity';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { QueryFailedError } from 'typeorm';
 
@@ -32,56 +33,50 @@ const roundMoney = (value: number): number =>
 const categoryKey = (name: string | undefined): string =>
   (name ?? '').trim().toLowerCase();
 
+/**
+ * Calendar day (`YYYY-MM-DD`) of either a DTO date or a Postgres `date`
+ * value. TypeORM hydrates `date` columns as strings while the DTOs carry
+ * `Date` instances, and comparing those two directly (`Date < string`)
+ * is always false — which silently disabled the window validation on
+ * partial updates.
+ */
+const calendarDay = (value: Date | string): string =>
+  (value instanceof Date ? value.toISOString() : String(value)).slice(0, 10);
+
 @Injectable()
 export class BudgetService {
   constructor(
     private readonly repo: BudgetRepository,
     private readonly categoryRepo: BudgetRepository,
     private readonly userRepo: UserRepositoryImpl,
-    private readonly userSettingsService: UserSettingsService,
     private readonly logger: LoggingService,
   ) {}
-
-  /**
-   * Currency stamped on budget categories that arrive without an
-   * explicit `currency`: the user's saved profile currency, falling
-   * back to EUR when the profile has none (see
-   * `UserSettingsService.getCurrencyForUser`). Never changes the
-   * numeric values — the app stores one currency per category and
-   * never converts.
-   */
-  private async resolveCurrency(userId: number): Promise<SupportedCurrency> {
-    return this.userSettingsService.getCurrencyForUser(userId);
-  }
 
   async createBudget(userId: number, dto: CreateBudgetDto): Promise<Budget> {
     const user = await this.userRepo.findById(userId);
 
     const totalSpent = dto.totalSpent ?? 0;
     const budgetType = dto.type ?? 'spending';
-    const userCurrency = await this.resolveCurrency(userId);
 
     if (user.budgets.find((b) => b.name === dto.name)) {
       throw new BadRequestException(`Budget ${dto.name} already exists`);
     }
 
-    if (dto.endDate < dto.startDate) {
+    if (calendarDay(dto.endDate) < calendarDay(dto.startDate)) {
       throw new BadRequestException(
-        `End date ${dto.endDate} cannot be less than start date ${dto.startDate}`,
+        `End date ${calendarDay(dto.endDate)} cannot be less than start date ${calendarDay(dto.startDate)}`,
       );
     }
 
     const categories = dto.categories?.map((category) => {
       // A brand-new category starts from its manual baseline (normally 0);
-      // transaction spending is added dynamically on read. Omitted
-      // `currency` falls back to the user's saved profile currency
-      // (EUR when none) instead of the column's legacy USD default.
+      // transaction spending is added dynamically on read. Amounts are in
+      // the account currency (D1): categories carry no currency of their own.
       const manualSpent = roundMoney(
         category.manualSpent ?? category.spent ?? 0,
       );
       return {
         ...category,
-        currency: category.currency ?? userCurrency,
         manualSpent,
         spent: manualSpent,
       };
@@ -140,8 +135,6 @@ export class BudgetService {
     const manualSpent = roundMoney(dto.manualSpent ?? dto.spent ?? 0);
     const newCategory = {
       ...dto,
-      // Saved profile currency (EUR fallback) when the client omits one.
-      currency: dto.currency ?? (await this.resolveCurrency(userId)),
       manualSpent,
       spent: manualSpent,
       budget: { id: budgetId } as Budget,
@@ -242,6 +235,121 @@ export class BudgetService {
       ),
     );
     return budget;
+  }
+
+  /**
+   * Historical reconciliation screen: unlinked expenses that fall inside a
+   * spending window but whose text category does not match any category of
+   * that budget. The caller assigns each one explicitly; nothing is guessed.
+   */
+  async getReconciliation(userId: number) {
+    // The repository query is scoped by `userId`; a user with no pending
+    // rows simply gets an empty queue, and a deleted-user token gets the
+    // same empty result instead of an extra lookup.
+    const rows = await this.repo.findReconciliationRows(userId);
+    const items = this.buildReconciliationItems(rows);
+    return { total: items.length, items };
+  }
+
+  /**
+   * Freezes one manual reconciliation decision. The chosen category must
+   * belong to the expense's winning budget and its window, otherwise the
+   * caller would be able to create an attribution the system itself would
+   * never infer (and would silently count outside the budget dates).
+   */
+  async reconcileExpense(
+    userId: number,
+    transactionId: number,
+    budgetCategoryId: number,
+  ) {
+    const rows = await this.repo.findReconciliationRows(userId, transactionId);
+    if (rows.length === 0) {
+      throw new NotFoundException(
+        `Unassigned expense ${transactionId} not found`,
+      );
+    }
+    const candidates = rows.filter(
+      (row): row is ReconciliationRow & {
+        categoryId: number | string;
+        categoryName: string;
+      } => row.categoryId != null && row.categoryName != null,
+    );
+    if (
+      !candidates.some(
+        (candidate) =>
+          Number(candidate.categoryId) === Number(budgetCategoryId),
+      )
+    ) {
+      throw new BadRequestException(
+        `Category ${budgetCategoryId} does not belong to the expense budget`,
+      );
+    }
+
+    const updated = await this.repo.setTransactionBudgetCategory(
+      userId,
+      transactionId,
+      budgetCategoryId,
+    );
+    if (!updated) {
+      // The row was linked or deleted between the read and the write.
+      throw new NotFoundException(
+        `Unassigned expense ${transactionId} not found`,
+      );
+    }
+    return { id: transactionId, budgetCategoryId };
+  }
+
+  private buildReconciliationItems(rows: ReconciliationRow[]) {
+    const byTransaction = new Map<
+      number,
+      {
+        id: number;
+        date: string;
+        description: string;
+        category: string;
+        amount: number;
+        budgetId: number;
+        budgetName: string;
+        candidates: Array<{ id: number; name: string }>;
+      }
+    >();
+
+    for (const row of rows) {
+      const id = Number(row.id);
+      let item = byTransaction.get(id);
+      if (!item) {
+        item = {
+          id,
+          date: row.date,
+          description: row.description,
+          category: row.category,
+          amount: roundMoney(Number(row.amount)),
+          budgetId: Number(row.budgetId),
+          budgetName: row.budgetName,
+          candidates: [],
+        };
+        byTransaction.set(id, item);
+      }
+      if (row.categoryId != null && row.categoryName) {
+        item.candidates.push({
+          id: Number(row.categoryId),
+          name: row.categoryName,
+        });
+      }
+    }
+
+    // SQL already orders the queue by date, id and candidate name. The
+    // name-match filter keeps rows that the legacy fallback already
+    // attributes out of the manual queue.
+    return [...byTransaction.values()]
+      .filter((item) => item.candidates.length > 0)
+      .filter(
+        (item) =>
+          !item.candidates.some(
+            (candidate) =>
+              categoryKey(candidate.name) === categoryKey(item.category),
+          ),
+      );
   }
 
   async findCategories(filters: {
@@ -356,9 +464,25 @@ export class BudgetService {
       throw new NotFoundException(`Budget ${dto.id} not found`);
     }
 
-    if (dto.endDate < dto.startDate) {
+    // Resolve the window once: a partial PATCH inherits whichever end it
+    // omitted, so an `endDate` before the stored `startDate` must fail even
+    // when the request never sends `startDate`.
+    //
+    // Only an **actual** change to the window is validated. The edit form
+    // PATCHes the whole budget, dates included, so a presence-based check
+    // would reject an unrelated rename that happens to resend the stored
+    // window.
+    const startDate = dto.startDate ?? existing.startDate;
+    const endDate = dto.endDate ?? existing.endDate;
+    const existingType = existing.type ?? 'spending';
+    const budgetType = dto.type ?? existingType;
+    const windowChanged =
+      calendarDay(startDate) !== calendarDay(existing.startDate) ||
+      calendarDay(endDate) !== calendarDay(existing.endDate);
+
+    if (windowChanged && calendarDay(endDate) < calendarDay(startDate)) {
       throw new BadRequestException(
-        `End date ${dto.endDate} cannot be less than start date ${dto.startDate}`,
+        `End date ${calendarDay(endDate)} cannot be less than start date ${calendarDay(startDate)}`,
       );
     }
 
@@ -394,6 +518,23 @@ export class BudgetService {
     const category = await this.categoryRepo.getBudgetCategory(dto.id, userId);
     if (!category) {
       throw new NotFoundException(`Category ${dto.id} not found`);
+    }
+
+    // D2.2 assisted resolution: before a spending category changes its
+    // name, freeze the attribution of every still-unlinked expense that
+    // matched the OLD name inside the budget window. Without this, those
+    // rows would silently stop counting for the category the moment the
+    // name changes. The FK keeps them attached even after the rename.
+    if (category.budget?.type === 'spending') {
+      const nextName = dto.name?.trim();
+      if (nextName && nextName !== category.name) {
+        await this.categoryRepo.linkUnlinkedTransactionsToCategory(
+          userId,
+          category.budget.id,
+          category.name,
+          category.id,
+        );
+      }
     }
 
     // `manualSpent` is the authoritative manual baseline going forward.

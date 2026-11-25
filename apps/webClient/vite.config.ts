@@ -9,7 +9,16 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 const appVersion = process.env.VITE_APP_VERSION || `${pkg.version}-dev`;
 
 export default defineConfig({
-  base: process.env.VITE_CAPACITOR === 'true' ? './' : '/',
+  // The SPA is mounted under /app/ in production so the Astro landing can own
+  // the root (see apps/landing + firebase.json). Capacitor still loads the
+  // bundle from a file origin, so it keeps the relative base; the dev server
+  // keeps / so local routes and Playwright stay unchanged.
+  base:
+    process.env.VITE_CAPACITOR === 'true'
+      ? './'
+      : process.env.NODE_ENV === 'production'
+        ? '/app/'
+        : '/',
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
   },

@@ -19,12 +19,13 @@ import {
   SortingState,
   createColumnHelper,
 } from "@tanstack/react-table";
-import { Trash2, ArrowDown, ArrowUp } from "lucide-react";
+import { Trash2, ArrowDown, ArrowUp } from "@presentation/components/ui/animated-icons";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
 import { EditTransaction } from "../dashboard/transaction/edit-transaction";
 import { Button } from "./button";
+import { Select } from "./select";
 
 export default function Table({
   data,
@@ -104,7 +105,7 @@ export default function Table({
             type="checkbox"
             checked={table.getIsAllRowsSelected()}
             onChange={table.getToggleAllRowsSelectedHandler()}
-            className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500 dark:border-slate-600 dark:bg-slate-700 dark:focus:ring-purple-600"
+            className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-700 dark:focus:ring-teal-500"
           />
         </div>
       ),
@@ -114,7 +115,7 @@ export default function Table({
             type="checkbox"
             checked={row.getIsSelected()}
             onChange={row.getToggleSelectedHandler()}
-            className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500 dark:border-slate-600 dark:bg-slate-700 dark:focus:ring-purple-600"
+            className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-700 dark:focus:ring-teal-500"
           />
         </div>
       ),
@@ -156,8 +157,8 @@ export default function Table({
           <span
             className={
               formatted.isPositive
-                ? "text-green-600 dark:text-green-400"
-                : "text-red-600 dark:text-red-400"
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-rose-600 dark:text-rose-400"
             }
           >
             {formatted.formatted}
@@ -176,7 +177,7 @@ export default function Table({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 p-0 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+              className="h-8 w-8 p-0 text-rose-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20"
               onClick={() => deleteTransaction(transaction.id)}
             >
               <Trash2 className="h-4 w-4" />
@@ -217,7 +218,7 @@ export default function Table({
   // ~800px width when the flex ancestors collapse (MainLayout + main +
   // MainContent all set min-w-0 themselves in this same fix).
   return (
-    <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+    <div className="glass-panel min-w-0 overflow-hidden rounded-xl">
       {selectedRows > 0 && (
         <div className="flex items-center justify-between rounded-lg bg-slate-50 p-2 dark:bg-slate-800">
           <span className="text-sm font-medium">
@@ -240,8 +241,8 @@ export default function Table({
         </div>
       )}
       <div className="overflow-x-auto">
-        <table className="w-full divide-y divide-slate-200 dark:divide-slate-700">
-          <thead className="bg-slate-50 dark:bg-slate-700">
+        <table className="w-full divide-y divide-slate-200/80 dark:divide-white/[0.06]">
+          <thead className="bg-slate-50/80 dark:bg-white/[0.025]">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -263,11 +264,11 @@ export default function Table({
               </tr>
             ))}
           </thead>
-          <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-800">
+          <tbody className="divide-y divide-slate-200/70 dark:divide-white/[0.05] dark:bg-transparent">
             {table.getRowModel().rows.map((row) => (
               <tr
                 key={row.id}
-                className="hover:bg-slate-50 dark:hover:bg-slate-700"
+                className="glow-row hover:bg-teal-500/[0.06] dark:hover:bg-teal-400/[0.06]"
               >
                 {row.getVisibleCells().map((cell) => {
                   const isAmountCol = cell.column.id === "amount";
@@ -275,8 +276,8 @@ export default function Table({
                   const amountColor =
                     isAmountCol && typeof value === "number"
                       ? value < 0
-                        ? "text-red-600 dark:text-red-400"
-                        : "text-green-600 dark:text-green-400"
+                        ? "text-rose-600 dark:text-rose-400"
+                        : "text-emerald-600 dark:text-emerald-400"
                       : "text-slate-500 dark:text-slate-400";
 
                   return (
@@ -298,7 +299,7 @@ export default function Table({
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+      <div className="flex items-center justify-between border-t border-slate-200/80 bg-white/60 px-4 py-3 dark:border-white/[0.06] dark:bg-transparent">
         <div className="md:flex gap-5 mx-2 justify-between sm:hidden">
           <button
             onClick={() => table.previousPage()}
@@ -325,24 +326,20 @@ export default function Table({
             </strong>
           </div>
           <div className="flex items-center space-x-2">
-            <label
-              htmlFor="pageSize"
-              className="text-sm text-slate-700 dark:text-slate-300"
-            >
+            <span className="text-sm text-slate-700 dark:text-slate-300">
               {t("common.show")}
-            </label>
-            <select
-              id="pageSize"
-              value={table.getState().pagination.pageSize}
-              onChange={(e) => table.setPageSize(Number(e.target.value))}
-              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
-            >
-              {[10, 20, 30, 40, 50].map((pageSize) => (
-                <option key={pageSize} value={pageSize}>
-                  {pageSize}
-                </option>
-              ))}
-            </select>
+            </span>
+            <Select
+              size="sm"
+              aria-label={t("common.show")}
+              className="w-20"
+              value={String(table.getState().pagination.pageSize)}
+              onChange={(value) => table.setPageSize(Number(value))}
+              options={[10, 20, 30, 40, 50].map((pageSize) => ({
+                value: String(pageSize),
+                label: String(pageSize),
+              }))}
+            />
           </div>
         </div>
       </div>

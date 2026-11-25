@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "apps/webClient/dist",
+    "public": "dist",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -8,8 +8,32 @@
     ],
     "rewrites": [
       {
-        "source": "**",
-        "destination": "/index.html"
+        "source": "/app/**",
+        "destination": "/app/index.html"
+      },
+      {
+        "source": "/auth/**",
+        "destination": "/app/index.html"
+      },
+      {
+        "source": "/privacy-policy",
+        "destination": "/app/index.html"
+      },
+      {
+        "source": "/terms-and-conditions",
+        "destination": "/app/index.html"
+      },
+      {
+        "source": "/contact-sales",
+        "destination": "/app/index.html"
+      },
+      {
+        "source": "/changelog",
+        "destination": "/changelog/index.html"
+      },
+      {
+        "source": "/es/changelog",
+        "destination": "/es/changelog/index.html"
       }
     ]
   }

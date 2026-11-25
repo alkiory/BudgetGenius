@@ -9,8 +9,10 @@ import {
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
+import { Select } from "@presentation/components/ui/select";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
-import { PiggyBank, Wallet } from "lucide-react";
+import { errorToast } from "@presentation/utils/toast";
+import { PiggyBank, Wallet } from "@presentation/components/ui/animated-icons";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
@@ -137,6 +139,16 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // The category picker is a custom listbox, so keep the constraint the
+    // native `<select required>` used to enforce.
+    if (categories.some((category) => !category.name.trim())) {
+      errorToast(
+        t("transactions.selectCategory"),
+        3000,
+        "budget-category-required",
+      );
+      return;
+    }
     // Amounts are stored exactly as entered in the user's currency. The
     // effective `spent` is computed by the API (manual baseline plus
     // linked transactions), so the form never submits a spent value.
@@ -163,7 +175,7 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
       <div className="space-y-4">
         <div className="space-y-2">
           <Label>{t("budgets.budgetType")}</Label>
-          <div className="grid grid-cols-2 gap-2 rounded-lg border border-slate-200 p-1 dark:border-slate-700">
+          <div className="grid grid-cols-2 gap-2 rounded-lg border border-slate-200 p-1 dark:border-white/10">
             <button
               type="button"
               data-testid="budget-type-spending"
@@ -171,7 +183,7 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
               aria-pressed={!isSavings}
               className={`flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                 !isSavings
-                  ? "bg-purple-600 text-white shadow-sm"
+                  ? "bg-teal-600 text-white shadow-sm"
                   : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
               }`}
             >
@@ -185,7 +197,7 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
               aria-pressed={isSavings}
               className={`flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                 isSavings
-                  ? "bg-green-600 text-white shadow-sm"
+                  ? "bg-emerald-600 text-white shadow-sm"
                   : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
               }`}
             >
@@ -216,20 +228,18 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
         <div className="space-y-2">
           <Label htmlFor="period">{t("budgets.budgetPeriod")}</Label>
 
-          <select
+          <Select
             id="period"
             name="period"
-            value={formData.period}
-            onChange={handleChange}
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-            required
-          >
-            {PERIOD_OPTIONS.map((period) => (
-              <option key={period} value={period}>
-                {t(`periods.${periodTranslationKey(period)}`)}
-              </option>
-            ))}
-          </select>
+            value={formData.period ?? ""}
+            onChange={(value) =>
+              setFormData((prev) => ({ ...prev, period: value }))
+            }
+            options={PERIOD_OPTIONS.map((period) => ({
+              value: period,
+              label: t(`periods.${periodTranslationKey(period)}`),
+            }))}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -303,7 +313,7 @@ export function BudgetForm({ budget, onSubmit, onCancel }: BudgetFormProps) {
           ))}
         </div>
 
-        <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+        <div className="rounded-lg border border-slate-200 p-4 dark:border-white/10">
           <div className="flex items-center justify-between">
             <span className="font-medium">{totalLabel}</span>
             <span className="text-lg font-bold">{formattedTotal}</span>

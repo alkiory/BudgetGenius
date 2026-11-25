@@ -43,12 +43,12 @@ export default function BudgetCategoryList({
         // so only spending categories use the red over-budget treatment.
         const isOverBudget = !isSavings && percentUsed > 100;
         const progressColor = isSavings
-          ? "bg-green-500"
+          ? "bg-emerald-500"
           : percentUsed > 100
-          ? "bg-red-500"
+          ? "bg-rose-500"
           : percentUsed > 90
           ? "bg-yellow-500"
-          : "bg-green-500";
+          : "bg-emerald-500";
 
         const targetCurrency = (settings?.currency || "EUR") as Currency;
 
@@ -119,7 +119,7 @@ export default function BudgetCategoryList({
               </div>
             </div>
 
-            <div className="mt-1 h-2 w-full rounded-full bg-slate-100 dark:bg-slate-700">
+            <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-white/[0.07]">
               <div
                 className={`h-2 rounded-full ${progressColor}`}
                 style={{ width: `${Math.min(percentUsed, 100)}%` }}
@@ -131,8 +131,8 @@ export default function BudgetCategoryList({
               <span
                 className={
                   remaining >= 0 || isSavings
-                    ? "text-green-600 dark:text-green-400"
-                    : "text-red-600 dark:text-red-400"
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-rose-600 dark:text-rose-400"
                 }
               >
                 {remainingText}

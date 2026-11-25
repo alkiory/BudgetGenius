@@ -1,15 +1,22 @@
+import { logoutAction } from "@adapters/slices/auth/authSlice";
+import { store } from "@adapters/store/rootStore";
 import axios from "axios";
 import type { AxiosRequestConfig, AxiosResponse } from "axios";
 import toast from "react-hot-toast";
 // Internal imports grouped in alphabetical order per the
 // project's `import/order` eslint rule.
 import { getDeviceId } from "./device-id";
+import { isNativePlatform } from "./native";
 import { enqueueRequest, registerOnlineListener } from "./offline-queue";
+import { queryClient } from "./queryClient";
 import { requestQueue } from "./request-queue";
 
 interface ApiError {
   config: AxiosRequestConfig & {
+    /** Caller opt-out: never attempt a token refresh for this request. */
     _retry?: boolean;
+    /** Set by this interceptor once the request has consumed a refresh. */
+    _sessionRetry?: boolean;
     _retryCount?: number;
   };
   response?: AxiosResponse;
@@ -52,15 +59,13 @@ const PROXY_UNAVAILABLE_CODES = [502, 503, 504];
 // JWT strategy in `apps/api/src/infrastructure/config/strategy/jwt.strategy.ts`).
 // The mirror here is:
 //   1. **Response interceptor** — on every successful auth response,
-//      persist `data.accessToken` + `data.refreshToken` to BOTH
-//      `localStorage` (web storage; survives reloads) AND the
-//      browser's cookie jar via `document.cookie` (so the same-site
-//      cookie path keeps working on web SPA and the Capacitor path
-//      that hasn't blocked cookies yet).
+//      keep `data.accessToken` + `data.refreshToken` in module memory
+//      for the rest of the page's lifetime. QA-0.5: they are NO LONGER
+//      written to `localStorage` on the web — see `saveTokens`.
 //   2. **Request interceptor** — attach `Authorization: Bearer
-//      ${localStorage.accessToken}` so the backend's auth pipeline
-//      works even if cookies were dropped. Backend already allowlists
-//      `Authorization` in CORS (`apps/api/src/main.ts:99`).
+//      <in-memory token>` so the backend's auth pipeline works even if
+//      cookies were dropped. Backend already allowlists
+//      `Authorization` in CORS (`apps/api/src/cors.ts`).
 //   3. **`X-Device-Id`** — emit a per-install stable id (generated
 //      on first load via `crypto.randomUUID` or `getRandomValues`,
 //      persisted in `localStorage.bgDeviceId`). Backend's
@@ -98,61 +103,154 @@ const STORAGE_KEY_REFRESH = "refreshToken";
  * interceptor's 401 handler declines to recurse (it falls into
  * `Promise.reject(error)`), the outer `await refreshToken()` rejects,
  * and the parent request's `catch (refreshError)` block runs as
- * designed: clears localStorage, fires the "sesión expirada" toast.
+ * designed: clears the token copies, fires the "sesión expirada" toast.
  */
 const RETRY_GUARD = { _retry: true } as AxiosRequestConfig & {
   _retry?: boolean;
 };
 
 /**
- * Persist the token pair to localStorage only.
+ * Token storage.
  *
- * Why no JS-side `document.cookie` write: the server's response ALSO
- * sets the cookie via `Set-Cookie` with the prod shape
- * (`HttpOnly; Secure; SameSite=None`); a JS-side `SameSite=Lax`
- * cookie for the same name would create a SameSite desync where the
- * browser keeps one cookie and ignores the other. Since v1.3.1, the
- * server is the single source of truth for the cookie channel;
- * localStorage is the source of truth for the body / Authorization
- * channel. Trying to write both from the JS side is a bug magnet.
+ * QA-0.5 — a browser no longer persists JWTs to `localStorage`: Web
+ * Storage is readable by any script on the origin, so one XSS (or one
+ * compromised dependency) walks away with a 7-day refresh token. The web
+ * SPA authenticates through the server's `HttpOnly; Secure;
+ * SameSite=None` cookies; the copy below just lets the same tab send
+ * `Authorization: Bearer` and replay the refresh token in the
+ * `/auth/refresh` body until the next reload.
+ *
+ * The Capacitor WebView is the one runtime that needs a durable copy:
+ * Android System WebView drops cross-origin `Set-Cookie`, so the APK has
+ * no cookie channel and would lose the session on every cold start.
+ *
+ * Why no JS-side `document.cookie` write: the server sets the cookie via
+ * `Set-Cookie`; a JS-side `SameSite=Lax` cookie for the same name would
+ * desync it (the browser keeps one and ignores the other).
  */
-function persistTokens(accessToken: string, refreshToken: string): void {
+const persistsTokens = isNativePlatform();
+
+let tokens: {
+  accessToken: string | null;
+  refreshToken: string | null;
+} = { accessToken: null, refreshToken: null };
+
+// Leftovers from builds that stored the pair here. Dropped once at boot;
+// nothing below reads them on the web any more.
+if (!persistsTokens) {
+  try {
+    window.localStorage.removeItem(STORAGE_KEY_ACCESS);
+    window.localStorage.removeItem(STORAGE_KEY_REFRESH);
+  } catch {
+    // localStorage may throw in incognito / sandboxed contexts.
+  }
+}
+
+function saveTokens(accessToken: string, refreshToken: string): void {
+  tokens = { accessToken, refreshToken };
+
+  if (!persistsTokens) {
+    return;
+  }
+
   try {
     window.localStorage.setItem(STORAGE_KEY_ACCESS, accessToken);
     window.localStorage.setItem(STORAGE_KEY_REFRESH, refreshToken);
   } catch {
-    // localStorage may throw in incognito / sandboxed contexts —
-    // the server's Set-Cookie still covers the same-site browser
-    // path; nothing else we can do here at boot time.
+    // WebView storage unavailable — the in-memory copy still works.
+  }
+}
+
+function loadTokens(): {
+  accessToken: string | null;
+  refreshToken: string | null;
+} {
+  // Cold start on native: the in-memory pair is empty, the cookie channel
+  // is broken, so the persisted copy is the only session left.
+  if (persistsTokens && !tokens.accessToken && !tokens.refreshToken) {
+    try {
+      tokens = {
+        accessToken: window.localStorage.getItem(STORAGE_KEY_ACCESS),
+        refreshToken: window.localStorage.getItem(STORAGE_KEY_REFRESH),
+      };
+    } catch {
+      // ignore — stay on the empty in-memory pair
+    }
+  }
+
+  return tokens;
+}
+
+/** Clears both channels: logout, delete-account, unrecoverable refresh. */
+export function clearPersistedTokens(): void {
+  tokens = { accessToken: null, refreshToken: null };
+
+  try {
+    window.localStorage.removeItem(STORAGE_KEY_ACCESS);
+    window.localStorage.removeItem(STORAGE_KEY_REFRESH);
+  } catch {
+    // incognito / sandboxed contexts
   }
 }
 
 /**
- * Pull the persisted tokens back out for the Authorization header +
- * /auth/refresh request body.
+ * Route prefix of the authenticated area. The session-expired toast is
+ * only meaningful there — public pages must stay silent.
  */
-function readPersistedTokens(): {
-  accessToken: string | null;
-  refreshToken: string | null;
-} {
-  let accessToken: string | null = null;
-  let refreshToken: string | null = null;
-  try {
-    accessToken = window.localStorage.getItem(STORAGE_KEY_ACCESS);
-    refreshToken = window.localStorage.getItem(STORAGE_KEY_REFRESH);
-  } catch {
-    // ignore — see persistTokens() comment
+const APP_ROUTE_PREFIX = "/app";
+
+/**
+ * Set while the local session is known to be dead, so the parallel 401s
+ * of one lost session run the cleanup exactly once and never start
+ * another refresh. Reset by any successful `/auth/*` round-trip.
+ */
+let sessionExpired = false;
+
+/**
+ * Ends the local session after a 401 that refreshing cannot recover.
+ *
+ * Before this, the handler only cleared the in-memory tokens and showed
+ * a toast: `authSlice` kept the user marked as authenticated, so
+ * `<AuthGuard>` never redirected, the dashboard stayed mounted, and its
+ * `useQuery({ retry: 3 })` hooks kept hitting the dead session. Every
+ * failed request (and every retry) fired its own toast — hence the
+ * endless stack of "Tu sesión ha expirado por inactividad", which also
+ * kept appearing after the user had navigated to the public landing.
+ *
+ * Now the first unrecoverable 401:
+ *   1. clears the token copies,
+ *   2. clears the React Query cache (cancels the retry loops that
+ *      produced the toast storm),
+ *   3. dispatches `logoutAction`, which makes `<AuthGuard>` navigate any
+ *      `/app/*` route to `/auth/login` on the same render,
+ *   4. shows one toast, only on the authenticated area and always under
+ *      the same toast id so it can never stack.
+ */
+function endSession(): void {
+  if (sessionExpired) {
+    return;
   }
-  return { accessToken, refreshToken };
+  sessionExpired = true;
+
+  clearPersistedTokens();
+  queryClient.clear();
+  store.dispatch(logoutAction());
+
+  if (
+    typeof window !== "undefined" &&
+    window.location.pathname.startsWith(APP_ROUTE_PREFIX)
+  ) {
+    toast.error("Tu sesión ha expirado por inactividad", {
+      id: "session-expired",
+    });
+  }
 }
 
 // ── Request interceptor: attach Authorization + X-Device-Id ────────
 //
 // Registered BEFORE the response interceptor so every outbound
-// request picks up the headers. The `_retry` flag suppresses the
-// Authorization header when retrying a request that already failed
-// (the request headers are computed fresh from current localStorage
-// state, so a successful _retry_ doesn't re-emit a stale token).
+// request picks up the headers. Headers are computed fresh per request,
+// so a retry never re-emits a token that was cleared in the meantime.
 api.interceptors.request.use((config) => {
   try {
     // v1.3.0 (mobile-cookies-persistence review-note §6): skip the
@@ -167,16 +265,15 @@ api.interceptors.request.use((config) => {
     // and (c) collide with the `refreshToken()` function below which
     // explicitly puts the refresh token in the body. The refresh
     // contract is body-first; the interceptor defers.
-    const url = config.url || "";
-    const isRefresh = url.includes("/auth/refresh");
-    if (!isRefresh) {
-      const { accessToken } = readPersistedTokens();
+    config.headers = config.headers ?? {};
+
+    if (!config.url?.includes("/auth/refresh")) {
+      const { accessToken } = loadTokens();
       if (accessToken) {
-        config.headers = config.headers ?? {};
         config.headers["Authorization"] = `Bearer ${accessToken}`;
       }
     }
-    config.headers = config.headers ?? {};
+
     config.headers["X-Device-Id"] = getDeviceId();
   } catch {
     // ignore — let the request proceed without auth headers
@@ -184,104 +281,126 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-const refreshToken = async (): Promise<void> => {
-  // v1.3.0 — send the refresh token in the BODY. The backend reads
-  // `req.body.refreshToken` as a fallback when the cookie path was
-  // blocked by Android WebView's third-party cookie policy. For
-  // browser-side the cookie path still works (browser forwards
-  // `refreshToken` cookie alongside the body), so backend-priority
-  // cookie wins; the body fallback covers the broken-cookie case.
-  const { refreshToken } = readPersistedTokens();
-
-  // v1.3.1 — DIAGNOSTIC. When the body is empty, log the exact origin
-  // of the call so we can reconcile why `localStorage.refreshToken` is
-  // null at this moment. The most common upstream cause is a cold-start
-  // race: a dashboard fetch fires (and 401s) BEFORE the response
-  // interceptor of an in-flight `/auth/firebase-login` has had the
-  // chance to call `persistTokens`. Without this log line the cascade
-  // had no breadcrumb — the user only saw the infinite-loop curl
-  // trace with `--data-raw '{}'` and no hint of the trigger. Cap at
-  // `console.warn` (not `error`) so it doesn't slamm dev consoles
-  // and doesn't get picked up by Sentry as a fault.
-  if (!refreshToken) {
-    console.warn(
-      "[v1.3.1] /auth/refresh POSTing with empty body — " +
-      "localStorage.refreshToken is null at this moment. " +
-      "With the _retry: true guard below the cascade is now " +
-      "bounded to one call before clearing auth state.",
-    );
-  }
+/**
+ * Actual refresh round-trip. Kept separate from the dedupe wrapper so
+ * the single-flight promise below stays trivial.
+ */
+const performRefresh = async (): Promise<void> => {
+  // A browser authenticates with the HttpOnly refreshToken cookie, so an
+  // empty body is the normal case there. Native sends the token in the
+  // body because Android's WebView dropped that cookie.
+  const { refreshToken: stored } = loadTokens();
 
   await api.post(
     "/auth/refresh",
-    refreshToken ? { refreshToken } : {},
+    stored ? { refreshToken: stored } : {},
     // v1.3.1 — see RETRY_GUARD docblock above.
     RETRY_GUARD,
   );
+};
+
+let inflightRefresh: Promise<void> | null = null;
+
+/**
+ * Single-flight refresh.
+ *
+ * A page can mount several protected queries at once (dashboard +
+ * budgets + recent summary + settings). When the session dies they all
+ * 401 in the same tick; previously each one POSTed `/auth/refresh`, so
+ * the server saw a burst and the UI got one failure per query. Sharing
+ * the in-flight promise collapses that burst into exactly one refresh
+ * attempt, and every caller observes the same outcome.
+ */
+const refreshToken = (): Promise<void> => {
+  if (inflightRefresh) {
+    return inflightRefresh;
+  }
+
+  inflightRefresh = performRefresh().finally(() => {
+    inflightRefresh = null;
+  });
+
+  return inflightRefresh;
 };
 
 api.interceptors.response.use(
   (response) => {
     // Persist tokens from successful auth responses so the next
     // request's request-interceptor can pick them up. Fires on
-    // /auth/{login,signup,firebase-login,refresh,set-cookies}
+    // /auth/{login,signup,firebase-login,refresh}
     // responses and any other endpoint that returns the token pair.
     const data = response.data as
       | { accessToken?: string; refreshToken?: string }
       | undefined;
     if (data?.accessToken && data?.refreshToken) {
-      persistTokens(data.accessToken, data.refreshToken);
+      saveTokens(data.accessToken, data.refreshToken);
     }
+
+    // Any successful auth round-trip (login, refresh, verify) means the
+    // local session is alive again: allow the next unrecoverable 401 to
+    // notify the user. Without this reset, a re-login after an expiry
+    // would leave the handler thinking the session had already ended.
+    if (response.config.url?.includes("/auth/")) {
+      sessionExpired = false;
+    }
+
     return response;
   },
   async (error: ApiError) => {
     const originalRequest = error.config;
+    const requestUrl = originalRequest.url ?? "";
 
-    if (
-      error.response?.status === 401 &&
-      (originalRequest.url?.includes("/auth/login") ||
-        originalRequest.url?.includes("/auth/refresh"))
-    ) {
-      return Promise.reject(error);
-    }
+    if (error.response?.status === 401) {
+      // Auth endpoints answer for themselves: a failed login, refresh or
+      // logout must reach its caller unchanged, never through a refresh.
+      if (requestUrl.includes("/auth/")) {
+        return Promise.reject(error);
+      }
 
-    // Lógica para el resto de rutas protegidas
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
+      // The session was already ended by another request: reject without
+      // refreshing again (and without another toast).
+      if (sessionExpired) {
+        return Promise.reject(error);
+      }
+
+      // Callers such as `useRestoreSession` mark `_retry` to opt out of
+      // the refresh path — their 401 means "no session yet", not
+      // "session expired", and must stay silent.
+      if (originalRequest._retry) {
+        return Promise.reject(error);
+      }
+
+      // Already refreshed once and still 401: the session is unusable,
+      // so do not start a second refresh — end it now.
+      if (originalRequest._sessionRetry) {
+        endSession();
+        return Promise.reject(error);
+      }
+
+      originalRequest._sessionRetry = true;
       try {
         await refreshToken();
         return api(originalRequest);
       } catch (refreshError) {
         requestQueue.process(refreshError);
-
-        try {
-          window.localStorage.removeItem(STORAGE_KEY_REFRESH);
-          window.localStorage.removeItem(STORAGE_KEY_ACCESS);
-        } catch {
-          // ignore
-        }
-
-        // v1.3.0 (T3.3) — surface a toast and leave the redirect to
-        // the next mount. Avoiding the immediate `window.location.href`
-        // assignment prevents the "blanco con 429" symptom from the
-        // user's trace (where the redirect races the toast duration
-        // and ends up on an entirely blank page). The session-expired
-        // UI now shows the toast and the next user-driven navigation
-        // picks up the cleared auth state.
-        toast.error("Tu sesión ha expirado por inactividad");
-
-        // Don't hard-redirect; let React Router's redirect-on-render
-        // pick up the cleared auth state via `useRestoreSession`'s
-        // `setAuthReady` -> `ProtectedRoute` re-evaluation.
+        endSession();
         return Promise.reject(refreshError);
       }
     }
 
     // Network error (ERR_NETWORK) OR proxy unavailable (502/503/504 via Vite) —
     // backend is unreachable or user is offline. Queue mutations for retry.
+    // A structured `{ code }` body means the backend answered on purpose
+    // (e.g. Finny's 503 setup state), so it must reach the caller instead of
+    // being mistaken for the dev proxy being down.
     const isNetworkError = !error.response;
+    const isAppError =
+      typeof (error.response?.data as { code?: unknown } | undefined)?.code ===
+      "string";
     const isProxyError =
-      error.response && PROXY_UNAVAILABLE_CODES.includes(error.response.status);
+      !isAppError &&
+      error.response &&
+      PROXY_UNAVAILABLE_CODES.includes(error.response.status);
 
     if (isNetworkError || isProxyError) {
       const method = originalRequest.method?.toUpperCase() || "";
@@ -317,10 +436,6 @@ api.interceptors.response.use(
   },
 );
 
-// Re-export the storage key constants so callers (e.g. tests) can
-// assert on them without re-declaring the magic strings.
-export const ACCESS_TOKEN_STORAGE_KEY = STORAGE_KEY_ACCESS;
-export const REFRESH_TOKEN_STORAGE_KEY = STORAGE_KEY_REFRESH;
 export const X_DEVICE_ID_HEADER = "X-Device-Id";
 
 export default api;

@@ -1,0 +1,52 @@
+---
+import { getCopy } from "../i18n";
+
+interface Props {
+  t: ReturnType<typeof getCopy>;
+}
+
+const { t } = Astro.props;
+const items = [
+  { key: "track", icon: "trending-up" },
+  { key: "finny", icon: "message-circle" },
+  { key: "goals", icon: "target" },
+] as const;
+---
+
+<section class="section" id="features">
+  <div class="container">
+    <div class="section-head" data-reveal>
+      <h2>{t.sectionFeatures.title}</h2>
+      <p>{t.sectionFeatures.subtitle}</p>
+    </div>
+
+    <div class="grid features-grid">
+      {
+        items.map((item, index) => {
+          const copy = t.sectionFeatures.items[item.key];
+          return (
+            <article
+              class="card"
+              data-reveal
+              data-icon-hover
+              style={`--reveal-delay:${index * 90}ms`}
+            >
+              <div class="feature-head">
+                <span class="feature-icon">
+                  <animate-icons
+                    name={item.icon}
+                    size="20"
+                    is-animated="false"
+                    aria-hidden="true"
+                  ></animate-icons>
+                </span>
+                <h3>{copy.title}</h3>
+              </div>
+              <p>{copy.description}</p>
+            </article>
+          );
+        })
+      }
+    </div>
+  </div>
+</section>

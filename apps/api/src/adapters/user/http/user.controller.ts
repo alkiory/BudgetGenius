@@ -17,6 +17,7 @@ import { UserDto } from '@application/user/dto/user.dto';
 import { UserService } from '@application/user/user.service';
 import { User } from '@domain/user/user.entity';
 import { LoggingService } from '@infrastructure/log/logger.service';
+import { PublicUser, toPublicUser } from '@application/user/public-user';
 
 @Controller('user')
 @UseGuards(JwtAuthGuard)
@@ -27,9 +28,13 @@ export class UserController {
   ) { }
 
   @Get('profile')
-  async getProfile(@Request() req): Promise<User> {
+  async getProfile(@Request() req): Promise<PublicUser | null> {
     const user = await this.userService.getUserByEmail(req.user.email);
-    return user;
+    // QA-0.2 — this used to return the raw entity, so every boot of the
+    // SPA pulled the bcrypt hash and hashed refresh token into browser
+    // memory (and any devtools network log). Project through the
+    // allow-list instead.
+    return toPublicUser(user);
   }
 
   @Put(':id')
@@ -49,10 +54,14 @@ export class UserController {
       );
     }
 
-    return this.userService.updateUser(currentUser.userId, {
+    const updated = await this.userService.updateUser(currentUser.userId, {
       ...updateUserDto,
       updatedAt: new Date(),
     });
+
+    // Same leak class as /user/profile: the updated row still contains
+    // `password`/`refreshToken`.
+    return toPublicUser(updated);
   }
 
   @Delete(':id')

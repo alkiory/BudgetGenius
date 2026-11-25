@@ -4,6 +4,7 @@ import {
   OverBudgetContainer,
   OverBudgetHeader,
 } from "@presentation/components/ui/budget-status";
+import { chartAxisProps, chartGridProps } from "@presentation/utils/chart-theme";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
@@ -77,10 +78,16 @@ export default function BudgetSpendingByCategory({
             layout="vertical"
             margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
           >
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis type="number" />
-            <YAxis dataKey="name" type="category" width={100} />
+            <CartesianGrid {...chartGridProps} vertical />
+            <XAxis type="number" {...chartAxisProps} />
+            <YAxis
+              dataKey="name"
+              type="category"
+              width={100}
+              {...chartAxisProps}
+            />
             <Tooltip
+              cursor={{ fill: "rgb(148 163 184 / 0.08)" }}
               content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null;
                 const entry = chartData.find((d) => d.name === label);
@@ -89,7 +96,7 @@ export default function BudgetSpendingByCategory({
                 const overAmount = entry.spent - entry.allocated;
 
                 return (
-                  <div className="rounded-lg border bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                  <div className="rounded-xl border border-slate-200/80 bg-white/95 p-3 shadow-xl backdrop-blur dark:border-white/10 dark:bg-[#0b1424]/95">
                     <p className="mb-1 font-medium">{label}</p>
                     {payload.map((p, i) => (
                       <p key={i} className="text-sm">
@@ -98,7 +105,7 @@ export default function BudgetSpendingByCategory({
                       </p>
                     ))}
                     {isOver && (
-                      <p className="mt-1 text-sm font-medium text-red-600 dark:text-red-400">
+                      <p className="mt-1 text-sm font-medium text-rose-600 dark:text-rose-400">
                         {t("budgets.chartOverBy", {
                           amount: formatCurrency(overAmount),
                         })}
@@ -108,14 +115,18 @@ export default function BudgetSpendingByCategory({
                 );
               }}
             />
-            <Bar dataKey="allocated" name={amountLabel} fill="#8884d8" />
+            <Bar
+              dataKey="allocated"
+              name={amountLabel}
+              fill="rgb(45 212 191 / 0.3)"
+            />
             <Bar dataKey="spent" name={progressLabel} fill="#82ca9d">
               {chartData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={
                     !isSavings && entry.percentUsed > 100
-                      ? "#ef4444"
+                      ? "#f43f5e"
                       : !isSavings && entry.percentUsed > 90
                       ? "#f59e0b"
                       : "#10b981"

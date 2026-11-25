@@ -204,7 +204,7 @@ export function FilterModal({
       onClick={() => onClick(option)}
       className={`rounded-full px-3 py-1 text-xs font-medium ${
         selectedOptions.includes(option)
-          ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+          ? "bg-teal-500/10 text-teal-800 dark:bg-teal-400/15 dark:text-teal-200"
           : "bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200"
       }`}
       aria-pressed={selectedOptions.includes(option)}

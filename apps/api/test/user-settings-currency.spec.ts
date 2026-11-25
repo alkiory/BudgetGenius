@@ -1,5 +1,8 @@
-import { BadRequestException } from '@nestjs/common';
-import { UserSettingsService } from '@application/user/user-settings.service';
+import { BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  CURRENCY_LOCKED_HAS_HISTORY,
+  UserSettingsService,
+} from '@application/user/user-settings.service';
 import { UserSettingsRepository } from '@adapters/user/persistence/user-settings.repository';
 import { UserSettings } from '@domain/user/user-settings.entity';
 
@@ -11,13 +14,14 @@ import { UserSettings } from '@domain/user/user-settings.entity';
  * row (and that an unsupported code is rejected before it reaches the
  * Postgres enum).
  */
-const makeRepo = (initial?: UserSettings) => {
+const makeRepo = (initial?: UserSettings, history = 0) => {
   let stored: UserSettings | undefined = initial
     ? { ...initial }
     : undefined;
 
   return {
     findByUserId: jest.fn(async () => stored),
+    countFinancialHistory: jest.fn(async () => history),
     create: jest.fn((settings: Partial<UserSettings>) =>
       ({ ...settings }) as UserSettings,
     ),
@@ -92,5 +96,76 @@ describe('UserSettingsService — onboarding currency', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(repo.save).not.toHaveBeenCalled();
     expect(repo.getStored()?.currency).toBe('EUR');
+  });
+
+  it('rejects a currency change with 409 once the account has money', async () => {
+    // D1: 3 transactions + budgets exist, so switching would re-label them.
+    const repo = makeRepo(existingRow, 3);
+    const service = buildService(repo);
+
+    await expect(
+      service.updateSettings(1, { currency: 'USD' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.updateSettings(1, { currency: 'USD' }),
+    ).rejects.toThrow(CURRENCY_LOCKED_HAS_HISTORY);
+
+    expect(repo.countFinancialHistory).toHaveBeenCalledWith(1);
+    expect(repo.save).not.toHaveBeenCalled();
+    expect(repo.getStored()?.currency).toBe('EUR');
+  });
+
+  it('re-sending the current currency is a no-op even with money', async () => {
+    const repo = makeRepo(existingRow, 3);
+    const service = buildService(repo);
+
+    const saved = await service.updateSettings(1, {
+      currency: 'EUR',
+      hasCompletedOnboarding: true,
+    });
+
+    expect(saved.currency).toBe('EUR');
+    expect(saved.hasCompletedOnboarding).toBe(true);
+    // The comparison short-circuits before counting: no wasted round-trip.
+    expect(repo.countFinancialHistory).not.toHaveBeenCalled();
+    expect(repo.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows choosing a different currency while the account is empty', async () => {
+    const repo = makeRepo(existingRow, 0);
+    const service = buildService(repo);
+
+    const saved = await service.updateSettings(1, { currency: 'COP' });
+
+    expect(saved.currency).toBe('COP');
+    expect(repo.countFinancialHistory).toHaveBeenCalledWith(1);
+    expect(repo.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('locks a user with money but no settings row yet (first PATCH cannot pick a unit)', async () => {
+    // Edge case: the guard must compare against the row the service is
+    // about to create (EUR), not skip because `settings` was undefined.
+    const repo = makeRepo(undefined, 1);
+    const service = buildService(repo);
+
+    await expect(
+      service.updateSettings(1, { currency: 'USD' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(repo.countFinancialHistory).toHaveBeenCalledWith(1);
+    expect(repo.save).not.toHaveBeenCalled();
+  });
+
+  it('accepts the seeded EUR default for a legacy user with money and no settings row', async () => {
+    // Same edge case, but the effective currency is already EUR, so the
+    // PATCH confirms the existing unit and must not 409.
+    const repo = makeRepo(undefined, 1);
+    const service = buildService(repo);
+
+    const saved = await service.updateSettings(1, { currency: 'EUR' });
+
+    expect(saved.currency).toBe('EUR');
+    expect(repo.countFinancialHistory).not.toHaveBeenCalled();
+    expect(repo.save).toHaveBeenCalledTimes(1);
   });
 });

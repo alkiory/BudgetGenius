@@ -114,14 +114,8 @@ export class CurrencyService {
 
   /**
    * Rounds a raw amount to the currency's decimal precision and returns
-   * clean text for a form input. Used when seeding an editor with a value
-   * read back from storage: historical rows may carry floating-point
-   * residue from the removed conversion logic (`62.787499999999994`), so
-   * the input shows `62.79` instead of the full binary expansion.
-   *
-   * Trailing zeros are dropped (`100.00` → `100`) because this is an input
-   * buffer, not a display value; `formatCurrency` still renders exactly two
-   * decimals.
+   * clean text for a form input. Keeps trailing zeros (`1500.2` → `1500.20`)
+   * so the edit modal matches the table's decimal precision.
    */
   public formatAmountInput(
     amount: number | null | undefined,
@@ -131,8 +125,7 @@ export class CurrencyService {
       return "";
     }
     const precision = CURRENCY_PRECISION_MAP[currency] ?? 2;
-    const fixed = Number(amount).toFixed(precision);
-    return precision > 0 ? fixed.replace(/\.?0+$/, "") : fixed;
+    return Number(amount).toFixed(precision);
   }
 
   /** Rounds a numeric amount to the currency's decimal precision. */

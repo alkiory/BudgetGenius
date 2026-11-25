@@ -50,6 +50,7 @@ jest.mock('@infrastructure/config/cookie.service', () => {
   };
 });
 
+import { ConflictException } from '@nestjs/common';
 import { AuthController } from '../src/adapters/auth/http/auth.controller';
 import { LoggingService } from '../src/infrastructure/log/logger.service';
 
@@ -269,6 +270,35 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
         expect.objectContaining({ email: mockUserEntity.email }),
       );
     });
+
+    it('lets the 409 of the unique-email race through instead of answering 401', async () => {
+      // Web Google sign-in posts here (Firebase idToken), so this endpoint is
+      // the one that must not disguise the conflict as an invalid credential.
+      authService.oauthLogin.mockRejectedValueOnce(
+        new ConflictException('⚠️ Email already in use'),
+      );
+
+      await expect(
+        controller.firebaseLogin(
+          { idToken: 'mock-firebase-id-token' },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          {} as any,
+        ),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(cookieService.setCookie).not.toHaveBeenCalled();
+    });
+
+    it('still answers 401 for an unexpected failure', async () => {
+      authService.oauthLogin.mockRejectedValueOnce(new Error('db exploded'));
+
+      await expect(
+        controller.firebaseLogin(
+          { idToken: 'mock-firebase-id-token' },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          {} as any,
+        ),
+      ).rejects.toMatchObject({ status: 401 });
+    });
   });
 
   // ─── /auth/login (web SPA + Capacitor email/password path) ────────
@@ -304,6 +334,60 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
       );
 
       expect(authService.login).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ─── /auth/google-callback error mapping ──────────────────────────
+  //
+  // The callback is a browser navigation, so it cannot answer a JSON 409.
+  // What it must NOT do is flatten every failure into one opaque redirect:
+  // the concurrent-signup conflict (UNIQUE index on LOWER(email), 409 from
+  // `validateOAuthUser`) has to stay distinguishable, and the redirect has to
+  // be temporary — a cached 301 would replay the failure forever.
+
+  describe('googleCallback error handling', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const makeRes = (): any => ({
+      redirect: jest.fn(),
+      status: jest.fn(),
+      type: jest.fn(),
+      send: jest.fn(),
+    });
+
+    it('forwards the 409 conflict as ?error=email_in_use with a temporary redirect', async () => {
+      authService.oauthLogin.mockRejectedValueOnce(
+        new ConflictException('⚠️ Email already in use'),
+      );
+      const res = makeRes();
+
+      await controller.googleCallback(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { user: mockUserEntity } as any,
+        res,
+      );
+
+      expect(res.redirect).toHaveBeenCalledWith(
+        302,
+        expect.stringContaining('error=email_in_use'),
+      );
+      // No session is created on the failing path.
+      expect(cookieService.setCookie).not.toHaveBeenCalled();
+    });
+
+    it('keeps the generic code for other failures and never answers 301', async () => {
+      authService.oauthLogin.mockRejectedValueOnce(new Error('boom'));
+      const res = makeRes();
+
+      await controller.googleCallback(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { user: mockUserEntity } as any,
+        res,
+      );
+
+      expect(res.redirect).toHaveBeenCalledWith(
+        302,
+        expect.stringContaining('error=google_auth_failed'),
+      );
     });
   });
 

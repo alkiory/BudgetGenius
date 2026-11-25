@@ -23,10 +23,8 @@ export function BudgetProgress() {
 
   return (
     <div
-      className={`rounded-lg p-6 shadow-sm transition-colors ${
-        hasOverBudget
-          ? "border border-red-300 bg-red-50/80 dark:border-red-800 dark:bg-red-950/30"
-          : "bg-white dark:bg-slate-800"
+      className={`glass-panel hover-glow rounded-xl p-6 ${
+        hasOverBudget ? "border-rose-400/35 dark:border-rose-400/25" : ""
       }`}
     >
       <div className="flex items-center justify-between mb-4">
@@ -38,7 +36,7 @@ export function BudgetProgress() {
         </div>
         <Link
           to={RoutePaths.App + "/" + RoutePaths.Budgets}
-          className="text-sm text-purple-600 hover:underline dark:text-purple-400"
+          className="text-xs font-medium text-teal-600 transition hover:text-teal-500 hover:underline dark:text-teal-300"
         >
           {t("dashboard.manageBudgets")}
         </Link>
@@ -79,13 +77,13 @@ export function BudgetProgress() {
                     {formattedSpent.formatted} / {formattedAllocated.formatted}
                   </span>
                 </div>
-                <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-700">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-white/[0.07]">
                   <div
                     className={`h-2 rounded-full progress-shim ${
                       isSavings
-                        ? "bg-green-500"
+                        ? "bg-emerald-500"
                         : isOverBudget
-                        ? "bg-red-500"
+                        ? "bg-rose-500"
                         : getColorBasedOnEndDate(budget.endDate)
                     }`}
                     style={{ width: `${percentage}%` }}
@@ -109,7 +107,7 @@ export function BudgetProgress() {
                   <span
                     className={
                       isOverBudget
-                        ? "text-red-500 dark:text-red-400"
+                        ? "text-rose-500 dark:text-rose-400"
                         : "text-slate-500 dark:text-slate-400"
                     }
                   >

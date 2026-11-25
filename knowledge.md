@@ -96,7 +96,7 @@ Both apps follow a **Clean Architecture / Hexagonal** pattern with strict layer 
 | State Management | Redux Toolkit + React Query (TanStack) | — |
 | Routing | React Router | 7.3 |
 | Charts | Recharts | 2.x |
-| Icons | Lucide React | — |
+| Icons | AnimateIcons (Lucide) | 0.13 |
 | Testing | Playwright | 1.51 |
 | Auth | Firebase JS SDK | 11.x |
 
@@ -1449,6 +1449,8 @@ git push origin main --tags
 
 > **Why annotated tags (`-a`)?** `git describe` ignores lightweight tags by default in some configurations. Annotated tags also carry a message for the release log.
 
+> **Automated path:** `.github/workflows/release-android.yml` also runs on every push to `main` and publishes only when the root `package.json` version has no GitHub Release yet. It builds the APK, creates the annotated tag `vX.Y.Z` at that commit, uses the matching `## [vX.Y.Z]` section of `docs/changelog.md` as the release body, and attaches both `BudgetGenius-vX.Y.Z.apk` and the stable `BudgetGenius.apk` alias under the title `BudgetGenius vX.Y.Z`. The APK is the signed `assembleRelease` output: the workflow validates the `KEYSTORE_BASE64` keystore, signs with `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` through `BG_*` env vars, and fails if `apksigner` reports an unsigned or debug-signed artifact. Setting the optional `RELEASE_CERT_SHA256` secret pins the signing certificate: a release signed by any other keystore is refused instead of published. The landing download button points at `releases/latest/download/BudgetGenius.apk`, so it always serves the newest stable APK without an env change or redeploy; the landing probes that URL at build time and falls back to the release page while the alias does not exist yet, so an early deploy never ships a 404. The manual tag + push below still works and simply re-publishes that tag (`workflow_dispatch` forces it too).
+
 ### 16.4 CI auto-versioning reminder
 
 The CI workflows (`firebase-hosting-merge.yml`, `build-apk.yml`, `firebase-pull-request.yml`) already inject `VITE_APP_VERSION` from `git describe --tags --always --dirty`. Once the tag exists, the version badge in the web UI and APK will display the correct version automatically.
@@ -1459,13 +1461,42 @@ The CI workflows (`firebase-hosting-merge.yml`, `build-apk.yml`, `firebase-pull-
 - [ ] Bump version in root `package.json`
 - [ ] Update `docs/changelog.md` with release notes
 - [ ] Commit: `chore: bump version to vX.Y.Z`
-- [ ] Create annotated tag: `git tag -a vX.Y.Z -m "vX.Y.Z — ..."`
-- [ ] Push: `git push origin main --tags`
+- [ ] Push to `main` — `release-android.yml` creates the annotated tag and the GitHub Release with the APK
+- [ ] (Optional) `git tag -a vX.Y.Z -m "vX.Y.Z — ..."` + `git push origin main --tags` to release without a new commit
 - [ ] Verify CI/CD completes successfully
 - [ ] Confirm version badge in web UI shows the new version
 ```
 
 ---
 
-*Last updated: 2026-06-25*
+## 17. Frontend design & animation references
+
+Curated references for UI work in `apps/webClient` (loading states, motion and the navy/teal palette):
+
+### 17.1 CSS & animation fundamentals
+
+- **MDN — `transform`**: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/transform
+  Compositor-friendly movement (`translate`, `scale`, `rotate`). Prefer transform/opacity over layout properties for loaders, drifts and hovers.
+- **MDN — CSS reference**: https://developer.mozilla.org/en-US/docs/Web/CSS
+  Canonical syntax for custom properties, `@keyframes`, `@media (prefers-reduced-motion: reduce)` and `color-mix()`.
+- **web.dev — Learn CSS: Animations**: https://web.dev/learn/css/animations
+  Keyframes, timing functions, fill modes, and how to keep UI motion accessible.
+
+### 17.2 Motion inspiration (Codepen)
+
+- **“Funny Candle” — pure CSS character animation**: https://codepen.io/kevin_David_k/pen/eYNeQVY
+  Multi-part keyframe choreography on a single subject; useful for personality-driven loaders.
+- **“Pure CSS cat” — blinking / look-around character**: https://codepen.io/johanmouchet/pen/OXxvqM
+  Small, cheap loops (`blink`, `look-around`) that make a static mark feel alive; pair with `prefers-reduced-motion`.
+
+### 17.3 House rules for BudgetGenius motion
+
+- Every animation must read correctly in both themes: drive colours from the tokens in `src/index.css` (`rgb(var(--primary))`, `rgb(var(--accent))`, `rgb(var(--muted))`), never from fixed hex values.
+- Keep brand loaders transform/opacity-only, and disable them under `prefers-reduced-motion`.
+- Shared loading classes live in `src/index.css` (`brand-loader-*`, `skeleton`); the full-page loader is `presentation/pages/loading.tsx`. Every inline spinner must use `BrandDots` (exported from `presentation/components/loader.tsx`) instead of `animate-spin` / `Loader2`, so all loading states keep the same dot animation and inherit the palette through `currentColor`.
+- Native `<select>` popups are painted by the OS and ignore the theme. Use the portal-based `presentation/components/ui/select.tsx` for any dropdown in the app.
+
+---
+
+*Last updated: 2026-11-24*
 *Maintainers: Alkiory, Sergio Campbell*

@@ -13,6 +13,19 @@ export class UserSeederService {
   ) {}
 
   async createDefaultUsers(): Promise<void> {
+    // QA-0.1 — the seeded accounts use a fixed, publicly-known password
+    // (`#Password123`). `AppService.onModuleInit()` runs this in every
+    // environment, so a production boot would silently ensure an admin
+    // account whose credentials are in the repository history. Seed only
+    // when the operator explicitly runs in development; everything else
+    // (production, test, staging, NODE_ENV unset) is a no-op.
+    if (process.env.NODE_ENV !== 'development') {
+      this.logger.log(
+        `🌱 User seeder skipped (NODE_ENV=${process.env.NODE_ENV ?? 'unset'}) — fixed-password demo accounts are development-only`,
+      );
+      return;
+    }
+
     // Check if the users already exist
     const userExists = await this.userRepository.findByEmail('admin@admin.com');
 

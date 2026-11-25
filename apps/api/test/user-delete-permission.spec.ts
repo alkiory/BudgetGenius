@@ -54,9 +54,17 @@ describe('UserController Delete Permission (e2e) — v1.7.3', () => {
   let tokenB: string;
 
   beforeAll(async () => {
+    // This suite is about the DELETE ownership contract, not Firebase.
+    // AppModule's FIREBASE_ADMIN factory parses a real service-account
+    // private key, so booting the full module in a test/CI environment
+    // without credentials would throw before any assertion runs. Override
+    // the provider so the module boots with a stub Admin SDK instance.
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider('FIREBASE_ADMIN')
+      .useValue({})
+      .compile();
 
     app = moduleFixture.createNestApplication();
     userRepo = app.get(UserRepositoryImpl);
@@ -259,7 +267,11 @@ describe('UserController Delete Permission (e2e) — v1.7.3', () => {
       .set('Authorization', `Bearer ${tokenA}`)
       .expect(200);
 
-    expect(response.body?.message).toBeTruthy();
+    // `UserController#deleteUser` returns `UserService#deleteUser(id)`
+    // directly, and that service resolves `void`, so the 200 carries an
+    // empty body by contract. The proof that the delete happened is the
+    // row-level state asserted immediately below, not a response message.
+    expect(response.text).toBe('');
 
     // Post-delete assertion #1: parent row must be gone.
     const noUser = await userRepo.findById(userAId);

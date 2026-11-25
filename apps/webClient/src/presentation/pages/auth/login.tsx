@@ -2,6 +2,8 @@ import { loginAction, setUser } from "@adapters/slices/auth/authSlice";
 import { login } from "@application/auth/auth.service";
 import { isNativePlatform } from "@infrastructure/platform";
 import { SocialLoginButtons } from "@presentation/components/social-buttons-login";
+import { BrandDots } from "@presentation/components/loader";
+import { Mail } from "@presentation/components/ui/animated-icons";
 import { Button } from "@presentation/components/ui/button";
 import {
   Card,
@@ -14,18 +16,30 @@ import {
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
 import { Separator } from "@presentation/components/ui/separator";
+import { goToLanding } from "@presentation/utils/landing";
 import { RoutePaths } from "@presentation/utils/routes";
 import { useMutation } from "@tanstack/react-query";
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch } from "react-redux";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 
 export default function LoginPage() {
   const { t } = useTranslation();
+  // The Google OAuth callback is a browser navigation, so the 409 of a
+  // concurrent signup reaches the SPA as `?error=email_in_use`
+  // (`AuthController.googleCallback`). Surface it instead of dropping the user
+  // on a silent login form.
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  // Derived on every render instead of seeded into state: a language switch
+  // re-translates the banner, and a failed submit takes precedence over the
+  // stale query parameter.
+  const oauthError =
+    searchParams.get("error") === "email_in_use" ? t("auth.emailInUse") : null;
+  const error = formError ?? oauthError;
   const [loading, setLoading] = useState(false);
 
   const dispatch = useDispatch();
@@ -57,9 +71,9 @@ export default function LoginPage() {
       const status = error.response?.status;
 
       if (status === 401) {
-        setError(serverMessage || "Credenciales incorrectas");
+        setFormError(serverMessage || "Credenciales incorrectas");
       } else {
-        setError(JSON.stringify(error));
+        setFormError(JSON.stringify(error));
       }
 
       setLoading(false);
@@ -74,27 +88,22 @@ export default function LoginPage() {
 
   if (loading) {
     return (
-      <div className="w-full h-full flex items-center justify-center">
-        <svg
-          className="animate-spin h-8 w-8 text-primary"
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
-          <circle
-            className="opacity-25"
-            cx="12"
-            cy="12"
-            r="10"
-            strokeWidth="4"
-            stroke="currentColor"
-          ></circle>
-          <path
-            className="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2.93 6.364A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3.93-1.574zM12 20a8 8 0 008-8h4c0 5.627-4.373 10-10 10v-4zm6.364-2.93A7.962 7.962 0 0120 12h4c0 3.042-1.135 5.824-3 7.938l-3.636-1.868zM12 4a8 8 0 00-8 8H0c0-5.627 4.373-10 10-10v4zm2.93-.636A7.962 7.962 0 0112 4V0c3.042 0 5.824 1.135 7.938 3l-1.574 3.93z"
-          ></path>
-        </svg>
+      <div className="flex h-full w-full items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent
+            role="status"
+            aria-live="polite"
+            className="flex flex-col items-center gap-4 pt-12 pb-12"
+          >
+            <BrandDots
+              size="lg"
+              className="text-teal-600 dark:text-teal-300"
+            />
+            <span className="text-sm text-slate-500 dark:text-slate-400">
+              {t("common.loading")}
+            </span>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -105,7 +114,7 @@ export default function LoginPage() {
         <Button
           variant="default"
           className="absolute left-4 top-[max(env(safe-area-inset-top),1rem)] md:left-8 md:top-8 animate-shake"
-          onClick={() => navigate(RoutePaths.Home)}
+          onClick={goToLanding}
         >
           {t("auth.goBack")}
         </Button>
@@ -114,21 +123,7 @@ export default function LoginPage() {
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center">
             <div className="rounded-full bg-primary/10 p-2">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6 text-primary"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M18.5 4H5.5C4.12 4 3 5.12 3 6.5v11C3 18.88 4.12 20 5.5 20h13c1.38 0 2.5-1.12 2.5-2.5v-11C21 5.12 19.88 4 18.5 4Z" />
-                <path d="M3 6.5l9 6 9-6" />
-              </svg>
+              <Mail className="h-6 w-6 text-primary" aria-hidden="true" />
             </div>
           </div>
           <CardTitle className="text-2xl font-bold">
@@ -165,8 +160,12 @@ export default function LoginPage() {
                 required
               />
             </div>
-            {error && <p className="text-red-500">{error}</p>}
-            <Button variant="default" type="submit" className="w-full">
+            {error && <p className="text-rose-500">{error}</p>}
+            <Button
+              variant="default"
+              type="submit"
+              className="star-cta w-full"
+            >
               {t("auth.signIn")}
             </Button>
           </form>

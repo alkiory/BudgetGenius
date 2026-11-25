@@ -20,9 +20,9 @@ RUN pnpm install --frozen-lockfile
 # 5. Copiar el resto del código fuente
 COPY . .
 
-# 6. Manejo flexible de variables de entorno
-# El '*' hace que el comando no falle si el archivo no existe
-COPY apps/api/.env.production .env
+# 6. Sin secretos en la imagen: `.dockerignore` excluye los .env (el
+#    `COPY . .` de arriba) y el entorno se inyecta en runtime vía compose
+#    (`env_file` / `environment`).
 
 # 7. Build usando Turborepo
 # Usamos el comando de pnpm pero nos aseguramos de estar en la carpeta correcta

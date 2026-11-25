@@ -18,6 +18,9 @@ services:
       - DB_NAME=budgetgenius_prod
       - DB_USER=postgres_admin_prod
       - DB_PASS=${DB_PASSWORD}
+      # QA-0.6 — Redis exige AUTH. RedisService y el ThrottlerModule
+      # leen esta misma variable.
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     networks:
       - app-network
       - npm_network
@@ -35,8 +38,10 @@ services:
       - POSTGRES_USER=postgres_admin_prod
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=budgetgenius_prod
-    ports:
-      - "4002:5432"
+    # Sin `ports`: Postgres solo se alcanza desde la red interna
+    # `app-network`. Publicar 4002:5432 exponía la base a Internet en
+    # cualquier host cuyo firewall no bloqueara el puerto; el backend ya
+    # habla con `database:5432` por la red de Docker.
     networks:
       - app-network
     volumes:
@@ -48,12 +53,27 @@ services:
     image: redis:7.2-alpine
     container_name: bg-redis-prod
     restart: always
+    # QA-0.6 — AUTH obligatorio: sin esto cualquier contenedor de la red
+    # podía leer/escribir refresh tokens y contadores del throttle. El
+    # `:?` aborta el `up` si falta la variable en vez de arrancar abierto.
+    command:
+      - redis-server
+      - --requirepass
+      - "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     networks:
       - app-network
     volumes:
       - redisdata_prod:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      # `ping` a secas da NOAUTH: el contenedor nunca sería healthy y el
+      # backend no arrancaría (depends_on: service_healthy).
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG",
+        ]
       interval: 5s
       timeout: 3s
       retries: 5

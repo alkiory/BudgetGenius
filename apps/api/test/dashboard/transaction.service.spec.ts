@@ -34,6 +34,7 @@ describe('TransactionService', () => {
             findOne: jest.fn().mockResolvedValue(mockTransaction),
             update: jest.fn().mockResolvedValue(mockTransaction),
             delete: jest.fn().mockResolvedValue(true),
+            deleteAllTransactions: jest.fn().mockResolvedValue(undefined),
           },
         },
         {
@@ -102,7 +103,20 @@ describe('TransactionService', () => {
     it('should throw an error when creation fails', async () => {
       repo.create = jest.fn().mockRejectedValue(new Error('DB Error'));
 
-      await expect(service.createTransaction(1, {} as any)).rejects.toThrow(
+      // A valid-shaped DTO: the service resolves the calendar day and the
+      // budget-category attribution BEFORE hitting `repo.create`, so an
+      // empty payload would fail on `dto.date` instead of reaching the
+      // repository rejection this test is about.
+      const dto = {
+        date: new Date(),
+        description: 'Exploding row',
+        category: 'Food',
+        amount: 10,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await expect(service.createTransaction(1, dto)).rejects.toThrow(
         'DB Error',
       );
     });
@@ -304,9 +318,7 @@ describe('TransactionService', () => {
 
       // Caller asks to delete both — but only userATxId is in the user's
       // ownership list, so userBTxId is silently dropped.
-      await service.deleteAllTransactions(userAId, {
-        transactions: [userATxId, userBTxId],
-      });
+      await service.deleteAllTransactions(userAId, [userATxId, userBTxId]);
 
       // The repo's `delete` was called only for the owned id.
       const deletedIds = (repo.delete as jest.Mock).mock.calls.map((c) => c[0]);
@@ -315,6 +327,21 @@ describe('TransactionService', () => {
       for (const call of (repo.delete as jest.Mock).mock.calls) {
         expect(call[1]).toBe(userAId);
       }
+    });
+
+    it('deleteAllTransactions: a same-size payload of foreign ids does not wipe the history', async () => {
+      // The old `requested.length === owned.length` shortcut deleted everything
+      // from a payload made only of ids the user does not own.
+      (repo.findByUser as jest.Mock).mockResolvedValue({
+        id: userAId,
+        email: 'a@test.com',
+        transactions: [{ id: 42 }, { id: 43 }],
+      });
+
+      const result = await service.deleteAllTransactions(userAId, [98, 99]);
+
+      expect(result).toEqual({ message: 'No transactions to delete' });
+      expect(repo.deleteAllTransactions).not.toHaveBeenCalled();
     });
   });
 });

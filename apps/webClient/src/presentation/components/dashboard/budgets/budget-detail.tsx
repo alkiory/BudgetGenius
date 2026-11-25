@@ -16,7 +16,7 @@ import {
   infoToast,
 } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus } from "@presentation/components/ui/animated-icons";
 import { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
@@ -232,12 +232,16 @@ export function BudgetDetail({
   }, []);
 
   const handleNewCategoryChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    (e: React.ChangeEvent<HTMLInputElement>) => {
       const { name, value } = e.target;
       setNewCategory((prev) => ({ ...prev, [name]: value }));
     },
     [],
   );
+
+  const handleNewCategoryNameChange = useCallback((value: string) => {
+    setNewCategory((prev) => ({ ...prev, name: value }));
+  }, []);
 
   const handleAddCategorySubmit = useCallback(() => {
     if (!user || !activeBudget) return;
@@ -283,7 +287,7 @@ export function BudgetDetail({
 
   if (!activeBudget) {
     return (
-      <div className="md:mt-11 rounded-lg border border-dashed bg-purple-50 p-6 text-center dark:border-purple-900/30 dark:bg-purple-900/20 md:p-10 lg:p-16 xl:p-20 border-slate-200 dark:border-slate-700">
+      <div className="md:mt-11 rounded-xl border border-dashed border-slate-200 bg-teal-500/10 p-6 text-center dark:border-teal-400/15 dark:bg-teal-400/10 md:p-10 lg:p-16 xl:p-20">
         <p className="text-slate-500 dark:text-slate-400">
           {t("common.selectBudget")}
         </p>
@@ -339,6 +343,7 @@ export function BudgetDetail({
             allocated={newCategory.allocatedText}
             amountLabel={amountLabel}
             handleNewCategoryChange={handleNewCategoryChange}
+            onCategoryNameChange={handleNewCategoryNameChange}
             handleAddCategorySubmit={handleAddCategorySubmit}
           />
         )}
@@ -352,7 +357,7 @@ export function BudgetDetail({
             onDeleteCategoryHandler={onDeleteCategoryHandler}
           />
         ) : (
-          <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center dark:border-slate-700">
+          <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center dark:border-white/10">
             <p className="text-slate-500 dark:text-slate-400">
               {t("budgets.noCategoriesYet")}
             </p>

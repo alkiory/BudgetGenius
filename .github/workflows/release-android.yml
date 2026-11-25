@@ -1,17 +1,45 @@
 name: Release Android APK to GitHub Releases
 
-# Concurrency: serialise releases per ref so two tags pushed in rapid
-# succession don't race each other into the same `BudgetGenius-${tag}.apk`
-# asset slot on the GitHub Releases API. `cancel-in-progress: false` so a
-# second push stacks, doesn't kill the first.
+# ── Release pipeline ───────────────────────────────────────────────────────
+# Three entry points, all producing the same artefacts:
+#
+#   * push to `main`      → publishes ONLY when the version in the root
+#                           `package.json` has no GitHub Release yet, i.e. right
+#                           after the `chore: bump version to vX.Y.Z` commit
+#                           from `knowledge.md` §16 that also added the
+#                           `docs/changelog.md` entry. Every other main push
+#                           exits after the ~10 s resolve step.
+#   * push of a `v*` tag  → always publishes that tag (a re-push refreshes the
+#                           release and replaces the APK asset).
+#   * manual dispatch     → force-publishes the checked-out revision's version
+#                           even when the release already exists.
+#
+# Everything the release page needs is generated here instead of by hand:
+#   - tag         → `v<version>` from the root `package.json` (annotated tag,
+#                   created and pushed only AFTER the APK builds, §16.3)
+#   - title       → `BudgetGenius v<version>`
+#   - description → the matching `## [vX.Y.Z]` section of `docs/changelog.md`
+#                   plus the download/install instructions below
+#   - binary      → `BudgetGenius-v<version>.apk` (debug-signed), built in this
+#                   job and attached to the release
+#
+# Concurrency: one release at a time across every ref. The documented flow
+# (`git push origin main --tags`, knowledge.md §16.3) fires a branch push AND a
+# tag push for the same commit at once; a single group serialises them, so the
+# second run starts after the first finished, sees the release it created and
+# exits through the resolve step instead of racing for the same
+# `BudgetGenius-vX.Y.Z.apk` asset. `cancel-in-progress: false` so a second push
+# stacks, doesn't kill the first.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}
   cancel-in-progress: false
 
 "on":
   push:
+    branches: [main]
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -25,19 +53,114 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ── Resolve what to publish ──────────────────────────────────────────
+      # The tag source of truth is the root `package.json` (knowledge.md
+      # §16.1) on branch pushes, and the pushed tag on `v*` pushes. `gh` ships
+      # on the ubuntu-latest image, so the existence check needs no extra
+      # action or token wiring beyond `GH_TOKEN`.
+      - name: Resolve release tag
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            tag="${GITHUB_REF_NAME}"
+            version="${tag#v}"
+            publish="true"
+          else
+            version="$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' package.json | head -n 1)"
+            tag="v${version}"
+            if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+              publish="true"
+            elif gh release view "${tag}" >/dev/null 2>&1; then
+              echo "::notice::Release ${tag} already exists — nothing to publish for this ref."
+              publish="false"
+            else
+              publish="true"
+            fi
+          fi
+
+          if [[ -z "${version}" ]]; then
+            echo "::error::Could not read \"version\" from the root package.json."
+            exit 1
+          fi
+
+          # Pre-release suffix (`v1.11.0-beta.1`) keeps the release out of the
+          # "Latest" slot, mirroring GitHub's own tagging guidance.
+          prerelease="false"
+          if [[ "${version}" == *-* ]]; then
+            prerelease="true"
+          fi
+
+          # Android install metadata from the released version: v1.11.0 ->
+          # 11100, so every release is installable over the previous one.
+          base="${version%%-*}"
+          IFS=. read -r vmajor vminor vpatch <<< "$base"
+          vpatch="${vpatch:-0}"
+          if ! [[ "$vmajor" =~ ^[0-9]+$ && "$vminor" =~ ^[0-9]+$ && "$vpatch" =~ ^[0-9]+$ ]]; then
+            echo "::error::Cannot derive an Android versionCode from '${version}'."
+            exit 1
+          fi
+          version_code=$((10#$vmajor * 10000 + 10#$vminor * 100 + 10#$vpatch))
+
+          {
+            echo "version=${version}"
+            echo "tag=${tag}"
+            echo "publish=${publish}"
+            echo "prerelease=${prerelease}"
+            echo "version_code=${version_code}"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Setup Java 21
+        if: steps.release.outputs.publish == 'true'
         uses: actions/setup-java@v4
         with:
           java-version: "21"
           distribution: "temurin"
 
+      # ── Release signing material ──────────────────────────────────────────
+      # `KEYSTORE_BASE64` is decoded outside the repo (and outside git) into
+      # $RUNNER_TEMP, then validated with keytool so a wrong password / alias
+      # fails here with a clear message instead of deep inside Gradle. The
+      # secrets reach Gradle through env vars set on the build step only.
+      - name: Decode release keystore
+        if: steps.release.outputs.publish == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Repository secret ${name} is not set — the release APK cannot be signed."
+              exit 1
+            fi
+          done
+
+          keystore="${RUNNER_TEMP}/budgetgenius-release.keystore"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+
+          if ! keytool -list -keystore "$keystore" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>&1; then
+            echo "::error::The keystore does not open with KEYSTORE_PASSWORD + KEY_ALIAS. Re-encode the .jks and re-store the secrets."
+            exit 1
+          fi
+
+          echo "::notice::Release keystore decoded and validated for alias ${KEY_ALIAS}."
+
       - name: Setup Android SDK
+        if: steps.release.outputs.publish == 'true'
         uses: android-actions/setup-android@v4
         with:
           packages: "cmdline-tools;latest platform-tools build-tools;35.0.0 platforms;android-35"
 
-      # ── Gradle cache (faster warm + cold builds) ───────────────────────
+      # ── Gradle cache (faster warm + cold builds) ─────────────────────────
       - name: Cache Gradle
+        if: steps.release.outputs.publish == 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -48,21 +171,27 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Setup Node.js
+        if: steps.release.outputs.publish == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
       - name: Install pnpm
+        if: steps.release.outputs.publish == 'true'
         run: npm install -g pnpm@12.18.0
 
       - name: Install Dependencies
+        if: steps.release.outputs.publish == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Build mobile web assets
+        if: steps.release.outputs.publish == 'true'
         run: pnpm --filter frontend-web build
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
-          VITE_APP_VERSION: ${{ github.ref_name }}
+          # Resolved tag (not `github.ref_name`, which is `main` on branch
+          # pushes) so the in-app badge shows the version being released.
+          VITE_APP_VERSION: ${{ steps.release.outputs.tag }}
           VITE_CAPACITOR: "true"
           VITE_IS_MOBILE_BUILD: "true"
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
@@ -76,20 +205,22 @@ jobs:
           VITE_GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
 
       - name: Sync Capacitor
+        if: steps.release.outputs.publish == 'true'
         run: pnpm --filter mobile exec cap sync android
 
       - name: Remove Capacitor Cordova compat shim (post-sync)
-        if: hashFiles('apps/mobile/android/capacitor-cordova-android-plugins/build.gradle') != ''
+        if: steps.release.outputs.publish == 'true' && hashFiles('apps/mobile/android/capacitor-cordova-android-plugins/build.gradle') != ''
         run: rm -rf apps/mobile/android/capacitor-cordova-android-plugins
 
       - name: Strip defunct apply-from line from capacitor.build.gradle (post-sync)
+        if: steps.release.outputs.publish == 'true'
         run: |
           test -f apps/mobile/android/app/capacitor.build.gradle \
               && sed -i '/^[^/]*apply from.*capacitor-cordova-android-plugins/d' \
                   apps/mobile/android/app/capacitor.build.gradle
 
       - name: Inject Firebase google-services.json
-        if: ${{ env.HAS_FIREBASE_SECRET != '' }}
+        if: steps.release.outputs.publish == 'true' && env.HAS_FIREBASE_SECRET != ''
         run: |
           echo "${{ secrets.FIREBASE_SERVICES_BASE64 }}" | base64 --decode > apps/mobile/android/app/google-services.json
           # Decode-then-validate: if the secret has stray whitespace, partial
@@ -98,40 +229,175 @@ jobs:
           python3 -c "import json; json.load(open('apps/mobile/android/app/google-services.json'))" \
             || (echo "::error::FIREBASE_SERVICES_BASE64 decoded but is not valid JSON — re-base64 the source file and re-store the secret." && exit 1)
 
-      - name: Build debug APK
+      - name: Build signed release APK
+        if: steps.release.outputs.publish == 'true'
         working-directory: apps/mobile/android
-        run: ./gradlew assembleDebug --no-daemon
+        env:
+          BG_KEYSTORE_FILE: ${{ runner.temp }}/budgetgenius-release.keystore
+          BG_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          BG_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          BG_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          BG_VERSION_CODE: ${{ steps.release.outputs.version_code }}
+          BG_VERSION_NAME: ${{ steps.release.outputs.version }}
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Rename APK to canonical release filename
+        if: steps.release.outputs.publish == 'true'
         run: |
-          mv apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk \
-             "BudgetGenius-${{ github.ref_name }}.apk"
+          set -euo pipefail
+          apk="apps/mobile/android/app/build/outputs/apk/release/app-release.apk"
+          test -f "$apk" || { echo "::error::assembleRelease produced no app-release.apk — check that the signing config was applied."; exit 1; }
+          mv "$apk" "BudgetGenius-${{ steps.release.outputs.tag }}.apk"
+          # Stable alias: `releases/latest/download/BudgetGenius.apk` is what the
+          # landing download button points at, so it always serves the newest
+          # stable build without editing an env var or redeploying the site.
+          cp "BudgetGenius-${{ steps.release.outputs.tag }}.apk" BudgetGenius.apk
+
+      # Publishing an unsigned or debug-signed file by accident is worse than
+      # failing the pipeline: verify the artifact really carries the release key.
+      - name: Verify APK signature
+        if: steps.release.outputs.publish == 'true'
+        env:
+          # Optional pin: when the secret is set, an APK signed by any other
+          # keystore is refused. Leave it unset (or empty) to skip the check.
+          EXPECTED_CERT_SHA256: ${{ secrets.RELEASE_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          apk="BudgetGenius-${{ steps.release.outputs.tag }}.apk"
+          sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          apksigner="${sdk}/build-tools/35.0.0/apksigner"
+          test -x "$apksigner" || { echo "::error::apksigner not found under ${sdk}/build-tools/35.0.0."; exit 1; }
+
+          "$apksigner" verify "$apk"
+          certs=$("$apksigner" verify --print-certs "$apk")
+          if grep -q "CN=Android Debug" <<<"$certs"; then
+            echo "::error::The APK is debug-signed — refusing to publish it."
+            exit 1
+          fi
+
+          # `Signer #1 certificate SHA-256 digest: AA:BB:…` -> lowercase hex.
+          actual=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<<"$certs" \
+                     | tr -d ': \r\n' | tr 'A-F' 'a-f')
+          [[ -n "$actual" ]] \
+            || { echo "::error::Could not read the signing certificate SHA-256 from apksigner."; exit 1; }
+
+          expected=$(printf '%s' "${EXPECTED_CERT_SHA256:-}" | tr -d ': \r\n' | tr 'A-F' 'a-f')
+          if [[ -n "$expected" ]]; then
+            if [[ "$actual" != "$expected" ]]; then
+              echo "::error::APK signed with ${actual} but RELEASE_CERT_SHA256 pins ${expected} — wrong keystore, refusing to publish."
+              exit 1
+            fi
+            echo "::notice::Signing certificate matches RELEASE_CERT_SHA256."
+          else
+            echo "::notice::RELEASE_CERT_SHA256 is not set; publishing without the certificate pin (actual ${actual})."
+          fi
+
+          grep -E "certificate DN|certificate SHA-256" <<<"$certs" || true
+
+      # ── Compose the release description from the changelog ───────────────
+      # `knowledge.md` §16.2 makes one `## [vX.Y.Z]` section per release
+      # mandatory, so that entry is the canonical source for the notes. The
+      # awk pass copies everything from that heading up to the next `## [`,
+      # then trims trailing separators/blank lines; the installer-facing block
+      # is appended so the release page is self-sufficient either way.
+      - name: Compose release notes
+        if: steps.release.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.tag }}"
+          notes="release-notes.md"
+
+          awk -v heading="## [${tag}]" '
+            index($0, heading) == 1 { capture = 1; next }
+            capture && /^## \[/ { exit }
+            capture { lines[++n] = $0 }
+            END {
+              start = 1
+              while (start <= n && lines[start] ~ /^[[:space:]]*$/) start++
+              while (n > 0 && (lines[n] ~ /^[[:space:]]*$/ || lines[n] == "---")) n--
+              for (i = start; i <= n; i++) print lines[i]
+            }
+          ' docs/changelog.md > "$notes"
+
+          if [ -s "$notes" ]; then
+            echo "::notice::Release notes taken from the docs/changelog.md '${tag}' entry."
+          else
+            echo "::warning::No '## [${tag}]' section in docs/changelog.md — publishing the install notes only."
+            printf '_No changelog entry was found for %s._\n' "$tag" > "$notes"
+          fi
+
+          {
+            printf '\n---\n\n'
+            printf '## Download\n\n'
+            printf 'Tap **BudgetGenius.apk** for the newest release, or use the versioned **BudgetGenius-%s.apk** asset.\n\n' "$tag"
+            printf '## Install\n\n'
+            printf '1. Save the APK to your device.\n'
+            printf '2. Open it from your file manager (Downloads, Files, etc.).\n'
+            printf '3. If Android warns about installing from an unknown source,\n'
+            printf '   open Settings → Apps → Special access → Install unknown\n'
+            printf '   apps and grant permission to the file manager you used.\n'
+            printf '4. Tap Install. BudgetGenius is ready.\n\n'
+            printf '## Notes\n\n'
+            printf -- '- This APK is signed with the BudgetGenius release key and\n'
+            printf '  carries the version of this release, so it installs over\n'
+            printf '  earlier releases. Builds signed with the old debug key must\n'
+            printf '  be uninstalled once before installing this one.\n'
+            printf -- '- iOS — coming soon.\n'
+          } >> "$notes"
+
+      # ── Annotated tag (branch pushes only) ───────────────────────────────
+      # Created AFTER a successful APK build so a broken commit never leaves a
+      # stray tag behind. Pushed with the workflow token, which does not
+      # re-trigger this workflow's `v*` push event (no release loop).
+      - name: Create annotated tag
+        if: steps.release.outputs.publish == 'true' && github.ref_type == 'branch'
+        run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.tag }}"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "::notice::Tag ${tag} already exists — reusing it."
+            exit 0
+          fi
+
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git tag -a "${tag}" -m "${tag} — BudgetGenius Android release"
+          git push origin "refs/tags/${tag}"
 
       - name: Publish GitHub Release
+        if: steps.release.outputs.publish == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          files: "BudgetGenius-${{ github.ref_name }}.apk"
-          generate_release_notes: false
+          tag_name: ${{ steps.release.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: BudgetGenius ${{ steps.release.outputs.tag }}
+          body_path: release-notes.md
+          files: |
+            BudgetGenius-${{ steps.release.outputs.tag }}.apk
+            BudgetGenius.apk
+          prerelease: ${{ steps.release.outputs.prerelease == 'true' }}
+          make_latest: ${{ steps.release.outputs.prerelease != 'true' }}
           fail_on_unmatched_files: true
-          body: |
-            ## Download
 
-            Tap the **BudgetGenius-${{ github.ref_name }}.apk** asset below
-            to download BudgetGenius for Android.
-
-            ## Install
-
-            1. Save the APK to your device.
-            2. Open it from your file manager (Downloads, Files, etc.).
-            3. If Android warns about installing from an unknown source,
-               open Settings → Apps → Special access → Install unknown
-               apps and grant permission to the file manager you used.
-            4. Tap Install. BudgetGenius is ready.
-
-            ## Notes
-
-            - This APK is signed with the standard Android debug keystore
-              (same certificate as every development install). It is fine
-              for personal use; a properly-signed APK will follow when the
-              Play Store rollout is ready.
-            - iOS — coming soon.
+      # The landing button is a plain `<a>` to this URL (no runtime GitHub API
+      # call, per DESIGN.md), so a release without the stable alias would ship
+      # a 404 to the public site. Fail the run instead of discovering it later.
+      - name: Verify the landing download URL serves this build
+        if: steps.release.outputs.publish == 'true' && steps.release.outputs.prerelease != 'true'
+        run: |
+          set -euo pipefail
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/BudgetGenius.apk"
+          # `/releases/latest` can lag a few seconds behind the upload, so retry
+          # the 404 window instead of failing on the first probe.
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -sSL -r 0-0 -o /dev/null -w '%{http_code}' "$url" || true)
+            if [[ "$code" == "200" || "$code" == "206" ]]; then
+              echo "::notice::$url serves the latest release (HTTP $code)."
+              exit 0
+            fi
+            echo "attempt ${attempt}: HTTP ${code:-no response} — retrying in 5s"
+            sleep 5
+          done
+          echo "::error::$url did not serve the APK — the landing download button would be broken."
+          exit 1

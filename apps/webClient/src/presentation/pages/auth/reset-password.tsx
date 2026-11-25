@@ -13,7 +13,7 @@ import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
 import { RoutePaths } from "@presentation/utils/routes";
 import { useMutation } from "@tanstack/react-query";
-import { Wallet } from "lucide-react";
+import { Wallet } from "@presentation/components/ui/animated-icons";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router";
@@ -119,7 +119,7 @@ export default function ResetPasswordPage() {
               required
             />
           </div>
-          {error && <p className="text-red-500">{error}</p>}{" "}
+          {error && <p className="text-rose-500">{error}</p>}{" "}
           <Button type="submit" className="w-full">
             {t("auth.resetPassword")}
           </Button>

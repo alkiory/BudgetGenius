@@ -1,0 +1,75 @@
+---
+import { Image } from "astro:assets";
+import mobile from "../assets/create_budget_mobile.png";
+import { appHref, getCopy, resolveApkHref, type Lang } from "../i18n";
+
+interface Props {
+  t: ReturnType<typeof getCopy>;
+  lang: Lang;
+}
+
+const { t, lang } = Astro.props;
+const d = t.sectionDownloadApp;
+// Build-time probe: the stable `BudgetGenius.apk` asset when it exists,
+// otherwise the newest release page (never a 404).
+const apkUrl = await resolveApkHref();
+---
+
+<section class="section" id="download">
+  <div class="container">
+    <div class="download" data-reveal>
+      <div>
+        <h2>{d.title}</h2>
+        <p>{d.subtitle}</p>
+
+        <div class="download-actions">
+          <a
+            class="btn btn-primary"
+            href={apkUrl}
+            rel="noopener"
+            data-icon-hover
+          >
+            <animate-icons
+              name="download"
+              size="18"
+              is-animated="false"
+              aria-hidden="true"
+            ></animate-icons>
+            {d.buttonLabel}
+          </a>
+          <span class="soon">{d.iosSoon}</span>
+        </div>
+
+        <p class="fineprint">{d.warning}</p>
+      </div>
+
+      <div class="download-art">
+        <div class="frame phone-frame">
+          <Image
+            src={mobile}
+            alt={d.regionAria}
+            format="webp"
+            widths={[200, 280, 360]}
+            sizes="(max-width: 960px) 55vw, 240px"
+            loading="lazy"
+            quality={76}
+          />
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="section-head center"
+      style="margin-top: 4rem; margin-bottom: 0;"
+      data-reveal
+    >
+      <h2>{t.sectionFinalCta.title}</h2>
+      <p>{t.sectionFinalCta.subtitle}</p>
+      <p style="margin-top: 1.5rem;">
+        <a class="btn btn-primary" href={appHref("/auth/signup")}>
+          {t.getStarted}
+        </a>
+      </p>
+    </div>
+  </div>
+</section>

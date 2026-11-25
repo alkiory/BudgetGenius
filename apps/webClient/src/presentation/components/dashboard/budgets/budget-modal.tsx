@@ -6,6 +6,20 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { BudgetForm } from "./budget-form";
 
+/** Extracts the API/transport message, falling back to a localized one. */
+const budgetErrorMessage = (
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  error: any,
+  fallback: string,
+): string => {
+  const data = error?.response?.data;
+  const apiMessage = Array.isArray(data?.message)
+    ? data.message[0]
+    : data?.message;
+  const message = apiMessage || error?.message || fallback;
+  return Array.isArray(message) ? message[0] : message;
+};
+
 interface BudgetModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -43,12 +57,11 @@ export function BudgetModal({
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        t("budgets.createError");
-      const errorMsg = Array.isArray(message) ? message[0] : message;
-      errorToast(errorMsg, 5000, "budget-create");
+      errorToast(
+        budgetErrorMessage(error, t("budgets.createError")),
+        5000,
+        "budget-create",
+      );
       console.error("Budget creation failed:", error);
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
     },
@@ -73,12 +86,11 @@ export function BudgetModal({
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        t("budgets.updateError");
-      const errorMsg = Array.isArray(message) ? message[0] : message;
-      errorToast(errorMsg, 5000, "budget-update");
+      errorToast(
+        budgetErrorMessage(error, t("budgets.updateError")),
+        5000,
+        "budget-update",
+      );
       console.error("Budget update failed:", error);
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
     },

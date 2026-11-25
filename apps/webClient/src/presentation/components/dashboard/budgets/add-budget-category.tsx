@@ -3,6 +3,7 @@ import { BUDGET_CATEGORY_OPTIONS } from "@domain/dashboard/budgets/budget.entity
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
+import { Select } from "@presentation/components/ui/select";
 import {
   CURRENCY_PRECISION_MAP,
   Currency,
@@ -16,14 +17,14 @@ export default function AddBudgetCategory({
   allocated,
   amountLabel,
   handleNewCategoryChange,
+  onCategoryNameChange,
   handleAddCategorySubmit,
 }: {
   name: string;
   allocated: string;
   amountLabel: string;
-  handleNewCategoryChange: (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => void;
+  handleNewCategoryChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onCategoryNameChange: (value: string) => void;
   handleAddCategorySubmit: () => void;
 }) {
   const { t } = useTranslation();
@@ -34,27 +35,26 @@ export default function AddBudgetCategory({
   const stepAttr = precision === 0 ? 1 : 1 / 10 ** precision;
 
   return (
-    <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+    <div className="rounded-lg border border-slate-200 p-4 dark:border-white/10">
       <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]">
         <div className="min-w-0 space-y-2">
           <Label htmlFor="new-category-name">
             {t("budgets.categoryField")}
           </Label>
-          <select
+          <Select
             id="new-category-name"
             name="name"
             value={name}
-            onChange={handleNewCategoryChange}
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-            required
-          >
-            <option value="">{t("transactions.selectCategory")}</option>
-            {BUDGET_CATEGORY_OPTIONS.map((category) => (
-              <option key={category} value={category}>
-                {t(`categories.${category.toLowerCase()}`)}
-              </option>
-            ))}
-          </select>
+            onChange={onCategoryNameChange}
+            placeholder={t("transactions.selectCategory")}
+            options={[
+              { value: "", label: t("transactions.selectCategory") },
+              ...BUDGET_CATEGORY_OPTIONS.map((category) => ({
+                value: category,
+                label: t(`categories.${category.toLowerCase()}`),
+              })),
+            ]}
+          />
         </div>
         <div className="min-w-0 space-y-2">
           <Label htmlFor="new-category-allocated">{amountLabel}</Label>

@@ -2,6 +2,95 @@
 
 ---
 
+## [v1.11.0] — 2026-11-25
+
+> Session: the animated-icon line and self-hosted typography across both surfaces. Every icon now animates from its parent component's hover/focus instead of its own, `lucide-react` is replaced by `@animateicons/react` (75-icon catalogue) and `@animateicons/vanilla`, Manrope ships locally in the SPA and the landing, Playfair Display is limited to the landing hero, and the footer credit reveals an animated coffee cup.
+
+### Added
+
+- **Parent-driven animated icons** — `apps/webClient/src/presentation/components/ui/animated-icon.tsx` wraps `@animateicons/react` behind the previous Lucide-style API and moves `hover`/`focus` to the nearest interactive ancestor (button, link, card), so hovering a card animates its icons instead of requiring the icon itself to be hovered. `animated-icons.tsx` is now the single icon catalogue/alias map, and the 43 files that imported `lucide-react` import from it instead.
+- **Animated coffee on the Alkiory credit** — `apps/landing/src/components/Footer.astro` animates the creator name on hover/`focus-visible` and reveals an `@animateicons/vanilla` coffee cup, steam included, at the end of the name. The cup sits in a zero-width wrapper because AnimateIcons does not animate an icon whose own box is 0 px wide.
+
+### Changed
+
+- **Typography** — Manrope (variable WOFF2 + OFL licence) is self-hosted from `apps/landing/src/assets/fonts` and `apps/webClient/src/assets/fonts`, replacing Google Fonts; the SPA no longer loads Google Fonts at all. Playfair Display styles only the landing hero `h1`, and every other landing section and the whole app render in Manrope, `CardDescription` included.
+- **Release-signed APK** — `.github/workflows/release-android.yml` decodes the `KEYSTORE_BASE64` secret into `$RUNNER_TEMP`, validates it with `keytool`, signs `assembleRelease` through `BG_*` environment variables (never the Gradle command line), checks the artifact with `apksigner`, optionally pins the signing certificate against the `RELEASE_CERT_SHA256` secret and publishes that APK instead of the debug build. `versionCode`/`versionName` are derived from the released tag (`v1.11.0` → `11100`), so each release installs over the previous one. `build-apk.yml` now only produces the debug artifact.
+- **Landing icon binding** — Features, Security, Download, Header and FAQ mark their containers with `data-icon-hover`, and `apps/landing/src/layouts/Base.astro` binds `mouseenter`/`mouseleave`/`focusin`/`focusout` immediately through a `WeakSet`, because waiting only on `customElements.whenDefined` left the listeners unbound on first paint. `prefers-reduced-motion` still disables every hover animation.
+
+### Fixed
+
+- **Cyrillic subset mixed into Latin text** — the Google Fonts Manrope response also served a Cyrillic `@font-face` with its own `unicode-range`, which some browsers picked for Latin copy and painted with a different face. Shipping the local Latin WOFF2 removes the mismatch.
+
+---
+
+## [v1.10.0] — 2026-11-24
+
+> Session: budget-attribution correctness, idempotent imports and the visual rewash. Transactions now carry an explicit `budgetCategoryId` FK with a deterministic fallback for legacy rows, the reconciliation screen lets the user assign the rows no rule can attribute, imports are replay-safe, and the whole UI moved to the teal token palette. This version also closes the quality gates: `check-types` is a real `tsc -b`, the API suite runs against a live database in CI, Swagger is development-only and Postgres is no longer published in production.
+
+### Added
+
+- **Explicit budget attribution (`1800000000012-TransactionBudgetCategoryLink`)** — `transactions.budgetCategoryId` (nullable FK → `budget_categories(id)`, `ON DELETE SET NULL`) plus `IDX_transactions_budgetCategoryId`. `TransactionService#resolveBudgetCategoryId` links an explicit id only when it belongs to the caller, and otherwise links only when exactly one candidate matches (budget window + case-insensitive category name); ambiguity stays `NULL`. When several budgets overlap, the winner is deterministic (monthly before annual, then most recent start, then lowest id), so a row can never be double-counted.
+- **Reconciliation queue** — `GET /api/budgets/reconciliation` lists the expenses inside a budget window whose text category matches none of its categories; `PUT /api/budgets/reconciliation/:id` requires an explicit choice that is validated against the budget window. Surfaced in the UI as a modal in _Budgets_. Renaming a category links the matching unlinked rows first, so historical totals do not move.
+- **Idempotent transaction import (`1800000000014-TransactionImportReceipts`)** — `POST /api/transactions/import` accepts an `Idempotency-Key`. The receipt and the rows are written in the same transaction: same key + same payload returns `201 { created: 0, replayed: true }`, same key + different payload returns `409`, and exact duplicate lines inside one payload are skipped and reported as `skippedDuplicates`.
+- **Transaction read indexes (`1800000000013-TransactionReadIndexes`)** — `IDX_transactions_userId_date` and `IDX_transactions_userId_budgetCategoryId`, both idempotent (`CREATE INDEX IF NOT EXISTS`). Verified with `EXPLAIN (ANALYZE, BUFFERS)` at 204k rows: no sequential scan on `transactions`.
+- **Real quality gates in CI** — the backend job now boots `postgres:15-alpine` and `redis:7.2-alpine`, creates `bg_public` and applies migrations before running Jest, so the DB-backed e2e specs run against real tables. A `frontend` job runs `check-types` and `build`.
+
+### Changed
+
+- **Budget overlap validation is scoped to `spending`** — a savings budget no longer blocks (or is blocked by) a spending budget or another savings goal; the check also re-runs when an update changes the type.
+- **Visual rewash** — the dashboard moved to the teal token palette (`index.css` / Tailwind tokens), loading indicators were unified across the app, and the sidebar, cards and time-based greetings were restyled and localised. Budget cards now share the same glass surface/border tokens as the transaction and progress cards.
+- **`check-types` is `tsc -b`** — the previous `tsc --noEmit` ran against a solution `tsconfig.json` with `files: []` and exited 0 without checking a single file. All 17 real type errors are fixed, and `_retry` / `_sessionRetry` / `_retryCount` are now declared on `AxiosRequestConfig` in `src/types/axios-augment.d.ts`.
+- **Workspace config** — per-skill `.gitignore` files and the `skills` directory list were added to `pnpm-workspace.yaml`, alongside the user-settings/currency follow-up on the `011` migration.
+
+### Fixed
+
+- **API suite back to green** — four specs were red on stale mocks/assertions rather than runtime regressions (`getCategoryBreakdown` vs `getCategoryBreakdowns`, `JwtAiGuard` vs the MVP `JwtAuthGuard`, a fixture without `date`, and an e2e suite that could not boot without `JWT_SECRET` or Firebase credentials). `test/setup-env.ts` + a `FIREBASE_ADMIN` override fix the environment, and the DELETE spec now asserts the real empty-body contract. Latest run: **23/23 suites, 199/199 tests**.
+- **Swagger is development-only** — `SwaggerModule.setup('docs', …)` is registered only when `NODE_ENV !== 'production'`, so the deployed API no longer publishes an unauthenticated endpoint map.
+- **Postgres is no longer published in production** — `docker-compose.prod.yml` dropped the `4002:5432` mapping; the database is reachable only from the internal `app-network`.
+
+---
+
+## [v1.9.0] — 2026-11-23
+
+> Session: security hardening and data normalisation across the API and the deployment. No new product surface; the goal was to stop leaking credentials and identity fields and to make the Docker stack safe by default.
+
+### Added
+
+- **`PublicUser` projection** — user responses are shaped before they leave the API, so `password` and `refreshToken` can no longer ride along on a profile payload.
+- **Helmet + CSP** on the API (`script-src 'self'`, `frame-ancestors 'none'`, `connect-src` built from the CORS allow-list) with explicit exemptions for Swagger UI and the Google OAuth custom-scheme shim.
+- **Email normalisation** — `1800000000009-UniqueLowercaseUserEmail` adds a unique index over the lowercased email, and `1800000000010-NormalizeUserEmails` backfills existing rows so signup and login compare the same value.
+- **Budget-category currency unification (`1800000000011-UnifyBudgetCategoryCurrency`)** — category amounts and the financial history read through the same currency rules as budgets.
+
+### Changed
+
+- **Web tokens are no longer persisted in `localStorage`** — the browser authenticates through the `HttpOnly` cookies and keeps the access/refresh pair in memory for the tab's lifetime; only the Capacitor WebView (which cannot rely on cross-origin cookies) keeps a durable copy.
+- **Docker secrets** — `.dockerignore` excludes `**/.env*` (except `.env.example`), so `COPY . .` no longer bakes production credentials into an image layer.
+- **Redis requires AUTH** — `docker-compose.prod.yml` and `docker-compose.gce.yml` start `redis-server --requirepass ${REDIS_PASSWORD:?}` and use a password-aware healthcheck, so the API cannot silently run against an open Redis.
+- **Tooling** — root `packageManager` bumped from `pnpm@12.18.0` to `pnpm@12.23.0` (the workflows keep installing `12.18.0` on the runner).
+
+---
+
+## [v1.8.0] — 2026-11-13
+
+> Session: per-user currency, import/report endpoints and money-rounding correctness. First release after v1.7.3.
+>
+> _Entries v1.8.0–v1.10.0 were never tagged; they are reconstructed from the commit history between `v1.7.3` and `HEAD`._
+
+### Added
+
+- **Currency per user (EUR / USD / COP)** — `UserSettings` gains the selected currency with validation, the onboarding wizard exposes it, and dashboard/report formatting reads it through the shared currency service instead of a hardcoded symbol.
+- **Import endpoints** — `POST /api/transactions/import` and `POST /api/expense-categories/import` accept bulk payloads (capped at 1,000 rows) so a statement can be loaded without one request per row.
+- **Report ranges** — overview by date range, category breakdown with income sources, weekly trend and savings growth, all scoped by the requesting `userId`.
+- **Money rounding (`1800000000007-RoundTransactionAmounts`)** — legacy float amounts (e.g. `62.787499999999994`) are persisted as two-decimal values.
+- **Budget types (`1800000000008-BudgetTypesAndManualSpending`)** — budgets carry an explicit `spending` / `savings` type and support manually entered spending.
+
+### Changed
+
+- `pnpm` pinned to `12.18.0` in the root `packageManager` and across the GitHub Actions workflows, with the dependency build-approval list (`allowBuilds`) declared in `pnpm-workspace.yaml`.
+- Transaction form coverage extended to editing and field preservation (Playwright).
+
+---
+
 ## [v1.7.3] — 2026-07-02
 
 > Session: v1.7.2 production follow-up — the danger-zone delete button's real DELETE call reached the backend (v1.7.2 cascade fix worked), but the controller rejected every legit self-delete with a 401 because `@Param('id') id: number` is a TS lie (NestJS extracts URL segments as STRINGS at runtime; the JWT claim carries a NUMBER). v1.7.3 ships `ParseIntPipe` on the param + optional-chaining on the comparison alongside a Jest e2e regression spec. Codified as `knowledge.md §6.8.6`. Postmortem at `rpi/delete-account-cleanup/postmortem.md`.

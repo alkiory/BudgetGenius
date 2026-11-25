@@ -1,4 +1,4 @@
-import { DollarSign, Sparkles } from "lucide-react";
+import { DollarSign, Sparkles } from "@presentation/components/ui/animated-icons";
 
 interface LogoProps {
   size?: "sm" | "md" | "lg" | "xl";
@@ -38,12 +38,15 @@ export function Logo({
     <div className={`flex items-center gap-2 ${className}`}>
       <div className={`relative ${sizeClasses[size]}`}>
         <div className="inset-0 flex items-center justify-center">
-          <div className="rounded-full bg-gradient-to-r from-purple-600 to-purple-400 p-1.5 shadow-lg">
-            <DollarSign className={`${iconSizeClasses[size]} text-white`} />
+          <div className="rounded-full bg-gradient-to-br from-teal-300 via-teal-400 to-cyan-500 p-1.5 shadow-[0_0_24px_-6px_rgb(45_212_191_/_0.85)]">
+            <DollarSign
+              className={`${iconSizeClasses[size]} text-slate-950`}
+              strokeWidth={2.5}
+            />
           </div>
         </div>
         <div className="absolute -right-1 -top-1">
-          <Sparkles className="h-4 w-4 text-purple-400" />
+          <Sparkles className="h-4 w-4 text-amber-400" />
         </div>
       </div>
 
@@ -52,7 +55,7 @@ export function Logo({
           <span
             className={`font-bold leading-none tracking-tight dark:text-white ${textSizeClasses[size]}`}
           >
-            Budget<span className="text-purple-600">Genius</span>
+            Budget<span className="text-gradient-teal">Genius</span>
           </span>
           <span className="text-xs text-slate-500 dark:text-slate-400">
             AI-Powered Finance

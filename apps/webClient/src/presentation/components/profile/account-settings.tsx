@@ -5,7 +5,7 @@ import { deleteUser, updateUserSettings } from "@application/user/user.service";
 import { UserSettings } from "@domain/user/userSettings";
 import { errorToast, successToast } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "@presentation/components/ui/animated-icons";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector, useDispatch } from "react-redux";
@@ -212,10 +212,10 @@ export function AccountSettings() {
         </form>
       </Card>
 
-      <Card className="border-red-200 dark:border-red-900 dark:bg-slate-950">
-        <CardHeader className="text-red-600 dark:text-red-500">
+      <Card className="border-rose-200 dark:border-rose-900 dark:bg-slate-950">
+        <CardHeader className="text-rose-600 dark:text-rose-500">
           <CardTitle>{t("settings.dangerZone")}</CardTitle>
-          <CardDescription className="text-red-600/80 dark:text-red-500/80">
+          <CardDescription className="text-rose-600/80 dark:text-rose-500/80">
             {t("settings.deleteWarning")}
           </CardDescription>
         </CardHeader>
@@ -226,16 +226,16 @@ export function AccountSettings() {
             </p>
           ) : (
             <div className="space-y-4">
-              <div className="rounded-md bg-red-50 p-4 dark:bg-red-900/20">
+              <div className="rounded-md bg-rose-50 p-4 dark:bg-rose-900/20">
                 <div className="flex items-start">
                   <div className="flex-shrink-0">
-                    <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-500" />
+                    <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-500" />
                   </div>
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-600 dark:text-red-500">
+                    <h3 className="text-sm font-medium text-rose-600 dark:text-rose-500">
                       {t("settings.warning")}
                     </h3>
-                    <div className="mt-2 text-sm text-red-600/80 dark:text-red-500/80">
+                    <div className="mt-2 text-sm text-rose-600/80 dark:text-rose-500/80">
                       <p>{t("profile.deleteConfirmationWarning")}</p>
                     </div>
                   </div>
@@ -245,7 +245,7 @@ export function AccountSettings() {
               <div className="space-y-2">
                 <Label
                   htmlFor="confirm-delete"
-                  className="text-red-600 dark:text-red-500"
+                  className="text-rose-600 dark:text-rose-500"
                 >
                   {" "}
                   {t("settings.typeToConfirm", {
@@ -256,7 +256,7 @@ export function AccountSettings() {
                   id="confirm-delete"
                   value={confirmText}
                   onChange={(e) => setConfirmText(e.target.value)}
-                  className="border-red-200 focus-visible:ring-red-500 dark:border-red-900"
+                  className="border-rose-200 focus-visible:ring-rose-500 dark:border-rose-900"
                 />
               </div>
             </div>

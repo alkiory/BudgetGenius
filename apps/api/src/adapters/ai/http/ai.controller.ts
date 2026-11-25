@@ -1,20 +1,59 @@
-import { Controller, Post, Body, UseGuards, Request } from '@nestjs/common';
-import { AiService } from '@application/ai/ai.service';
-import { JwtAiGuard } from '@infrastructure/ai/guard/jwt-ai.guard';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Post,
+  Request,
+  ServiceUnavailableException,
+  UseGuards,
+} from '@nestjs/common';
+import { AiService, FinnyConfigError } from '@application/ai/ai.service';
+import { JwtAuthGuard } from '@infrastructure/auth/guards/jwt-auth.guard';
 
 @Controller('ai')
-@UseGuards(JwtAiGuard)
+@UseGuards(JwtAuthGuard)
 export class AiController {
   constructor(private readonly aiService: AiService) {}
 
   @Post('analysis')
-  async analyze(@Request() req, @Body() financialData: any) {
-    // `req.user.id` was undefined because JwtStrategy.validate exposes the
-    // payload as { userId, email, role } (see jwt.strategy.ts). Reading
-    // `req.user.userId` actually populates the AI service with a valid
-    // foreign key into the users table — previously the AI service was
-    // fetching some unrelated user (or none) via `userService.getById(undefined)`.
+  async analyze(@Request() req, @Body() body: any) {
+    // JwtStrategy.validate exposes { userId, email, role }.
     const userId = req.user.userId;
-    return this.aiService.analyzeFinancialData(userId, financialData);
+
+    // The Finny rail sends { prompt, context }. Keep accepting a bare
+    // string/object body for backwards compatibility with earlier callers.
+    const prompt =
+      typeof body === 'string'
+        ? body
+        : typeof body?.prompt === 'string'
+        ? body.prompt
+        : typeof body?.message === 'string'
+        ? body.message
+        : '';
+
+    if (!prompt.trim()) {
+      throw new BadRequestException('A prompt is required');
+    }
+
+    const context =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? body.context
+        : undefined;
+
+    try {
+      return await this.aiService.analyzeFinancialData(
+        userId,
+        prompt.trim(),
+        context,
+      );
+    } catch (error) {
+      if (error instanceof FinnyConfigError) {
+        throw new ServiceUnavailableException({
+          code: error.code,
+          message: error.message,
+        });
+      }
+      throw error;
+    }
   }
 }

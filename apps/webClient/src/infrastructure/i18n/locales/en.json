@@ -118,6 +118,7 @@
         "resetLinkSent": "We've sent a password reset link to your email address",
         "checkSpamFolder": "If you don't see the email in your inbox, please check your spam folder. The link will expire in 24 hours.",
         "returnToLogin": "Return to login",
+        "emailInUse": "That email already belongs to an account. Sign in with your password, or use a different address.",
         "accountReauth": {
             "title": "Google sign-in needs the SHA-1 to be registered",
             "body": "Your APK can't complete Google sign-in because the keystore SHA-1 isn't registered in Firebase / Google Cloud. Follow these steps to register it:",
@@ -132,7 +133,36 @@
     },
     "dashboard": {
         "title": "Dashboard",
-        "welcomeBack": "Welcome back, {{name}}! Here's an overview of your finances.",
+        "welcomeBack": "Welcome back, <highlight>{{name}}</highlight>! {{greeting}}",
+        "greetings": {
+            "morning": [
+                "It's a great day to review your finances.",
+                "Start your morning with your accounts up to date.",
+                "A quick check now brings peace of mind all day.",
+                "Good morning, let's see how your goals are progressing today.",
+                "New morning, new opportunities to save.",
+                "Begin the day with clarity on your budget.",
+                "Grab a coffee and take a quick look at your numbers."
+            ],
+            "afternoon": [
+                "A coffee for this afternoon or early evening.",
+                "How is your budget looking so far today?",
+                "Great time this afternoon to catch up on your expenses.",
+                "Take a short break and check today's balance.",
+                "Your afternoon summary is ready for you.",
+                "Stay on track with your goals before the day wraps up.",
+                "A quick afternoon review keeps everything under control."
+            ],
+            "night": [
+                "Wrap up the day by checking how your finances moved.",
+                "Good evening, here is the summary of your day.",
+                "Before winding down, take a quick look at your balance.",
+                "A quiet evening moment to plan for tomorrow.",
+                "Everything is ready to close out your numbers for the day.",
+                "Review your latest transactions and rest easy.",
+                "Evening is a great time to fine-tune your savings goals."
+            ]
+        },
         "overview": "Financial Overview",
         "recentTransactions": "Recent Transactions",
         "budgetProgress": "Budget Progress",
@@ -243,6 +273,16 @@
         "budgetHealthy": "You're within budget. Keep it up!",
         "createError": "Failed to create budget",
         "updateError": "Failed to update budget",
+        "reconcileWithCount": "Reconcile expenses ({{total}})",
+        "reconcileTitle": "Reconcile historical expenses",
+        "reconcileDescription": "These expenses fall inside a spending budget, but their category matches none of that budget's categories. Choose which category they belong to so history stops depending on text.",
+        "reconcilePending": "Pending reconciliation: {{total}}",
+        "reconcileBudget": "Budget",
+        "reconcileChooseCategory": "Choose category",
+        "reconcileAssign": "Assign",
+        "reconcileEmpty": "No expenses pending reconciliation.",
+        "reconcileSuccess": "Expense assigned to the category",
+        "reconcileError": "Failed to assign the expense",
         "budgetName": "Budget Name",
         "budgetPeriod": "Budget Period",
         "budgetCategories": "Budget Categories",
@@ -536,7 +576,46 @@
     },
     "theme": {
         "light": "Light",
-        "dark": "Dark"
+        "dark": "Dark",
+        "switchToDark": "Switch to dark mode",
+        "switchToLight": "Switch to light mode"
+    },
+    "finny": {
+        "title": "Finny",
+        "subtitle": "Your AI financial sidekick",
+        "open": "Open Finny",
+        "close": "Close Finny",
+        "collapse": "Collapse Finny",
+        "expand": "Expand Finny",
+        "online": "Online",
+        "offline": "Unavailable",
+        "setup": {
+            "badge": "Setup needed",
+            "missing": {
+                "title": "Finny needs an API key",
+                "body": "Add AGENT_API_KEY to the API environment and restart it. The key stays on the server."
+            },
+            "invalid": {
+                "title": "Finny's API key was rejected",
+                "body": "Replace AGENT_API_KEY with an active key and restart the API."
+            },
+            "placeholder": "Finny is offline until the key is configured",
+            "retry": "Try again"
+        },
+        "insightsTitle": "Insights",
+        "budgetRisk": "{{count}} budget(s) at risk",
+        "onTrack": "Budgets on track",
+        "onTrackDesc": "No category has exceeded its limit.",
+        "topCategory": "Top spending: {{category}}",
+        "topCategoryDesc": "{{amount}} this period.",
+        "savings": "Savings rate {{rate}}%",
+        "savingsDesc": "Income minus expenses for the current period.",
+        "conversation": "Conversation",
+        "ask": "Ask Finny about your money...",
+        "send": "Send to Finny",
+        "thinking": "Finny is thinking...",
+        "error": "I couldn't connect right now. Try again in a moment.",
+        "disclaimer": "Finny can make mistakes. Check important numbers."
     },
     "sidebar": {
         "investments": "Investments",
@@ -817,7 +896,10 @@
             "subtitle": "How the app got better, one release at a time.",
             "regionAria": "Changelog timeline",
             "footerLink": "What's new",
-            "newBadge": "New"
+            "newBadge": "New",
+            "latestBadge": "Latest",
+            "latestRelease": "Latest release",
+            "backHome": "Back to home"
         }
     },
     "demo": {
@@ -1012,6 +1094,31 @@
         "offlineMessage": "You're offline — changes will sync when reconnected",
         "syncingPending": "Syncing pending changes...",
         "savedOffline": "Saved offline — will sync when connection returns"
+    },
+    "tour": {
+        "progress": "{{current}} of {{total}}",
+        "next": "Next",
+        "previous": "Back",
+        "done": "Got it",
+        "changelogCta": "Open the full changelog",
+        "onboarding": {
+            "welcomeTitle": "You're all set",
+            "welcomeBody": "Your preferences are saved. Here's a 60-second tour of where everything lives.",
+            "navTitle": "Every area, one click away",
+            "navBody": "Dashboard, transactions, budgets, reports and income all live in this sidebar.",
+            "addTitle": "Log your first transaction",
+            "addBody": "Use the + button to record income or an expense. Categorizing takes a second.",
+            "finnyTitle": "Meet Finny",
+            "finnyBody": "Ask Finny about spending, budgets or trends in English or Spanish.",
+            "releaseTitle": "Release notes live here",
+            "releaseBody": "The version badge opens the changelog whenever something new ships."
+        },
+        "whatsNew": {
+            "title": "What's new in v{{version}}",
+            "body": "A refreshed landing page, password recovery by email and a smoother dashboard.",
+            "changelogTitle": "See the full changelog",
+            "changelogBody": "Every release is documented here — open it any time from the version badge."
+        }
     },
     "maintenance": {
         "title": "We're down for maintenance",

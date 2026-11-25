@@ -12,15 +12,27 @@ const config = {
   theme: {
     extend: {
       fontFamily: {
-        display: ['"system-ui"', '"Avenir"', '"Helvetica"', '"Arial"', 'sans-serif'],
-        serif: [
-          '"Playfair Display"',
-          'ui-serif',
-          'Georgia',
-          'Cambria',
-          '"Times New Roman"',
-          'Times',
-          'serif',
+        sans: [
+          '"Manrope"',
+          'ui-sans-serif',
+          'system-ui',
+          '-apple-system',
+          '"Segoe UI"',
+          'Roboto',
+          '"Helvetica Neue"',
+          'Arial',
+          'sans-serif',
+        ],
+        display: [
+          '"Manrope"',
+          'ui-sans-serif',
+          'system-ui',
+          '-apple-system',
+          '"Segoe UI"',
+          'Roboto',
+          '"Helvetica Neue"',
+          'Arial',
+          'sans-serif',
         ],
       },
       colors: {
