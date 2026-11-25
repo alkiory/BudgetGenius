@@ -19,6 +19,7 @@
 - **Budget overlap validation is scoped to `spending`** — a savings budget no longer blocks (or is blocked by) a spending budget or another savings goal; the check also re-runs when an update changes the type.
 - **Visual rewash** — the dashboard moved to the teal token palette (`index.css` / Tailwind tokens), loading indicators were unified across the app, and the sidebar, cards and time-based greetings were restyled and localised. Budget cards now share the same glass surface/border tokens as the transaction and progress cards.
 - **`check-types` is `tsc -b`** — the previous `tsc --noEmit` ran against a solution `tsconfig.json` with `files: []` and exited 0 without checking a single file. All 17 real type errors are fixed, and `_retry` / `_sessionRetry` / `_retryCount` are now declared on `AxiosRequestConfig` in `src/types/axios-augment.d.ts`.
+- **Workspace config** — per-skill `.gitignore` files and the `skills` directory list were added to `pnpm-workspace.yaml`, alongside the user-settings/currency follow-up on the `011` migration.
 
 ### Fixed
 
@@ -44,7 +45,7 @@
 - **Web tokens are no longer persisted in `localStorage`** — the browser authenticates through the `HttpOnly` cookies and keeps the access/refresh pair in memory for the tab's lifetime; only the Capacitor WebView (which cannot rely on cross-origin cookies) keeps a durable copy.
 - **Docker secrets** — `.dockerignore` excludes `**/.env*` (except `.env.example`), so `COPY . .` no longer bakes production credentials into an image layer.
 - **Redis requires AUTH** — `docker-compose.prod.yml` and `docker-compose.gce.yml` start `redis-server --requirepass ${REDIS_PASSWORD:?}` and use a password-aware healthcheck, so the API cannot silently run against an open Redis.
-- **Tooling** — `packageManager` pinned to `pnpm@12.23.0`, workspace `allowBuilds` declared in `pnpm-workspace.yaml`, and skill directories added to the workspace config.
+- **Tooling** — root `packageManager` bumped from `pnpm@12.18.0` to `pnpm@12.23.0` (the workflows keep installing `12.18.0` on the runner).
 
 ---
 
@@ -64,7 +65,7 @@
 
 ### Changed
 
-- `pnpm` pinned to `12.18.0` across the GitHub Actions workflows.
+- `pnpm` pinned to `12.18.0` in the root `packageManager` and across the GitHub Actions workflows, with the dependency build-approval list (`allowBuilds`) declared in `pnpm-workspace.yaml`.
 - Transaction form coverage extended to editing and field preservation (Playwright).
 
 ---

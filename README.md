@@ -216,7 +216,7 @@ BudgetGenius/
 ### Prerequisites
 
 - **Node.js** v18 or higher
-- **pnpm** v10.x (install: `npm install -g pnpm`)
+- **pnpm** v12.23.0 (install: `npm install -g pnpm@12.23.0`; the exact version is pinned by `packageManager` in the root `package.json`)
 - **Docker** & **Docker Compose** (for PostgreSQL and Redis)
 
 ---
