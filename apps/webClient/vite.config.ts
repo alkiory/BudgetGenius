@@ -6,7 +6,28 @@ import { readFileSync } from "fs";
 
 // Inject build version from env var (CI) or fall back to package.json version + git hash
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf-8"));
-const appVersion = process.env.VITE_APP_VERSION || `${pkg.version}-dev`;
+// The released version lives in the root package.json (bumped by the release
+// flow); this app's own version is not kept in lockstep with it. Deployments
+// that check out only this directory fall back to the local version.
+let releaseVersion = String(pkg.version);
+try {
+  const rootPkg = JSON.parse(
+    readFileSync(new URL("../../package.json", import.meta.url), "utf-8"),
+  );
+  if (rootPkg.version) releaseVersion = String(rootPkg.version);
+} catch {
+  // Monorepo metadata not available; keep the app version.
+}
+// Release builds export the tag (`v1.11.0`); strip the `v` because the badge
+// already renders its own prefix. Without VITE_APP_VERSION (Vercel/Firebase
+// builds) fall back to the real version, never to a `-dev` suffix: that
+// suffix must only ever appear on a local dev server.
+const rawVersion = process.env.VITE_APP_VERSION?.trim();
+const appVersion = rawVersion
+  ? rawVersion.replace(/^v/i, "")
+  : process.env.NODE_ENV === "development"
+    ? `${releaseVersion}-dev`
+    : releaseVersion;
 
 export default defineConfig({
   // The SPA is mounted under /app/ in production so the Astro landing can own

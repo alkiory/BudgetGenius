@@ -36,11 +36,14 @@ __pycache__/
 # Local agent tooling and design-review artifacts (never commit)
 .claude/
 .cursor/
+.gemini/
+.agent/
 .agents/
 .impeccable/
 .screenshots/
 /screenshots/
 /.cloud-attachments/
+.vscode/
 
 # Test/browser captures
 playwright-report/

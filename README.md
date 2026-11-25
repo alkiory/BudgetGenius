@@ -712,6 +712,16 @@ If you see CORS errors in the emulator's WebView, make sure the backend's CORS a
 - **Database:** AWS RDS PostgreSQL (production) / Docker PostgreSQL (development)
 - **Cache:** Redis (Docker in development, managed service in production)
 
+#### Production environment file
+
+`docker-compose.prod.yml` reads the secrets it interpolates (`DB_PASSWORD` and `REDIS_PASSWORD`) from the root `.env` on the server; the backend-specific settings still come from `apps/api/.env.production`. The stack refuses to start if `REDIS_PASSWORD` is missing, because Redis runs with `--requirepass`:
+
+```bash
+# Generate once, keep it: the same password must survive every redeploy.
+grep -q '^REDIS_PASSWORD=' .env || printf 'REDIS_PASSWORD=%s\n' "$(openssl rand -hex 24)" >> .env
+docker compose -f docker-compose.prod.yml up -d
+```
+
 ---
 
 ## 🧪 Testing

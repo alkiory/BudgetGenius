@@ -1,4 +1,5 @@
 import { isNativePlatform } from "@infrastructure/native";
+import { resolveLandingBase } from "./landing";
 
 export enum RouteNames {
   Dashboard = "Dashboard",
@@ -77,7 +78,6 @@ const publicSite =
 const landingBase = () =>
   isNativePlatform()
     ? publicSite
-    : (import.meta.env.VITE_LANDING_URL ??
-      (import.meta.env.DEV ? "http://localhost:4321" : ""));
+    : resolveLandingBase(import.meta.env.VITE_LANDING_URL, import.meta.env.DEV);
 
 export const landingHref = (path: string) => `${landingBase()}${path}`;

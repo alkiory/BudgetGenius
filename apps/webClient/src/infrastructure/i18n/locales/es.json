@@ -1,4 +1,9 @@
 {
+  "charts": {
+    "group": "Agrupar",
+    "showAll": "Ver todas",
+    "other": "Otras"
+  },
   "app": {
     "name": "Budget Genius",
     "tagline": "Gestión inteligente de finanzas personales"

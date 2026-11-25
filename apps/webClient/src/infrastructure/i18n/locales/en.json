@@ -1,4 +1,9 @@
 {
+    "charts": {
+        "group": "Group",
+        "showAll": "Show all",
+        "other": "Other"
+    },
     "app": {
         "name": "Budget Genius",
         "tagline": "Smart personal finance management"
