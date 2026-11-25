@@ -74,7 +74,7 @@ export const APP_PATHS = {
  * the static page from the same origin. Set VITE_LANDING_URL to override.
  */
 const publicSite =
-  import.meta.env.VITE_PUBLIC_SITE_URL ?? "https://budgetgenius.com";
+  import.meta.env.VITE_PUBLIC_SITE_URL ?? "https://budgetgeniusia.web.app";
 const landingBase = () =>
   isNativePlatform()
     ? publicSite
