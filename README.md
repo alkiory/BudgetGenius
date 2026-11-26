@@ -9,9 +9,20 @@
 <p align="center">
   <img src="https://img.shields.io/badge/status-active-brightgreen" alt="Status" />
   <img src="https://img.shields.io/badge/license-UNLICENSED-blue" alt="License" />
-  <img src="https://img.shields.io/badge/version-v1.11.0-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v1.12.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen" alt="Node" />
+  <a href="https://paypal.me/SergioCampbelldev" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
 </p>
+
+## ✨ What's New in v1.12.0
+
+- **Guided catalogue** — step-by-step modules such as the **Emergency fund**, with its 4-week plan, checklist and FAQ.
+- **A calculator with your real numbers** — the emergency fund reads your last six months of expenses and turns the 3–6 month target into a real savings goal.
+- **Every contribution is a dated transaction** — choose the day you put the money aside and it appears in Transactions as a savings movement.
+- **Goals stay in sync** — edit or delete a contribution and the goal follows; savings never count as spending in reports.
+- **Backoffice page editor** — write the module pages, reorder tabs, add blocks and upload images without a deploy.
+
+Full history in [`docs/changelog.md`](docs/changelog.md).
 ---
 
 ## 📖 Table of Contents
@@ -46,6 +57,7 @@ The application follows a **Clean Architecture** pattern across both its fronten
 - **Budget Planning** — Create custom budgets with categorized allocations and real-time spending tracking
 - **Financial Goals** — Set short-term and long-term goals with progress visualization
 - **Savings Goals** — Track saving progress with target dates and percentage completion *(Premium)*
+- **Guided Catalogue** — Practical modules with their own pages, calculators and checklists
 - **Investment Tracking** — Monitor investment portfolio performance *(Premium)*
 - **Reports & Analytics** — Generate detailed financial reports with charts *(Premium)*
 - **AI Financial Assistant ("Finny")** — Get personalized insights and advice powered by OpenAI
@@ -700,17 +712,37 @@ If you see CORS errors in the emulator's WebView, make sure the backend's CORS a
 
 | Workflow | Trigger | Actions |
 |----------|---------|---------|
-| **CI/CD** | Push to `main`, PR to `main`/`dev` | Backend: test → build Docker → push to registry → deploy via SSH; Frontend: test |
-| **Playwright** | Push/PR to `main`/`dev` | E2E browser tests |
-| **Firebase Merge** | Push to `main` | Deploy frontend to Firebase Hosting |
-| **Firebase PR** | Pull request | Preview channel deployment |
+| **CI** (`.github/workflows/ci.yml`) | Push to `main`/`dev`/`feature*`, PR to `main`/`dev`, manual | API: migrations → tests → build. Web: typecheck → unit tests → landing + SPA build |
+| **Deploy** (`.github/workflows/deploy.yml`) | Push to `main`, manual | Verify → API image to DockerHub → pull/restart on GCE; landing + SPA → Firebase Hosting |
+| **Build Android APK** | Push/PR to `main`/`dev` | Debug APK artifact |
+| **Release Android** | Version tag | Signed APK on the GitHub Release |
 
 ### Deployment Architecture
 
-- **Frontend:** Vercel (primary) + Firebase Hosting (static assets)
-- **Backend:** Docker container deployed via SSH to VPS
-- **Database:** AWS RDS PostgreSQL (production) / Docker PostgreSQL (development)
-- **Cache:** Redis (Docker in development, managed service in production)
+- **Frontend:** Firebase Hosting (primary); Vercel can serve the same `dist/`
+- **Backend:** Docker container on GCE, image pulled from DockerHub
+- **Database:** PostgreSQL on the VM (compose) / Docker PostgreSQL (development)
+- **Cache:** Redis on the VM (compose, password-protected) / Docker Redis (development)
+
+#### Required GitHub secrets and variables
+
+The **Deploy** workflow fails fast if a required secret is missing:
+
+| Scope | Secrets / variables |
+|-------|--------------------|
+| API + GCE | `DOCKER_USERNAME`, `DOCKER_PASSWORD`, `GCE_HOST`, `GCE_USER`, `GCE_SSH_KEY`, `DB_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET` |
+| API runtime | `OPENAI_API_KEY`, `FRONTEND_URL`, `COOKIE_DOMAIN`, `RESEND_API_KEY`, `MAIL_FROM`, `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`, `PROVIDER_KEYS_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` |
+| Web build | `VITE_API_URL`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MEASUREMENT_ID`, `FIREBASE_SERVICE_ACCOUNT_BUDGETGENIUSIA` |
+| Variables | `PUBLIC_APP_URL`, `PUBLIC_APK_URL` (optional) |
+
+Push to `main` deploys automatically. To deploy the current branch without
+merging, run **Actions → Deploy → Run workflow** and pick the ref.
+
+```bash
+# Local production build (same artifact the deploy publishes)
+pnpm --filter api build   # apps/api/dist
+pnpm build:web             # dist/ → landing at /, SPA at /app/
+```
 
 #### Production environment file
 
@@ -867,7 +899,7 @@ REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_URL=redis://localhost:6379
 
-# OpenAI (optional — for AI assistant "Finny")
+# OpenAI (optional — legacy report insights only; Finny keys live in the backoffice)
 OPENAI_API_KEY=sk-...
 
 # OAuth (optional)
@@ -913,6 +945,132 @@ See `.env.example` files in each app directory for the full list of available va
 - [`apps/landing/.env.example`](apps/landing/.env.example)
 
 ---
+
+## 🛡️ Superadmin backoffice
+
+The app has an operator surface for running the product itself — not for
+browsing accounts. It is gated by the `superadmin` role (`user` and `admin`
+are both rejected by the API).
+
+**Operator account.** Set `SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD`; on boot
+the seeder creates that account, or promotes an existing one with that email.
+In development a local fallback is used (`superadmin@admin.com` /
+`#Password123`). Nothing is seeded when both variables are empty.
+
+**Schema.** The backoffice tables (`app_modules`, `app_api_keys`,
+`app_notifications`) are created by migration `1800000000015`; migration
+`1800000000016` stores the announcement windows as `timestamptz` so
+"publish now" is timezone-safe:
+
+```bash
+pnpm --filter api migration:run
+```
+
+**Routes** (all `GET/POST/PUT/DELETE /api/superadmin/*`, JWT + role guard):
+
+| Route | Purpose |
+|---|---|
+| `/superadmin/overview` | Aggregate usage: users, transactions, data volumes, 6-month activity |
+| `/superadmin/modules` | Product module inventory (status, version, core flag) |
+| `/superadmin/api-keys` | Issue keys (secret shown once, only its SHA-256 hash is stored), revoke, delete |
+| `/superadmin/provider-keys` | Finny provider keys: create, reveal, reorder, disable, delete; used with failover |
+| `/superadmin/notifications` | Announcements with level, audience, publish and expiry |
+
+**In the app.** The sidebar shows a *Backoffice* entry for a superadmin at
+`/app/superadmin`; the same role check protects the route client-side, but the
+API is the real boundary.
+
+### What each backoffice area actually does
+
+- **Módulos** is the product catalogue. A row is `key` (stable machine id),
+  `name`, `kind` (`module` = whole feature, `component` = reusable UI piece,
+  `integration` = external service), `category`, `status`, `version` and
+  `isCore` (cannot be disabled or deleted). Active and beta rows are served by
+  `GET /api/modules` and shown to every user under **Módulos** in the sidebar;
+  disabling a row removes it from that page on the next sync, and beta entries
+  carry a badge. `isCore` blocks disabling/deleting on the write side.
+- **API keys** issues machine credentials (`bg_live_…`). Only the SHA-256 hash
+  is stored, so the secret is shown once. These are for machine clients, not
+  Finny, and are not validated by any endpoint yet — they are the registry for
+  future machine-to-machine access.
+- **Claves de Finny** (inside the API keys tab) stores the provider
+  credentials the assistant uses. They are sealed with AES-256-GCM at rest and
+  the superadmin can reveal them again. Enabled keys are tried in `priority`
+  order: when one is rejected, rate-limited or unreachable, the API records
+  `lastError` on that row and retries with the next key. That table is the
+  only source of credentials — the server environment is no longer read — so
+  rotating a key never needs a deploy.
+- **Avisos** publishes announcements to users. Leaving the schedule empty saves
+  a draft; setting a date publishes it with that `publishedAt`, and the app
+  reveals it on the first poll after that moment (no cron). `expiresAt` retires
+  it automatically. Levels are presentational: `info` (neutral), `success`
+  (positive/confirmation), `warning` (attention, app still healthy) and
+  `critical` (something is broken or urgent). Audience filters by plan
+  (`all`, `free`, `premium`).
+
+### Finny's provider key
+
+`FINNY_INVALID_KEY` means every configured credential was rejected by the
+model provider. Keys are managed in **Backoffice → API keys → Claves de
+Finny**, so rotating or adding contingency does not require a server change:
+
+1. Add the new provider key with a label and a priority (lower runs first).
+2. Optionally disable the old one; the next prompt already uses the new list.
+3. The list shows the last provider error per key, which is what `FINNY_INVALID_KEY`
+   was reporting.
+
+Selection happens on every prompt, in `AiService.resolveKeys()`: active
+backoffice rows ordered by `priority` then `createdAt`. Each candidate is tried
+in turn and the first answer wins; a rejection or provider failure records
+`lastFailedAt`/`lastError` on the row and moves on inside the same request —
+there is no cron and no separate rotation job. A success clears that failure,
+so a key that recovers returns to the front of the chain by itself.
+
+Expiry cannot be predicted: an API key carries no expiry date the API can read,
+so an expiring key is only noticed when the provider starts rejecting it, and
+the next key answers that same prompt. A key that failed stays out of the
+healthy set for 15 minutes, which is what keeps Finny visibly asleep until a
+different key answers.
+
+`GET /api/ai/status` reports the resolved chain without calling the provider:
+`{ available, reason, activeKeys, firstKey }`, where `reason` is
+`FINNY_NOT_CONFIGURED`, `FINNY_INVALID_KEY` (every failure was an auth
+rejection) or `FINNY_PROVIDER_ERROR`. The Finny rail reads it on open, so the
+launcher shows Finny asleep (closed eyes, pink glow) instead of waiting for a
+failed prompt, and the API keys tab shows the same snapshot above the list.
+
+The key is stored encrypted with `PROVIDER_KEYS_SECRET` (falling back to
+`JWT_SECRET`). If that secret is rotated, existing rows become undecryptable
+and must be re-entered. With no active key in the backoffice, Finny reports
+`FINNY_NOT_CONFIGURED`; `AGENT_API_KEY` and `OPENAI_API_KEY` in the API
+environment are ignored by the assistant.
+
+A non-OpenAI key (for example a free-tier gateway key) is rejected by
+`api.openai.com` with `FINNY_INVALID_KEY`. Add a valid OpenAI key in the
+backoffice instead of editing the server.
+
+### Cross-device sync and announcements
+
+- `GET /api/modules` returns the active/beta catalogue (modules, components,
+  integrations) rendered on the app's **Módulos** page.
+- `GET /api/sync/revision` returns a small revision string derived from the
+  user's transactions, budgets, categories, settings, modules and live announcements.
+  The SPA and the APK poll it (15 s, paused in background), and when it changes
+  they invalidate the dashboard/report queries. That is what makes a
+  transaction created on the phone appear on the desktop without a refresh.
+- `GET /api/notifications` returns the live announcements for the signed-in
+  user (audience + publish/expiry window). The app renders the newest one as a
+dismissible banner.
+
+Sessions last **7 days**: the access token, the refresh token and the cookie
+max-age all use `7d`, so returning after more than an hour no longer forces a
+re-login.
+
+The overview's **Transacciones por mes** panel is the global count of ledger
+rows per month for the last six months, scaled against the busiest month; the
+`/superadmin/overview` response also exposes `activity[].amount` (sum of the
+month's amounts) for future reporting. The module card breaks its count down by
+kind instead of counting components as modules.
 
 ## 🌐 Web Surfaces & Password Recovery
 

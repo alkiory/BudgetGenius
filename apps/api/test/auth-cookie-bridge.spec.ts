@@ -112,7 +112,10 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
     login: jest.Mock;
     signup: jest.Mock;
     refreshToken: jest.Mock;
+    addTokenToBlacklist: jest.Mock;
+    invalidateRefreshToken: jest.Mock;
   };
+  let jwtService: { sign: jest.Mock; verify: jest.Mock };
 
   beforeEach(() => {
     // The cookieService mock mirrors the production class's
@@ -163,17 +166,20 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
         isNewUser: true,
       }),
       refreshToken: jest.fn().mockResolvedValue(undefined),
+      addTokenToBlacklist: jest.fn().mockResolvedValue(undefined),
+      invalidateRefreshToken: jest.fn().mockResolvedValue(undefined),
     };
 
     const userService = {
       findByEmail: jest.fn(),
       createUser: jest.fn(),
     };
-    const jwtService = {
+    jwtService = {
       sign: jest.fn().mockReturnValue('fresh-rotated-access-token'),
       verify: jest.fn().mockReturnValue({
         id: mockUserEntity.id,
         sub: mockUserEntity.id,
+        typ: 'refresh',
       }),
     };
     const logger = {
@@ -434,6 +440,24 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
       expect(authService.refreshToken).toHaveBeenCalledTimes(1);
     });
 
+    it('rejects an access token presented as a refresh token', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const req: any = {
+        cookies: { refreshToken: 'access-token-sent-to-refresh' },
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res: any = {};
+      (jwtService.verify as jest.Mock).mockReturnValueOnce({
+        id: mockUserEntity.id,
+        typ: 'access',
+      });
+
+      await expect(controller.refreshToken(req, res)).rejects.toMatchObject({
+        status: 401,
+      });
+      expect(authService.refreshToken).not.toHaveBeenCalled();
+    });
+
     it('throws HTTP 401 when no refresh cookie is attached', async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const req: any = { cookies: {} };
@@ -513,6 +537,51 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
         expect.anything(),
         'header-persisted-refresh-token',
       );
+    });
+  });
+
+  describe('logout', () => {
+    it('does not revoke Redis state when the token signature is invalid (CWE-347)', async () => {
+      (jwtService.verify as jest.Mock).mockImplementationOnce(() => {
+        throw new Error('invalid signature');
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const req: any = {
+        cookies: {},
+        headers: { authorization: 'Bearer forged-token' },
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res: any = {};
+
+      const body = await controller.logout(req, res);
+
+      expect(body).toMatchObject({ success: true });
+      expect(authService.addTokenToBlacklist).not.toHaveBeenCalled();
+      expect(authService.invalidateRefreshToken).not.toHaveBeenCalled();
+      expect(cookieService.clearCookie).toHaveBeenCalledWith(res, 'accessToken');
+      expect(cookieService.clearCookie).toHaveBeenCalledWith(res, 'refreshToken');
+    });
+
+    it('revokes both blacklist and refresh session for a verified access token', async () => {
+      (jwtService.verify as jest.Mock).mockReturnValueOnce({
+        id: 42,
+        typ: 'access',
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const req: any = {
+        cookies: { accessToken: 'verified-access-token' },
+        headers: {},
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res: any = {};
+
+      const body = await controller.logout(req, res);
+
+      expect(body).toMatchObject({ success: true });
+      expect(authService.addTokenToBlacklist).toHaveBeenCalledWith(
+        'verified-access-token',
+      );
+      expect(authService.invalidateRefreshToken).toHaveBeenCalledWith(42);
     });
   });
 });

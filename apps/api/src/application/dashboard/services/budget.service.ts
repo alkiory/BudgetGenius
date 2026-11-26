@@ -22,12 +22,13 @@ import {
   BudgetCategory,
 } from '@domain/dashboard/budget-category.entity';
 import { User } from '@domain/user/user.entity';
+import { Transaction } from '@domain/dashboard/transaction.entity';
 import { LoggingService } from '@infrastructure/log/logger.service';
-import { QueryFailedError } from 'typeorm';
+import { DataSource, QueryFailedError } from 'typeorm';
+import { ContributeSavingsDto } from '../dto/contribute-savings.dto';
 
 /** Persisted money is kept at two decimals. */
-const roundMoney = (value: number): number =>
-  Number(Number(value).toFixed(2));
+const roundMoney = (value: number): number => Number(Number(value).toFixed(2));
 
 /** Case-insensitive category name used to match transactions. */
 const categoryKey = (name: string | undefined): string =>
@@ -50,6 +51,7 @@ export class BudgetService {
     private readonly categoryRepo: BudgetRepository,
     private readonly userRepo: UserRepositoryImpl,
     private readonly logger: LoggingService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async createBudget(userId: number, dto: CreateBudgetDto): Promise<Budget> {
@@ -64,7 +66,9 @@ export class BudgetService {
 
     if (calendarDay(dto.endDate) < calendarDay(dto.startDate)) {
       throw new BadRequestException(
-        `End date ${calendarDay(dto.endDate)} cannot be less than start date ${calendarDay(dto.startDate)}`,
+        `End date ${calendarDay(
+          dto.endDate,
+        )} cannot be less than start date ${calendarDay(dto.startDate)}`,
       );
     }
 
@@ -95,11 +99,133 @@ export class BudgetService {
     return this.repo.createBudget({
       ...dto,
       type: budgetType,
+      goalKey: dto.goalKey ?? null,
       totalSpent,
       user: { id: userId } as User,
       categories,
       createdAt: new Date(),
       updatedAt: new Date(),
+    });
+  }
+
+  /**
+   * One deposit into a savings goal.
+   *
+   * The row is stored as an outflow (`amount < 0`) under the "Savings"
+   * category so reports can separate it from real spending. The goal reads
+   * that row back on every request (`manualSpent + linked deposits`), so
+   * deleting or editing the transaction moves the goal without a second
+   * write that could drift.
+   */
+  async contributeToSavingsGoal(
+    userId: number,
+    dto: ContributeSavingsDto,
+  ): Promise<{
+    transaction: Transaction;
+    category: BudgetCategory;
+    budget: Budget;
+  }> {
+    const amount = roundMoney(dto.amount);
+    if (!(amount > 0)) {
+      throw new BadRequestException('Amount must be greater than 0');
+    }
+    const day = calendarDay(dto.date);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+      throw new BadRequestException('Date must be a calendar day');
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      // Explicit joins: the nested `where` on two relation levels does not
+      // add the join reliably, and a missing join made every contribution
+      // look like a foreign category (404).
+      const category = await manager
+        .createQueryBuilder(BudgetCategory, 'category')
+        .innerJoinAndSelect('category.budget', 'budget')
+        .innerJoin('budget.user', 'owner')
+        .where('category.id = :categoryId', { categoryId: dto.categoryId })
+        .andWhere('owner.id = :userId', { userId })
+        .getOne();
+      if (!category) {
+        throw new NotFoundException(`Category ${dto.categoryId} not found`);
+      }
+      if (category.budget?.type !== 'savings') {
+        throw new BadRequestException(
+          'Only savings goals accept contributions',
+        );
+      }
+
+      const transaction = manager.create(Transaction, {
+        date: new Date(`${day}T00:00:00.000Z`),
+        description:
+          dto.description?.trim() || `Savings contribution · ${category.name}`,
+        category: 'Savings',
+        amount: -amount,
+        budgetCategoryId: category.id,
+        isSavingsDeposit: true,
+        recurrence: null,
+        user: { id: userId } as User,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      await manager.save(Transaction, transaction);
+
+      // The goal is the manual baseline plus every linked ledger row, the
+      // same layering spending budgets use. Only the row is written here:
+      // deleting or editing it later moves the goal on the next read, so
+      // the two can never drift apart.
+      const manual = roundMoney(
+        Number(category.manualSpent ?? category.spent ?? 0),
+      );
+      const deposited = await manager
+        .createQueryBuilder(Transaction, 'tx')
+        .select('COALESCE(SUM(ABS(tx.amount)), 0)', 'total')
+        .where('tx."budgetCategoryId" = :categoryId', {
+          categoryId: category.id,
+        })
+        .andWhere('tx.amount < 0')
+        .getRawOne<{ total: string }>();
+      category.manualSpent = manual;
+      category.transactionSpent = roundMoney(Number(deposited?.total) || 0);
+      category.spent = roundMoney(manual + category.transactionSpent);
+      category.updatedAt = new Date();
+      await manager.save(BudgetCategory, category);
+
+      const budget = category.budget;
+      const categories = await manager.getRepository(BudgetCategory).find({
+        where: { budget: { id: budget.id } },
+      });
+      const sums = await manager
+        .createQueryBuilder(Transaction, 'tx')
+        .select('tx."budgetCategoryId"', 'categoryId')
+        .addSelect('SUM(ABS(tx.amount))', 'total')
+        .where('tx."budgetCategoryId" IN (:...ids)', {
+          ids: categories.map((row) => row.id),
+        })
+        .andWhere('tx.amount < 0')
+        .groupBy('tx."budgetCategoryId"')
+        .getRawMany<{ categoryId: string; total: string }>();
+      const depositedByCategory = new Map(
+        sums.map((row) => [Number(row.categoryId), Number(row.total) || 0]),
+      );
+      budget.totalAllocated = roundMoney(
+        categories.reduce(
+          (total, row) => total + Number(row.allocated || 0),
+          0,
+        ),
+      );
+      budget.totalSpent = roundMoney(
+        categories.reduce(
+          (total, row) =>
+            total +
+            Number(row.manualSpent ?? 0) +
+            (depositedByCategory.get(Number(row.id)) ?? 0),
+          0,
+        ),
+      );
+      budget.updatedAt = new Date();
+      await manager.save(Budget, budget);
+
+      return { transaction, category, budget };
     });
   }
 
@@ -189,13 +315,22 @@ export class BudgetService {
       return [];
     }
 
-    // Effective spending = manual baseline + expense transactions linked
-    // by category name inside the budget window. Savings budgets never
-    // pull transaction spending, so their progress is purely manual.
-    const spendingByBudget = await this.loadTransactionSpending(userId);
+    // Effective spending = manual baseline + linked ledger rows. Spending
+    // budgets match by category name inside the window; savings budgets
+    // match by the frozen `budgetCategoryId`, so their deposits follow the
+    // goal even after a rename.
+    const [spendingByBudget, savingsByCategory] = await Promise.all([
+      this.loadTransactionSpending(userId),
+      this.loadSavingsTransactionSpending(userId),
+    ]);
     for (const budget of budgets) {
       for (const category of budget.categories ?? []) {
-        this.applyEffectiveSpent(category, budget, spendingByBudget);
+        this.applyEffectiveSpent(
+          category,
+          budget,
+          spendingByBudget,
+          savingsByCategory,
+        );
       }
       budget.totalSpent = roundMoney(
         (budget.categories ?? []).reduce(
@@ -218,9 +353,17 @@ export class BudgetService {
     // Repo scopes by userId — throws NotFoundException on miss so we don't
     // leak whether the budget exists for another user.
     const budget = await this.repo.findById(id, userId);
-    const spendingByBudget = await this.loadTransactionSpending(userId);
+    const [spendingByBudget, savingsByCategory] = await Promise.all([
+      this.loadTransactionSpending(userId),
+      this.loadSavingsTransactionSpending(userId),
+    ]);
     for (const category of budget.categories ?? []) {
-      this.applyEffectiveSpent(category, budget, spendingByBudget);
+      this.applyEffectiveSpent(
+        category,
+        budget,
+        spendingByBudget,
+        savingsByCategory,
+      );
     }
     budget.totalSpent = roundMoney(
       (budget.categories ?? []).reduce(
@@ -269,7 +412,9 @@ export class BudgetService {
       );
     }
     const candidates = rows.filter(
-      (row): row is ReconciliationRow & {
+      (
+        row,
+      ): row is ReconciliationRow & {
         categoryId: number | string;
         categoryName: string;
       } => row.categoryId != null && row.categoryName != null,
@@ -385,9 +530,10 @@ export class BudgetService {
 
     // The category rows carry the manual baseline; the response's `spent`
     // is the effective total used by every budget surface.
-    const spendingByBudget = await this.loadTransactionSpending(
-      filters.userId,
-    );
+    const [spendingByBudget, savingsByCategory] = await Promise.all([
+      this.loadTransactionSpending(filters.userId),
+      this.loadSavingsTransactionSpending(filters.userId),
+    ]);
     const budgetsById = new Map(
       (user.budgets ?? []).map((budget) => [Number(budget.id), budget]),
     );
@@ -396,7 +542,12 @@ export class BudgetService {
         category.budget ??
         budgetsById.get(Number(category.budget?.id ?? filters.budgetId));
       if (budget) {
-        this.applyEffectiveSpent(category, budget, spendingByBudget);
+        this.applyEffectiveSpent(
+          category,
+          budget,
+          spendingByBudget,
+          savingsByCategory,
+        );
       }
       return category;
     });
@@ -423,6 +574,16 @@ export class BudgetService {
     return byBudget;
   }
 
+  /** Builds a `budgetCategoryId -> deposited total` lookup for savings. */
+  private async loadSavingsTransactionSpending(
+    userId: number,
+  ): Promise<Map<number, number>> {
+    const rows = (await this.repo.sumLinkedSavingsByCategory(userId)) ?? [];
+    return new Map(
+      rows.map((row) => [Number(row.categoryId), Number(row.total) || 0]),
+    );
+  }
+
   /**
    * Sets `manualSpent`, `transactionSpent` and the effective `spent` for a
    * category. Mutates in place because these are response-only enrichments
@@ -433,13 +594,14 @@ export class BudgetService {
     category: BudgetCategory,
     budget: Budget,
     spendingByBudget: Map<number, Map<string, number>>,
+    savingsByCategory: Map<number, number>,
   ): void {
     const manual = roundMoney(
       Number(category.manualSpent ?? category.spent ?? 0),
     );
     const transactionSpent =
       budget.type === 'savings'
-        ? 0
+        ? savingsByCategory.get(Number(category.id)) ?? 0
         : spendingByBudget
             .get(Number(budget.id))
             ?.get(categoryKey(category.name)) ?? 0;
@@ -482,7 +644,9 @@ export class BudgetService {
 
     if (windowChanged && calendarDay(endDate) < calendarDay(startDate)) {
       throw new BadRequestException(
-        `End date ${calendarDay(endDate)} cannot be less than start date ${calendarDay(startDate)}`,
+        `End date ${calendarDay(
+          endDate,
+        )} cannot be less than start date ${calendarDay(startDate)}`,
       );
     }
 
@@ -545,8 +709,8 @@ export class BudgetService {
       dto.manualSpent !== undefined
         ? roundMoney(dto.manualSpent)
         : dto.spent !== undefined
-          ? roundMoney(dto.spent)
-          : undefined;
+        ? roundMoney(dto.spent)
+        : undefined;
     const updatedCategory = await this.repo.updateBudgetCategory(
       {
         ...dto,

@@ -17,7 +17,6 @@ import { ThrottlerBehindProxyGuard } from '@infrastructure/config/guards/throttl
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { AiModule } from './infrastructure/ai/module/ai.module';
-import { AiService } from '@application/ai/ai.service';
 import { CookieService } from '@infrastructure/config/cookie.service';
 import { RedisService } from '@infrastructure/config/redis.service';
 import { DashboardModule } from '@infrastructure/dashboard/dashboard.module';
@@ -27,6 +26,10 @@ import { UserSettingsModule } from '@infrastructure/user/user-settings.module';
 import { FirebaseAuthMiddleware } from '@infrastructure/auth/firebase-auth.strategy';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TestController } from '@adapters/app.controller';
+import { SuperAdminModule } from '@infrastructure/superadmin/superadmin.module';
+import { SyncModule } from '@infrastructure/sync/sync.module';
+import { NotificationsModule } from '@infrastructure/notifications/notifications.module';
+import { AppCatalogModule } from '@infrastructure/catalog/app-catalog.module';
 
 @Module({
   imports: [
@@ -116,6 +119,10 @@ import { TestController } from '@adapters/app.controller';
     AiModule,
     DashboardModule,
     CoreModule,
+    SuperAdminModule,
+    SyncModule,
+    NotificationsModule,
+    AppCatalogModule,
   ],
   controllers: [AppController, UserController, TestController],
   providers: [
@@ -129,7 +136,6 @@ import { TestController } from '@adapters/app.controller';
       provide: 'APP_GUARD',
       useClass: ThrottlerBehindProxyGuard,
     },
-    AiService,
     CookieService,
     {
       provide: 'FIREBASE_ADMIN',
@@ -164,14 +170,11 @@ export class AppModule {
       httpOnly: true,
       secure: isProduction,
       sameSite: isProduction ? ('none' as const) : ('lax' as const),
-      // v1.3.0 — bumped from 15 to 30 minutes. See
-      // rpi/mobile-cookies-persistence/research.md §"5. ⚠ The 15-min
-      // default cookieOptions.maxAge is short for the WebView's
-      // refresh-window" + plan.md T1.5. Keeps refresh cadence inside
-      // the 4-rps ThrottlerModule window even on slower CGNAT
-      // connections. JWT `expiresIn: '1h'` (auth.service.ts:114-120)
-      // remains the authoritative timeout.
-      maxAge: 30 * 60 * 1000, // 30 minutos
+      // Sessions last 7 days, matching the refresh token's JWT and the
+      // 7-day Redis entry. The access token itself is signed for 7d too
+      // (auth.service.ts), so a returning user is not logged out after an
+      // hour of inactivity.
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
       domain: configService.get<string>('COOKIE_DOMAIN'),
       path: '/',
     };

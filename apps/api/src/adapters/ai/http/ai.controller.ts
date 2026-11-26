@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
   Post,
   Request,
   ServiceUnavailableException,
@@ -14,6 +15,13 @@ import { JwtAuthGuard } from '@infrastructure/auth/guards/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 export class AiController {
   constructor(private readonly aiService: AiService) {}
+
+  /** Cheap readiness check: no provider call, so the rail can show Finny
+   * asleep (and explain why) before the user types anything. */
+  @Get('status')
+  status() {
+    return this.aiService.getStatus();
+  }
 
   @Post('analysis')
   async analyze(@Request() req, @Body() body: any) {

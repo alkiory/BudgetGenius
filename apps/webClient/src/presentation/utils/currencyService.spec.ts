@@ -56,3 +56,27 @@ describe("amount input formatting", () => {
     expect(currencyService.roundAmount(1234.56, "COP")).toBe(1235);
   });
 });
+
+describe("amount input parsing", () => {
+  it.each([
+    { raw: "1.234,56", expected: 1234.56 },
+    { raw: "1,234.56", expected: 1234.56 },
+    { raw: "1.234.567,89", expected: 1234567.89 },
+    { raw: "1,234,567.89", expected: 1234567.89 },
+    { raw: "1234,56", expected: 1234.56 },
+    { raw: "1234.56", expected: 1234.56 },
+    { raw: "1.234.567", expected: 1234567 },
+    { raw: "-1.234.567", expected: -1234567 },
+    { raw: "1,234,567", expected: 1234567 },
+    { raw: "-1.234,56", expected: -1234.56 },
+  ])("parses $raw as $expected", ({ raw, expected }) => {
+    expect(currencyService.parseAmountInput(raw)).toBe(expected);
+  });
+
+  it.each(["12.34.", "12..34", "12.34.56", "12,34,", "12,,34", "12,34,56"])(
+    "rejects malformed repeated separators (%s)",
+    (raw) => {
+      expect(currencyService.parseAmountInput(raw)).toBeNaN();
+    },
+  );
+});

@@ -2,8 +2,8 @@ import { useDecimalInput } from "@adapters/hooks/useDecimalInput";
 import { HttpExpenseCategoryRepository } from "@adapters/http/expense-category.repository";
 import { RootState } from "@adapters/store/rootStore";
 import {
+  DEFAULT_TRANSACTION_CATEGORIES,
   NewTransactionInput,
-  TRANSACTION_CATEGORIES,
 } from "@domain/dashboard/transactions/transaction.entity";
 import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
@@ -45,13 +45,6 @@ export default function AddTransactionForm({
     queryFn: HttpExpenseCategoryRepository.getAll,
     staleTime: 60_000,
   });
-  const categoryOptions = Array.from(
-    new Set([
-      ...TRANSACTION_CATEGORIES.filter((category) => category !== "All"),
-      ...importedCategories.map((category) => category.name),
-    ]),
-  );
-
   const [transactionType, setTransactionType] = useState<"income" | "expense">(
     "expense",
   );
@@ -65,6 +58,16 @@ export default function AddTransactionForm({
     // UI; `null` per the entity docstring (legacy non-recurring = nullable).
     recurrence: null,
   });
+
+  // Curated defaults plus the categories the user imported; a legacy row's
+  // own category is kept selectable when editing.
+  const categoryOptions = Array.from(
+    new Set([
+      ...DEFAULT_TRANSACTION_CATEGORIES,
+      ...importedCategories.map((category) => category.name),
+      ...(formData.category ? [formData.category] : []),
+    ]),
+  );
 
   const amountInput = useDecimalInput({
     initial: undefined,
@@ -155,7 +158,9 @@ export default function AddTransactionForm({
           options={[
             { value: "Other", label: t("categories.other") },
             ...categoryOptions
-              .filter((category) => category !== "Todos")
+              .filter(
+                (category) => category !== "Todos" && category !== "Other",
+              )
               .map((category) => ({
                 value: category,
                 label: t(`categories.${category.toLowerCase()}`, {

@@ -63,9 +63,21 @@ export interface ChangelogEntry {
  */
 export const changelog: ChangelogEntry[] = [
   {
+    version: "1.12",
+    date: "2026-11-26",
+    highlight: true,
+    title: {
+      en: "A guide for every screen, and savings you can watch grow",
+      es: "Una guía para cada pantalla y ahorros que ves crecer",
+    },
+    description: {
+      en: "The category picker now offers only the usual categories, so you stop scrolling, and the guided tour explains every page. The new catalogue brings guided modules such as the Emergency fund: its calculator reads your real expenses, and every contribution becomes a dated savings transaction. Edit or delete one and the goal follows, while savings stay out of your spending totals.",
+      es: "El selector de categorías ahora muestra solo las habituales, así dejas de hacer scroll, y el recorrido guiado explica cada página. El nuevo catálogo trae módulos guiados como el Fondo de emergencia: su calculadora lee tus gastos reales y cada aporte queda como una transacción de ahorro con su fecha. Edítalo o bórralo y la meta se ajusta, mientras el ahorro no cuenta como gasto.",
+    },
+  },
+  {
     version: "1.11",
     date: "2026-11-25",
-    highlight: true,
     title: {
       en: "A livelier interface, down to the details",
       es: "Una interfaz más viva, hasta en los detalles",

@@ -107,6 +107,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return true;
   }
 
+  /** Never log raw keys: blacklist or reset keys may contain sensitive tokens. */
+  private redactKey(key: string): string {
+    const colon = key.indexOf(':');
+    return colon > 0 ? `${key.slice(0, colon)}:*` : '[redacted]';
+  }
+
   async set(
     key: string,
     value: string | object,
@@ -122,7 +128,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         await this.client!.set(key, stringValue);
       }
     } catch (error) {
-      this.logger.error(`⚠️ Error setting key ${key} in Redis`, error.stack);
+      this.logger.error(
+        `⚠️ Error setting key ${this.redactKey(key)} in Redis`,
+        error.stack,
+      );
       throw error;
     }
   }
@@ -132,7 +141,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       return await this.client!.get(key);
     } catch (error) {
-      this.logger.error(`⚠️ Error getting key ${key} from Redis`, error.stack);
+      this.logger.error(
+        `⚠️ Error getting key ${this.redactKey(key)} from Redis`,
+        error.stack,
+      );
       throw error;
     }
   }
@@ -144,7 +156,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return value ? JSON.parse(value) : null;
     } catch (error) {
       this.logger.error(
-        `⚠️ Error getting JSON key ${key} from Redis`,
+        `⚠️ Error getting JSON key ${this.redactKey(key)} from Redis`,
         error.stack,
       );
       throw error;
@@ -156,7 +168,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       return await this.client!.del(key);
     } catch (error) {
-      this.logger.error(`⚠️ Error deleting key ${key} from Redis`, error.stack);
+      this.logger.error(
+        `⚠️ Error deleting key ${this.redactKey(key)} from Redis`,
+        error.stack,
+      );
       throw error;
     }
   }

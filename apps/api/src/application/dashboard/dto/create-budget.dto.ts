@@ -36,6 +36,10 @@ export class CreateBudgetDto {
   })
   type?: 'spending' | 'savings';
 
+  @IsOptional()
+  @IsString()
+  goalKey?: string | null;
+
   @IsNotEmpty()
   @IsNumber({ allowInfinity: false, allowNaN: false })
   totalAllocated: number;

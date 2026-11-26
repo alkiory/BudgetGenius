@@ -2,7 +2,10 @@ import {
   BudgetCategory,
   Budget,
 } from "@domain/dashboard/budgets/budget.entity";
-import { BudgetRepository } from "@domain/dashboard/budgets/budget.repository";
+import {
+  BudgetRepository,
+  SavingsContributionInput,
+} from "@domain/dashboard/budgets/budget.repository";
 import api from "@infrastructure/api.config";
 
 export const HttpBudgetRepository: BudgetRepository = {
@@ -48,6 +51,11 @@ export const HttpBudgetRepository: BudgetRepository = {
     return response.data;
   },
 
+  async contributeToSavings(payload: SavingsContributionInput) {
+    const response = await api.post("/budgets/savings/contribute", payload);
+    return response.data;
+  },
+
   async deleteBudgetCategory(categoryId: number) {
     const response = await api.delete(`/budgets/category/${categoryId}`);
     return response.data;
@@ -59,10 +67,9 @@ export const HttpBudgetRepository: BudgetRepository = {
   },
 
   async reconcileExpense(transactionId: number, budgetCategoryId: number) {
-    const response = await api.put(
-      `/budgets/reconciliation/${transactionId}`,
-      { budgetCategoryId },
-    );
+    const response = await api.put(`/budgets/reconciliation/${transactionId}`, {
+      budgetCategoryId,
+    });
     return response.data;
   },
 };

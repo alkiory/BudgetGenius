@@ -1,16 +1,19 @@
+import { clearAuthAndStateForLogout } from "@adapters/auth/clearAuthAndStateForLogout";
 import { useSidebar } from "@adapters/hooks/sidebarContext";
 import { useMobile } from "@adapters/hooks/useMobile";
-import { clearAuthAndStateForLogout } from "@adapters/auth/clearAuthAndStateForLogout";
+import { useCatalogEntries } from "@adapters/query/catalog";
 import { RootState } from "@adapters/store/rootStore";
 import { logout } from "@application/auth/auth.service";
 import { AddTransactionModal } from "@presentation/components/dashboard/transaction/add-transaction-modal";
-import { RoutePaths } from "@presentation/utils/routes";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
+  Building,
   CreditCard,
   DollarSign,
+  FileText,
   Home,
+  ListChecks,
+  Sparkles,
   PieChart,
   Plus,
   Settings,
@@ -19,6 +22,9 @@ import {
   ChevronRight,
   Menu,
 } from "@presentation/components/ui/animated-icons";
+import { catalogHref } from "@presentation/utils/catalog";
+import { RoutePaths } from "@presentation/utils/routes";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
@@ -26,7 +32,17 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { Logo } from "../logo";
 import { VersionBadge } from "../version-badge";
 
-const navigation = [
+type NavItem = {
+  key: string;
+  href: string;
+  icon: typeof Home;
+  i18nKey?: string;
+  label?: string;
+  badge?: string | null;
+  badgeTone?: string;
+};
+
+const navigation: NavItem[] = [
   {
     key: "dashboard",
     href: RoutePaths.App + "/" + RoutePaths.Dashboard,
@@ -64,6 +80,18 @@ const navigation = [
   },
 ];
 
+/**
+ * Appended only for the `superadmin` role. The API is the real boundary —
+ * every `/superadmin/*` route checks the role server-side — so hiding the
+ * entry is purely about not offering a page whose requests would 403.
+ */
+const superAdminNavigation = {
+  key: "superadmin",
+  href: RoutePaths.App + "/" + RoutePaths.Superadmin,
+  icon: Building,
+  i18nKey: "superadmin.navLabel",
+};
+
 export function DashboardSidebar() {
   const { t } = useTranslation();
   const dispatch = useDispatch();
@@ -76,6 +104,11 @@ export function DashboardSidebar() {
 
   const pathname = useLocation().pathname;
 
+  // Every module/page authored in the backoffice becomes a nav entry here.
+  // The API decides what each role gets: active entries for everyone, beta
+  // and disabled ones only for the superadmin.
+  const { data: catalogEntries } = useCatalogEntries();
+
   const navItemRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   const [activeIndicator, setActiveIndicator] = useState({
     top: 0,
@@ -83,7 +116,47 @@ export function DashboardSidebar() {
     ready: false,
   });
 
-  const activeNavKey = navigation.find((item) => pathname === item.href)?.key;
+  const catalogScreens: NavItem[] = (catalogEntries ?? [])
+    .filter((entry) => entry.kind === "module" || entry.kind === "page")
+    .map((entry) => ({
+      key: `catalog-${entry.key}`,
+      href: catalogHref(entry.key),
+      icon: entry.kind === "module" ? Sparkles : FileText,
+      label: entry.name,
+      badge:
+        entry.status === "beta"
+          ? t("catalog.beta")
+          : entry.status === "disabled"
+          ? t("catalog.disabled")
+          : null,
+      badgeTone:
+        entry.status === "disabled"
+          ? "border-rose-400/40 bg-rose-500/10 text-rose-600 dark:text-rose-300"
+          : "border-amber-400/40 bg-amber-500/10 text-amber-600 dark:text-amber-300",
+    }));
+
+  const catalogNavigation: NavItem[] = [
+    ...catalogScreens,
+    ...(catalogEntries?.length
+      ? [
+          {
+            key: "catalog-all",
+            href: `${RoutePaths.App}/${RoutePaths.Catalog}`,
+            icon: ListChecks,
+            label: t("catalog.all"),
+          } satisfies NavItem,
+        ]
+      : []),
+  ];
+
+  const navigationItems: NavItem[] = [
+    ...navigation,
+    ...catalogNavigation,
+    ...(user?.role === "superadmin" ? [superAdminNavigation] : []),
+  ];
+
+  const activeNavKey = navigationItems.find((item) => pathname === item.href)
+    ?.key;
 
   // One shared pill slides between nav items instead of the highlight
   // snapping from link to link, so selecting a page reads as motion.
@@ -130,7 +203,7 @@ export function DashboardSidebar() {
 
   const isMobile = useMobile();
 
-  const getLinkClasses = (_item: any, isActive: boolean) => {
+  const getLinkClasses = (_item: NavItem, isActive: boolean) => {
     return `
     group relative z-10 flex items-center rounded-md px-2 text-sm font-medium transition-colors duration-200
       ${isCollapsed ? "justify-center py-3" : "py-2"}
@@ -144,7 +217,7 @@ export function DashboardSidebar() {
     `;
   };
 
-  const getIconClasses = (_item: any, isActive: boolean) => {
+  const getIconClasses = (_item: NavItem, isActive: boolean) => {
     return `
     ${isCollapsed ? "h-6 w-6" : "h-5 w-5 flex-shrink-0 mr-3"}
       transition-colors duration-200
@@ -241,30 +314,51 @@ export function DashboardSidebar() {
                   transform: `translateY(${activeIndicator.top}px)`,
                 }}
               />
-              {navigation.map((item) => {
+              {navigationItems.map((item) => {
                 const isActive = pathname === item.href;
-                const label = t(item.i18nKey ?? "sidebar." + item.key);
+                const label =
+                  item.label ?? t(item.i18nKey ?? "sidebar." + item.key);
                 return (
-                  <Link
-                    key={item.key}
-                    ref={(element) => {
-                      navItemRefs.current[item.key] = element;
-                    }}
-                    to={item.href}
-                    className={getLinkClasses(item, isActive)}
-                    title={isCollapsed ? label : ""}
-                    onClick={closeSidebar}
-                  >
-                    <item.icon
-                      className={getIconClasses(item, isActive)}
-                      aria-hidden="true"
-                    />
-                    {!isCollapsed && (
-                      <span className="flex-1 transition-opacity duration-200">
-                        {label}
-                      </span>
-                    )}
-                  </Link>
+                  <div key={item.key}>
+                    {!isCollapsed &&
+                      catalogNavigation.length > 0 &&
+                      item.key === catalogNavigation[0].key && (
+                        <p className="px-2 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+                          {t("catalog.navGroup")}
+                        </p>
+                      )}
+                    <Link
+                      ref={(element) => {
+                        navItemRefs.current[item.key] = element;
+                      }}
+                      to={item.href}
+                      data-tour={`nav-${item.key}`}
+                      className={getLinkClasses(item, isActive)}
+                      title={
+                        isCollapsed
+                          ? `${label}${item.badge ? ` · ${item.badge}` : ""}`
+                          : ""
+                      }
+                      onClick={closeSidebar}
+                    >
+                      <item.icon
+                        className={getIconClasses(item, isActive)}
+                        aria-hidden="true"
+                      />
+                      {!isCollapsed && (
+                        <span className="flex-1 truncate transition-opacity duration-200">
+                          {label}
+                        </span>
+                      )}
+                      {!isCollapsed && item.badge && (
+                        <span
+                          className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${item.badgeTone}`}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  </div>
                 );
               })}
             </div>

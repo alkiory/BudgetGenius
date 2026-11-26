@@ -15,15 +15,21 @@ const MOOD_ACCENTS: Record<
 /**
  * Custom SVG recreation of Finny (the AI financial sidekick) with
  * blinking eyes, head-tilt sway, a waving hand, and mood-reactive glow.
+ *
+ * `asleep` is the unplugged state: Finny cannot reach its provider, so it
+ * closes its eyes, stops waving and floats a quiet “z” instead of pretending
+ * to be listening.
  */
 export function FinnyAvatar({
   mood = "cyan",
   className = "h-10 w-10",
   animate = true,
+  asleep = false,
 }: {
   mood?: FinnyMood;
   className?: string;
   animate?: boolean;
+  asleep?: boolean;
 }) {
   const uid = useId().replace(/:/g, "");
   const palette = MOOD_ACCENTS[mood];
@@ -33,7 +39,9 @@ export function FinnyAvatar({
       viewBox="0 0 120 120"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={`${className} ${animate ? "animate-finny-bob" : ""}`}
+      className={`${className} ${
+        animate ? (asleep ? "animate-finny-sleep" : "animate-finny-bob") : ""
+      }`}
       aria-hidden="true"
     >
       <defs>
@@ -99,8 +107,8 @@ export function FinnyAvatar({
         strokeLinejoin="round"
       />
 
-      {/* Waving hand */}
-      <g className={animate ? "finny-hand" : undefined}>
+      {/* Waving hand — asleep Finny keeps its arms still. */}
+      <g className={animate && !asleep ? "finny-hand" : undefined}>
         <path
           d="M28 97L21 82"
           stroke="#cbd5e1"
@@ -123,8 +131,8 @@ export function FinnyAvatar({
         />
       </g>
 
-      {/* Head group with gentle look-around sway */}
-      <g className={animate ? "finny-head" : undefined}>
+      {/* Head group with gentle look-around sway (still while asleep) */}
+      <g className={animate && !asleep ? "finny-head" : undefined}>
         {/* Top hair bun + glowing hairband */}
         <circle cx="68" cy="20" r="13" fill={`url(#finny-hair-${uid})`} />
         <path
@@ -187,42 +195,79 @@ export function FinnyAvatar({
         {/* Dark visor */}
         <rect x="34" y="42" width="52" height="36" rx="16" fill="#06101f" />
 
-        {/* Blinking eyes + lashes */}
-        <g className={animate ? "finny-eyes" : undefined}>
-          <path
-            d="M42 58C44 53 50 53 52 58"
+        {asleep ? (
+          /* Closed eyes reuse the existing eye paths, squashed vertically:
+             no new hand-drawn icon geometry is introduced. */
+          <g
+            transform="translate(0 68) scale(1 -0.25)"
             stroke={palette.glow}
             strokeWidth="3.2"
             strokeLinecap="round"
-          />
-          <path
-            d="M40 55L42.5 57M43 52.5L44.5 55"
-            stroke={palette.glow}
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          />
-          <path
-            d="M68 58C70 53 76 53 78 58"
-            stroke={palette.glow}
-            strokeWidth="3.2"
-            strokeLinecap="round"
-          />
-          <path
-            d="M80 55L77.5 57M77 52.5L75.5 55"
-            stroke={palette.glow}
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          />
-        </g>
+            opacity="0.9"
+          >
+            <path d="M42 58C44 53 50 53 52 58" />
+            <path d="M68 58C70 53 76 53 78 58" />
+          </g>
+        ) : (
+          /* Blinking eyes + lashes */
+          <g className={animate ? "finny-eyes" : undefined}>
+            <path
+              d="M42 58C44 53 50 53 52 58"
+              stroke={palette.glow}
+              strokeWidth="3.2"
+              strokeLinecap="round"
+            />
+            <path
+              d="M40 55L42.5 57M43 52.5L44.5 55"
+              stroke={palette.glow}
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+            <path
+              d="M68 58C70 53 76 53 78 58"
+              stroke={palette.glow}
+              strokeWidth="3.2"
+              strokeLinecap="round"
+            />
+            <path
+              d="M80 55L77.5 57M77 52.5L75.5 55"
+              stroke={palette.glow}
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+          </g>
+        )}
 
         {/* Smile */}
         <path
-          d="M54 66C57 69.5 63 69.5 66 66"
+          d={
+            asleep ? "M55 67C58 69 62 69 65 67" : "M54 66C57 69.5 63 69.5 66 66"
+          }
           stroke={palette.glow}
           strokeWidth="2.8"
           strokeLinecap="round"
         />
       </g>
+
+      {/* Dream bubbles, only while Finny is asleep */}
+      {asleep && (
+        <g
+          className={animate ? "finny-zzz" : undefined}
+          fill={palette.glow}
+          fontFamily="ui-sans-serif, system-ui, sans-serif"
+          fontWeight="700"
+        >
+          <text x="88" y="34" fontSize="11">
+            z
+          </text>
+          <text x="84" y="22" fontSize="14">
+            z
+          </text>
+          <text x="78" y="11" fontSize="17">
+            Z
+          </text>
+        </g>
+      )}
     </svg>
   );
 }

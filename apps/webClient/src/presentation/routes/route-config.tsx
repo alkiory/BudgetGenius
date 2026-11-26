@@ -10,6 +10,7 @@ import { Route, Routes } from "react-router";
 
 import AuthGuard from "./auth-guard";
 import OnboardingGuard from "./onboarding-guard";
+import SuperAdminGuard from "./superadmin-guard";
 
 // Phase 6.8: every protected + auth + public-chrome route is now
 // lazy-loaded so the main entry only carries the layout/loading
@@ -73,9 +74,20 @@ const TransactionsPage = lazy(
 const IncomePage = lazy(
   () => import("@presentation/pages/dashboard/incomePage"),
 );
+const CatalogPage = lazy(
+  () => import("@presentation/pages/catalog/catalogPage"),
+);
+const CatalogIndexPage = lazy(
+  () => import("@presentation/pages/catalog/catalogIndexPage"),
+);
 
 // User protected routes
 const ProfilePage = lazy(() => import("@presentation/pages/user/profile"));
+
+// Superadmin backoffice
+const SuperAdminPage = lazy(
+  () => import("@presentation/pages/superadmin/backoffice"),
+);
 
 // Auth routes
 const LoginPage = lazy(() => import("@presentation/pages/auth/login"));
@@ -183,6 +195,21 @@ const RouteConfig = () => {
             <Route path={RoutePaths.Income} element={<IncomePage />} />
             <Route path={RoutePaths.Budgets} element={<BudgetsPage />} />
             <Route path={RoutePaths.Reports} element={<ReportsPage />} />
+            {/* Catalogue screens authored in the backoffice. Modules list
+                their pages, pages render their tabs. */}
+            <Route path={RoutePaths.Catalog} element={<CatalogIndexPage />} />
+            <Route
+              path={`${RoutePaths.Catalog}/:key`}
+              element={<CatalogPage />}
+            />
+            {/* superadmin backoffice — role-gated; the API enforces the
+                same role on every /superadmin/* route */}
+            <Route element={<SuperAdminGuard />}>
+              <Route
+                path={RoutePaths.Superadmin}
+                element={<SuperAdminPage />}
+              />
+            </Route>
             {/* user section */}
             <Route path={RoutePaths.Profile} element={<ProfilePage />} />
             <Route path={RoutePaths.UserDetail} element={<ProfilePage />} />

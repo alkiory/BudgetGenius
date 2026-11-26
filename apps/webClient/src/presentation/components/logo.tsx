@@ -55,7 +55,7 @@ export function Logo({
           <span
             className={`font-bold leading-none tracking-tight dark:text-white ${textSizeClasses[size]}`}
           >
-            Budget<span className="text-gradient-teal">Genius</span>
+            Budget<span className="text-gradient-teal">Genius IA</span>
           </span>
           <span className="text-xs text-slate-500 dark:text-slate-400">
             AI-Powered Finance

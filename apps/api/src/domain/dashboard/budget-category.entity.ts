@@ -34,9 +34,10 @@ export class BudgetCategory {
   /**
    * Manually tracked portion of the amount. For spending budgets this is
    * the baseline added through "Añadir gasto"; for savings budgets it is
-   * the full amount saved. The effective `spent` exposed by the API is
-   * `manualSpent + transaction spending` (the latter is 0 for savings).
-   * Existing rows migrated their legacy `spent` value into this column.
+   * the part saved without a ledger row. The effective `spent` exposed by
+   * the API is always `manualSpent + transactionSpent`, where savings
+   * deposits are summed from their linked transactions. Existing rows
+   * migrated their legacy `spent` value into this column.
    */
   @Column('numeric', {
     default: 0,

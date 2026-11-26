@@ -8,6 +8,8 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   className?: string;
+  /** `lg` gives authoring surfaces room for forms built side by side. */
+  size?: "md" | "lg";
 }
 
 export function Modal({
@@ -16,6 +18,7 @@ export function Modal({
   title,
   children,
   className,
+  size = "md",
 }: ModalProps) {
   const [isShowing, setIsShowing] = useState(false);
 
@@ -70,7 +73,9 @@ export function Modal({
         and pushing the action buttons off-screen.
       */}
       <div
-        className={`relative z-50 flex max-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-[0_30px_80px_-30px_rgb(0_0_0/0.8)] backdrop-blur-xl sm:max-h-[calc(100dvh-2rem)] sm:p-6 dark:border-white/10 dark:bg-[#0b1424]/95 ${
+        className={`relative z-50 flex max-h-[calc(100dvh-1.5rem)] w-full ${
+          size === "lg" ? "max-w-4xl" : "max-w-md"
+        } flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-[0_30px_80px_-30px_rgb(0_0_0/0.8)] backdrop-blur-xl sm:max-h-[calc(100dvh-2rem)] sm:p-6 dark:border-white/10 dark:bg-[#0b1424]/95 ${
           isOpen ? "animate-in zoom-in-95" : "animate-out zoom-out-95"
         }`}
       >

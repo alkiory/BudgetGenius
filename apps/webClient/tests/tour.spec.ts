@@ -182,12 +182,27 @@ test.describe("Dashboard product tour", () => {
 
     // The 700 ms scheduling window plus settings/query re-renders.
     await expect(title).toHaveText("You're all set", { timeout: 10_000 });
+    // welcome + sidebar + one step per page + quick add + Finny + release
     await expect(tour.locator(".driver-popover-progress-text")).toHaveText(
-      "1 of 5",
+      "1 of 11",
     );
 
     await tour.getByRole("button", { name: "Next" }).click();
     await expect(title).toHaveText("Every area, one click away");
+
+    // Every page is explained on its own step.
+    for (const page of [
+      "Dashboard",
+      "Transactions",
+      "Budgets",
+      "Reports",
+      "Income",
+      "Modules",
+    ]) {
+      await tour.getByRole("button", { name: "Next" }).click();
+      await expect(title).toHaveText(page);
+    }
+
     await tour.getByRole("button", { name: "Next" }).click();
     await expect(title).toHaveText("Log your first transaction");
     await tour.getByRole("button", { name: "Next" }).click();
@@ -284,7 +299,7 @@ test.describe("Dashboard product tour", () => {
       { timeout: 10_000 },
     );
     await expect(tour.locator(".driver-popover-progress-text")).toHaveText(
-      "1 de 5",
+      "1 de 11",
     );
     await expect(
       tour.getByRole("button", { name: "Siguiente" }),

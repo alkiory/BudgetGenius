@@ -1,11 +1,16 @@
 import { DashboardHeader } from "@presentation/components/dashboard/header";
 import FooterComponent from "@presentation/components/ui/Footer";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  RefreshCw,
+} from "@presentation/components/ui/animated-icons";
 import { Button } from "@presentation/components/ui/button";
 import HeaderComponent from "@presentation/components/ui/header";
-import { AlertTriangle, ArrowLeft, Link, RefreshCw } from "@presentation/components/ui/animated-icons";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
+import { Link } from "react-router";
 
 export default function ErrorPage({
   error,

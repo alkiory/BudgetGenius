@@ -6,12 +6,11 @@ import {
 } from "@adapters/query/dashboard";
 import api from "@infrastructure/api.config";
 import { BrandDots } from "@presentation/components/loader";
-import { Currency, currencyService } from "@presentation/utils/currencyService";
-import { useMutation } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowUpRight,
   KeyRound,
+  Moon,
   PanelRightClose,
   PiggyBank,
   RefreshCw,
@@ -19,6 +18,8 @@ import {
   TrendingUp,
   X,
 } from "@presentation/components/ui/animated-icons";
+import { Currency, currencyService } from "@presentation/utils/currencyService";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -33,6 +34,17 @@ type ChatMessage = {
  * explain the fix instead of pretending the model failed. */
 type SetupIssue = "missing" | "invalid";
 
+/** `GET /ai/status`: no provider call, just whether a usable key exists. */
+type FinnyStatus = {
+  available: boolean;
+  reason:
+    | "FINNY_NOT_CONFIGURED"
+    | "FINNY_INVALID_KEY"
+    | "FINNY_PROVIDER_ERROR"
+    | null;
+  checkedAt: string;
+};
+
 /**
  * The setup banner exposes server-side configuration (env file, key name), so
  * it is reserved for the app's super admin. There is no admin role or panel
@@ -42,6 +54,68 @@ type SetupIssue = "missing" | "invalid";
 const CAN_VIEW_FINNY_SETUP = false;
 
 const DESKTOP_QUERY = "(min-width: 1280px)";
+
+/** Persisted desktop launcher position, measured from the viewport corners. */
+const LAUNCHER_POSITION_KEY = "bg_finny_launcher_position";
+const DEFAULT_LAUNCHER_OFFSET: LauncherOffset = { right: 24, bottom: 24 };
+const EDGE_MARGIN = 8;
+/** How much of the launcher must stay on screen when it is clamped. */
+const LAUNCHER_MIN_VISIBLE = 96;
+/** Movement below this is a click, not a drag. */
+const DRAG_THRESHOLD = 4;
+
+type LauncherOffset = { right: number; bottom: number };
+
+type DragState = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  right: number;
+  bottom: number;
+  moved: boolean;
+};
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
+
+const clampOffset = (offset: LauncherOffset): LauncherOffset => ({
+  right: clamp(
+    offset.right,
+    EDGE_MARGIN,
+    Math.max(EDGE_MARGIN, window.innerWidth - LAUNCHER_MIN_VISIBLE),
+  ),
+  bottom: clamp(
+    offset.bottom,
+    EDGE_MARGIN,
+    Math.max(EDGE_MARGIN, window.innerHeight - LAUNCHER_MIN_VISIBLE),
+  ),
+});
+
+function readLauncherOffset(): LauncherOffset {
+  if (typeof window === "undefined") return DEFAULT_LAUNCHER_OFFSET;
+  try {
+    const raw = window.localStorage.getItem(LAUNCHER_POSITION_KEY);
+    if (!raw) return DEFAULT_LAUNCHER_OFFSET;
+    const parsed = JSON.parse(raw) as Partial<LauncherOffset>;
+    if (
+      typeof parsed?.right !== "number" ||
+      typeof parsed?.bottom !== "number"
+    ) {
+      return DEFAULT_LAUNCHER_OFFSET;
+    }
+    return clampOffset({ right: parsed.right, bottom: parsed.bottom });
+  } catch {
+    return DEFAULT_LAUNCHER_OFFSET;
+  }
+}
+
+function writeLauncherOffset(offset: LauncherOffset): void {
+  try {
+    window.localStorage.setItem(LAUNCHER_POSITION_KEY, JSON.stringify(offset));
+  } catch {
+    // Storage unavailable: the position simply does not survive a reload.
+  }
+}
 
 /** Matches the `xl` breakpoint at which the rail stops being a sheet. */
 function useIsDesktop() {
@@ -89,9 +163,35 @@ export function FinnyRail() {
   const isDesktop = useIsDesktop();
   const scrollRef = useRef<HTMLDivElement>(null);
   const launchTimerRef = useRef<number | null>(null);
+  const [launcherOffset, setLauncherOffset] =
+    useState<LauncherOffset>(readLauncherOffset);
+  const dragRef = useRef<DragState | null>(null);
+  /** Timestamp until which a click means "the drag just ended", not "open". */
+  const suppressLaunchUntilRef = useRef(0);
 
-  const isOffline = setupIssue !== null || serviceUnavailable;
-  const composerDisabled = setupIssue !== null;
+  /**
+   * Finny's readiness is asked for up front. The rail used to look dead only
+   * after a prompt failed; knowing beforehand lets it sleep visibly and
+   * explain itself instead of collecting questions it cannot answer.
+   */
+  const {
+    data: aiStatus,
+    refetch: refetchStatus,
+    isFetching: isCheckingStatus,
+  } = useQuery({
+    queryKey: ["ai", "status"],
+    queryFn: async () =>
+      (await api.get<FinnyStatus>("/ai/status")).data as FinnyStatus,
+    staleTime: 60_000,
+    // While asleep, look again once a minute: a rotated key wakes it up.
+    refetchInterval: (query) =>
+      query.state.data?.available === false ? 60_000 : false,
+    retry: false,
+  });
+
+  const statusOffline = aiStatus ? !aiStatus.available : false;
+  const isOffline = setupIssue !== null || serviceUnavailable || statusOffline;
+  const composerDisabled = setupIssue !== null || statusOffline;
 
   const overBudget = useMemo(
     () =>
@@ -164,7 +264,7 @@ export function FinnyRail() {
 
   const activeInsight = insights[activeInsightIndex] ?? insights[0];
   const avatarMood: FinnyMood = isOffline
-    ? "amber"
+    ? "rose"
     : isDesktop && isCollapsed
     ? activeInsight.tone
     : "cyan";
@@ -192,6 +292,8 @@ export function FinnyRail() {
     onSuccess: (reply) => {
       setSetupIssue(null);
       setServiceUnavailable(false);
+      // The answer proves a key works again; drop a stale "asleep" badge.
+      void refetchStatus();
       setMessages((previous) => [
         ...previous,
         {
@@ -270,7 +372,81 @@ export function FinnyRail() {
     };
   }, []);
 
+  // Keep a stored position reachable after the window shrinks.
+  useEffect(() => {
+    if (!isDesktop) return;
+    const handleResize = () =>
+      setLauncherOffset((previous) => clampOffset(previous));
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [isDesktop]);
+
+  // Draggable on desktop: anchored bottom-right, the launcher used to cover the
+  // budget detail's "add expense" controls in web. Moving it (and remembering
+  // where) keeps Finny available without blocking the page underneath.
+  const handleLauncherPointerDown = (
+    event: React.PointerEvent<HTMLElement>,
+  ) => {
+    if (!isDesktop || (event.pointerType === "mouse" && event.button !== 0)) {
+      return;
+    }
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      right: launcherOffset.right,
+      bottom: launcherOffset.bottom,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleLauncherPointerMove = (
+    event: React.PointerEvent<HTMLElement>,
+  ) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+    drag.moved = true;
+    setLauncherOffset(
+      clampOffset({ right: drag.right - dx, bottom: drag.bottom - dy }),
+    );
+  };
+
+  const handleLauncherPointerUp = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (!drag.moved) return;
+    // The click that follows this pointerup belongs to the drag, not to the
+    // launcher. A short window (instead of a one-shot flag) cannot leak into
+    // the next real click if the browser skips the event.
+    suppressLaunchUntilRef.current = performance.now() + 300;
+    const next = clampOffset({
+      right: drag.right - (event.clientX - drag.startX),
+      bottom: drag.bottom - (event.clientY - drag.startY),
+    });
+    setLauncherOffset(next);
+    writeLauncherOffset(next);
+  };
+
+  // Shared by the avatar and the insight card so the whole launcher can be
+  // dragged from either handle.
+  const launcherDragHandlers = {
+    onPointerDown: handleLauncherPointerDown,
+    onPointerMove: handleLauncherPointerMove,
+    onPointerUp: handleLauncherPointerUp,
+    onPointerCancel: handleLauncherPointerUp,
+  };
+
   const handleLaunch = () => {
+    if (performance.now() < suppressLaunchUntilRef.current) return;
     if (isLaunching) return;
     setIsLaunching(true);
     launchTimerRef.current = window.setTimeout(() => {
@@ -293,9 +469,9 @@ export function FinnyRail() {
     mutation.mutate(text);
   };
 
-  // Recovery path: after rotating AGENT_API_KEY the rail was stuck
-  // offline. Retrying clears the banner, re-enables the composer and, when
-  // there is a previous question, sends it again.
+  // Recovery path: after removing or replacing the rejected key in the
+  // backoffice the rail was stuck offline. Retrying clears the banner and
+  // re-enables the composer.
   const handleRetry = () => {
     if (mutation.isPending) return;
     const lastUserMessage = [...messages]
@@ -305,6 +481,14 @@ export function FinnyRail() {
     if (lastUserMessage) mutation.mutate(lastUserMessage.content);
   };
 
+  // Waking Finny re-checks the key chain instead of resending a prompt that
+  // already failed, which is what the backoffice key list is for.
+  const handleWake = () => {
+    setSetupIssue(null);
+    setServiceUnavailable(false);
+    void refetchStatus();
+  };
+
   const collapsedDesktop = isDesktop && isCollapsed;
   const ActiveInsightIcon = activeInsight.icon;
 
@@ -312,13 +496,19 @@ export function FinnyRail() {
     <div
       onMouseEnter={() => setIsHoveringCollapsed(true)}
       onMouseLeave={() => setIsHoveringCollapsed(false)}
-      className="fixed bottom-6 right-6 z-40 flex items-end gap-3"
+      style={{ right: launcherOffset.right, bottom: launcherOffset.bottom }}
+      className="pointer-events-none fixed z-40 flex touch-none select-none items-end gap-3"
     >
-      <div className="flex flex-col items-end gap-2">
+      <div className="pointer-events-auto flex flex-col items-end gap-2">
         <button
           type="button"
           onClick={handleLaunch}
-          className="group max-w-[16.5rem] rounded-2xl border border-slate-200/80 bg-white/90 px-3.5 py-2.5 text-left shadow-xl backdrop-blur-xl transition hover:border-teal-400/50 dark:border-white/10 dark:bg-[#070d18]/90"
+          {...launcherDragHandlers}
+          className={`group max-w-[16.5rem] touch-none rounded-2xl border bg-white/90 px-3.5 py-2.5 text-left shadow-xl backdrop-blur-xl transition dark:bg-[#070d18]/90 ${
+            isOffline
+              ? "border-rose-300/70 hover:border-rose-400/60 dark:border-rose-400/25"
+              : "border-slate-200/80 hover:border-teal-400/50 dark:border-white/10"
+          }`}
         >
           <div
             key={activeInsightIndex}
@@ -366,8 +556,13 @@ export function FinnyRail() {
         data-tour="finny"
         onClick={handleLaunch}
         aria-label={t("finny.open")}
-        title={t("finny.open")}
-        className={`relative shrink-0 rounded-full focus:outline-none ${
+        title={
+          isDesktop
+            ? `${t("finny.open")} · ${t("finny.dragHint")}`
+            : t("finny.open")
+        }
+        {...launcherDragHandlers}
+        className={`pointer-events-auto relative shrink-0 cursor-grab touch-none rounded-full active:cursor-grabbing focus:outline-none ${
           isLaunching
             ? "animate-finny-fly"
             : "transition-transform duration-200 hover:scale-105 active:scale-95"
@@ -375,11 +570,16 @@ export function FinnyRail() {
       >
         <FinnyAvatar
           mood={avatarMood}
-          className="h-14 w-14 drop-shadow-[0_12px_28px_rgb(34_211_238_/_0.45)]"
+          asleep={isOffline}
+          className={`h-14 w-14 ${
+            isOffline
+              ? "drop-shadow-[0_10px_24px_rgb(251_113_133_/_0.45)]"
+              : "drop-shadow-[0_12px_28px_rgb(34_211_238_/_0.45)]"
+          }`}
         />
         <span
           className={`absolute right-0.5 top-0.5 h-3 w-3 rounded-full border-2 border-white dark:border-[#070d18] ${
-            isOffline ? "bg-amber-400" : "bg-emerald-400"
+            isOffline ? "bg-rose-400" : "bg-emerald-400"
           }`}
         />
       </button>
@@ -408,10 +608,14 @@ export function FinnyRail() {
         }`}
       >
         <div className="relative shrink-0">
-          <FinnyAvatar mood={avatarMood} className="h-10 w-10" />
+          <FinnyAvatar
+            mood={avatarMood}
+            asleep={isOffline}
+            className="h-10 w-10"
+          />
           <span
             className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-[#070d18] ${
-              isOffline ? "bg-amber-400" : "bg-emerald-400"
+              isOffline ? "bg-rose-400" : "bg-emerald-400"
             }`}
           />
         </div>
@@ -423,12 +627,14 @@ export function FinnyRail() {
             <span
               className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
                 isOffline
-                  ? "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                  ? "border-rose-400/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"
                   : "border-teal-500/25 bg-teal-500/10 text-teal-700 dark:text-teal-300"
               }`}
             >
               {setupIssue !== null
                 ? t("finny.setup.badge")
+                : statusOffline
+                ? t("finny.sleep.badge")
                 : serviceUnavailable
                 ? t("finny.offline")
                 : t("finny.online")}
@@ -471,7 +677,7 @@ export function FinnyRail() {
                 {t(`finny.setup.${setupIssue}.body`)}
               </p>
               <code className="inline-block rounded bg-slate-900/5 px-1.5 py-0.5 font-mono text-[10px] text-amber-800 dark:bg-white/10 dark:text-amber-100">
-                apps/api/.env · AGENT_API_KEY
+                Backoffice · API keys
               </code>
               <div className="pt-1">
                 <button
@@ -486,6 +692,37 @@ export function FinnyRail() {
                     <RefreshCw className="h-3 w-3" />
                   )}
                   {t("finny.setup.retry")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!setupIssue && isOffline && (
+        <div className="mx-4 mt-4 rounded-xl border border-rose-400/30 bg-rose-500/10 p-3">
+          <div className="flex items-start gap-2.5">
+            <Moon className="mt-0.5 h-4 w-4 shrink-0 text-rose-500 dark:text-rose-300" />
+            <div className="min-w-0 space-y-1">
+              <p className="text-xs font-semibold text-rose-700 dark:text-rose-200">
+                {t("finny.sleep.title")}
+              </p>
+              <p className="text-[11px] leading-relaxed text-rose-600/90 dark:text-rose-200/80">
+                {t("finny.sleep.body")}
+              </p>
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={handleWake}
+                  disabled={isCheckingStatus}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-rose-400/40 bg-rose-500/10 px-2 py-1 text-[11px] font-semibold text-rose-700 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-rose-200"
+                >
+                  {isCheckingStatus ? (
+                    <BrandDots size="sm" />
+                  ) : (
+                    <RefreshCw className="h-3 w-3" />
+                  )}
+                  {t("finny.sleep.wake")}
                 </button>
               </div>
             </div>
@@ -586,7 +823,11 @@ export function FinnyRail() {
             rows={2}
             disabled={composerDisabled}
             placeholder={
-              composerDisabled ? t("finny.setup.placeholder") : t("finny.ask")
+              setupIssue
+                ? t("finny.setup.placeholder")
+                : statusOffline
+                ? t("finny.sleep.placeholder")
+                : t("finny.ask")
             }
             className="max-h-28 min-h-[2.5rem] flex-1 resize-none bg-transparent px-1 py-1 text-xs leading-relaxed text-slate-800 placeholder:text-slate-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
@@ -629,11 +870,16 @@ export function FinnyRail() {
         >
           <FinnyAvatar
             mood={avatarMood}
-            className="h-12 w-12 drop-shadow-[0_10px_24px_rgb(34_211_238_/_0.45)] md:h-14 md:w-14"
+            asleep={isOffline}
+            className={`h-12 w-12 md:h-14 md:w-14 ${
+              isOffline
+                ? "drop-shadow-[0_10px_24px_rgb(251_113_133_/_0.45)]"
+                : "drop-shadow-[0_10px_24px_rgb(34_211_238_/_0.45)]"
+            }`}
           />
           <span
             className={`absolute right-0 top-0 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-[#070d18] ${
-              isOffline ? "bg-amber-400" : "bg-emerald-400"
+              isOffline ? "bg-rose-400" : "bg-emerald-400"
             }`}
           />
         </button>

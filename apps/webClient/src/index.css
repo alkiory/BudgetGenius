@@ -26,9 +26,8 @@ html {
 }
 
 :root {
-  --font-body:
-    "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
 
   --background: 246 248 252;
   --foreground: 15 23 42;
@@ -352,6 +351,34 @@ body {
   }
 }
 
+@keyframes finny-sleep-bob {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(1.5px) scale(0.985);
+  }
+}
+
+@keyframes finny-zzz {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.85);
+  }
+  35% {
+    opacity: 0.85;
+  }
+  70% {
+    opacity: 0.25;
+    transform: translateY(-6px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scale(1.05);
+  }
+}
+
 @keyframes finny-insight-in {
   0% {
     opacity: 0;
@@ -365,6 +392,17 @@ body {
 
 .animate-finny-bob {
   animation: finny-bob 3.4s ease-in-out infinite;
+}
+
+/* Asleep: a slower, heavier breath so the launcher reads as resting. */
+.animate-finny-sleep {
+  animation: finny-sleep-bob 5.2s ease-in-out infinite;
+}
+
+.finny-zzz {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: finny-zzz 3.8s ease-in-out infinite;
 }
 
 .finny-head {
@@ -404,6 +442,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-finny-bob,
+  .animate-finny-sleep,
+  .finny-zzz,
   .finny-head,
   .finny-eyes,
   .finny-hand,
@@ -601,6 +641,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-finny-bob,
+  .animate-finny-sleep,
+  .finny-zzz,
   .finny-head,
   .finny-eyes,
   .finny-hand,
@@ -706,11 +748,7 @@ body {
 
 .brand-loader-bar {
   width: 42%;
-  background: linear-gradient(
-    90deg,
-    rgb(var(--primary)),
-    rgb(var(--accent))
-  );
+  background: linear-gradient(90deg, rgb(var(--primary)), rgb(var(--accent)));
   box-shadow: 0 0 16px rgb(var(--primary) / 0.55);
   animation: brand-progress 1.7s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
@@ -761,6 +799,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-finny-bob,
+  .animate-finny-sleep,
+  .finny-zzz,
   .finny-head,
   .finny-eyes,
   .finny-hand,
@@ -958,4 +998,65 @@ body {
 
 .driver-popover.bg-tour .driver-popover-footer .driver-popover-btn-disabled {
   opacity: 0.5;
+}
+
+/* ── Backoffice announcements ──────────────────────────────────────
+   Avisos sent from the backoffice stay pinned above the app. They slide
+   in when they arrive and keep a slow glow so they read as a highlight
+   instead of one more panel. Transform/opacity/shadow only, and every
+   animation is disabled under prefers-reduced-motion. */
+@keyframes announce-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes announce-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(45 212 191 / 0);
+  }
+
+  50% {
+    box-shadow: 0 0 36px -8px rgb(45 212 191 / 0.45);
+  }
+}
+
+.animate-announce-in {
+  animation: announce-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-announce-glow {
+  animation: announce-glow 3.6s ease-in-out infinite;
+}
+
+/* ReactBits-style TextType caret. */
+@keyframes caret-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.animate-caret {
+  animation: caret-blink 1s steps(1, end) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-announce-in,
+  .animate-announce-glow,
+  .animate-caret {
+    animation: none;
+  }
 }

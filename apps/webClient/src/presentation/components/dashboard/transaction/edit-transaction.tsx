@@ -4,10 +4,10 @@ import {
   TransactionPatch,
 } from "@domain/dashboard/transactions/transaction.entity";
 import { Modal } from "@presentation/components/modal/modal";
+import { Pencil } from "@presentation/components/ui/animated-icons";
 import { Button } from "@presentation/components/ui/button";
 import { successToast, errorToast } from "@presentation/utils/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Pencil } from "@presentation/components/ui/animated-icons";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TransactionForm } from "./transaction-form";
@@ -44,6 +44,8 @@ export function EditTransaction({
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["recent-summary"] });
+      // A savings deposit's amount is part of the goal's progress.
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
     },
     onError: (error) => {
       errorToast(error.message, 3000, "transaction-create");

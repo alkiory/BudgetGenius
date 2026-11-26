@@ -2,6 +2,32 @@
 
 ---
 
+## [v1.12.0] — 2026-11-26
+
+> Session: the catalogue becomes a real product surface. Modules and pages are created and edited from the backoffice (sections, texts, tab order, uploaded images), the emergency-fund module turns the last six months of real expenses into a savings goal, and every calculator contribution is written as a dated savings transaction. Savings progress now derives from those linked transactions, so editing or deleting a deposit keeps the goal in sync and savings never inflate expense totals. Checks and deployment are also split: every feature branch is validated, and production only ships through a gated deploy workflow.
+
+### Added
+
+- **Catalogue modules and page builder** — the backoffice creates modules and child pages, edits their title/description, reorders tabs, adds blocks (rich text, steps, checklist, FAQ, CTA, images, the live emergency-fund tool) and publishes them. Each module declares the blocks it accepts through `apps/api/src/application/superadmin/page-blocks.ts`; the ordered sections live in the new nullable `app_modules.content` jsonb column (`1800000000019-AppModuleContent.ts`) and render at `/app/catalog` and `/app/catalog/:key` from `apps/webClient/src/presentation/pages/catalog/`.
+- **Emergency-fund module** — the live `emergency-fund` block (`apps/webClient/src/presentation/pages/catalog/page-blocks.tsx`) averages the user's last six months of expenses, offers the 3- and 6-month targets and creates the `Fondo de emergencia` savings budget on demand through `budget.service.ts`; the 4-week plan page carries the checklist and FAQ. The calculator reads the real goal (`manualSpent` + linked deposits) instead of a separate copy.
+- **Dated savings contributions** — `POST /api/budgets/savings/contribute` (`contribute-savings.dto.ts`) writes the goal bump and its `Savings` transaction in one DB transaction. The calculator adds a “Contribution date” field and the row appears in Transactions with the chosen day, a negative amount and the savings category.
+- **Backoffice image uploads** — `POST /api/media` accepts a browser data URL, validates MIME plus magic bytes (5 MB cap), stores the file under `apps/api/uploads` and serves it from `GET /api/media/:file` with a 30-day cache. The image block still accepts an external URL.
+- **Guided tour and shorter category picker** — the dashboard tour now covers every page, Finny can be dragged when it covers a control, the category picker lists only the usual categories, and editing a budget preserves the selected currency.
+- **Split CI and deploy workflows** — `.github/workflows/ci.yml` validates API migrations/tests/build and web typecheck/unit tests/assembled build on feature branches; `.github/workflows/deploy.yml` gates on the same checks, publishes `finance-api:<sha>` + `:latest` to DockerHub, deploys it to GCE and publishes `dist/` to Firebase Hosting.
+
+### Changed
+
+- **Savings progress is derived from the ledger** — `BudgetService` now exposes `manualSpent + SUM(linked savings transactions)` for savings categories (same layering as spending budgets). Contributions only persist the transaction, so a deleted or edited deposit moves the goal on the next read without a second write that could drift.
+- **Savings are excluded from expense aggregates** — dashboard totals, reports, category breakdowns and the weekly trend ignore the `savings` category, so a deposit no longer lowers the savings rate or inflates the emergency-fund baseline.
+- **GCE deploys pull the built image** — `docker-compose.gce.yml` declares `image: ${API_IMAGE}` and the workflow runs `up --no-build`; the VM no longer needs the source tree to rebuild. The deploy also writes the full `.env` (Redis password, Resend, Firebase, superadmin, provider-key secret) and fails if `/api` never answers after restart.
+
+### Fixed
+
+- **Deleting or editing a savings contribution** — the goal used to keep the amount forever because the contribution was also copied into `manualSpent`. Editing a deposit without sending `budgetCategoryId` also unlinked it. Both paths keep the goal in sync now, and `apps/api/test/dashboard/savings-goal.spec.ts` pins add/edit/delete, sign and category changes, foreign categories and malformed input.
+- **Emergency-fund baseline feedback loop** — the calculator's “typical month” used to grow with every contribution (€114.19 → €122.52 after two deposits); savings rows are now filtered out of the six-month expense average.
+
+---
+
 ## [v1.11.0] — 2026-11-25
 
 > Session: the animated-icon line and self-hosted typography across both surfaces. Every icon now animates from its parent component's hover/focus instead of its own, `lucide-react` is replaced by `@animateicons/react` (75-icon catalogue) and `@animateicons/vanilla`, Manrope ships locally in the SPA and the landing, Playfair Display is limited to the landing hero, and the footer credit reveals an animated coffee cup.

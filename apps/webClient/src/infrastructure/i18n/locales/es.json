@@ -412,6 +412,7 @@
     "medical": "Médico",
     "rent": "Alquiler",
     "salary": "Salario",
+    "savings": "Ahorro",
     "dining": "Restaurantes",
     "groceries": "Supermercado",
     "shopping": "Compras",
@@ -589,6 +590,7 @@
     "title": "Finny",
     "subtitle": "Tu asistente financiero con IA",
     "open": "Abrir Finny",
+    "dragHint": "Arrastra para mover",
     "close": "Cerrar Finny",
     "collapse": "Encoger Finny",
     "expand": "Expandir Finny",
@@ -598,14 +600,21 @@
       "badge": "Falta configurar",
       "missing": {
         "title": "Finny necesita una clave de API",
-        "body": "Añade AGENT_API_KEY al entorno de la API y reiníciala. La clave se queda en el servidor."
+        "body": "Añade una clave del proveedor en Backoffice → API keys. Se guarda cifrada en el servidor y se puede rotar sin reiniciar."
       },
       "invalid": {
         "title": "La clave de API de Finny fue rechazada",
-        "body": "Sustituye AGENT_API_KEY por una clave activa y reinicia la API."
+        "body": "Sustituye o desactiva la clave rechazada en Backoffice → API keys y Finny usará la siguiente al instante."
       },
       "placeholder": "Finny está desconectado hasta configurar la clave",
       "retry": "Reintentar"
+    },
+    "sleep": {
+      "badge": "Dormida",
+      "title": "Finny está dormida",
+      "body": "Ninguna clave de IA responde ahora mismo, así que el chat queda en pausa hasta que una vuelva a funcionar. Los insights se siguen actualizando con normalidad.",
+      "placeholder": "Finny está dormida y aún no puede responder",
+      "wake": "Volver a comprobar"
     },
     "insightsTitle": "Insights",
     "budgetRisk": "{{count}} presupuesto(s) en riesgo",
@@ -1110,7 +1119,29 @@
       "welcomeTitle": "Todo listo",
       "welcomeBody": "Tus preferencias están guardadas. Aquí tienes un recorrido de 60 segundos por la app.",
       "navTitle": "Cada sección, a un clic",
-      "navBody": "Panel, transacciones, presupuestos, reportes e ingresos viven en esta barra lateral.",
+      "navBody": "Panel, transacciones, presupuestos, reportes e ingresos viven en esta barra lateral. Ahora vemos cada una.",
+      "pages": {
+        "dashboard": {
+          "title": "Panel",
+          "body": "Tu mes de un vistazo: balance, ingresos, gastos y las categorías donde más gastas. Empieza aquí para ver cómo va el mes."
+        },
+        "transactions": {
+          "title": "Transacciones",
+          "body": "Todos los movimientos. Filtra, edita o importa los tuyos, y usa Importar categoría para traer las categorías que ya usas."
+        },
+        "budgets": {
+          "title": "Presupuestos",
+          "body": "Define un límite por categoría y periodo. Abre uno para añadir un gasto y ver la barra de progreso."
+        },
+        "reports": {
+          "title": "Reportes",
+          "body": "Tendencias, comparaciones y desgloses en el tiempo, para ver qué cambió y por qué."
+        },
+        "income": {
+          "title": "Ingresos",
+          "body": "Tus ingresos fijos y puntuales, separados del gasto para que el balance sea real."
+        }
+      },
       "addTitle": "Registra tu primera transacción",
       "addBody": "Usa el botón + para registrar un ingreso o un gasto. Categorizar toma un segundo.",
       "finnyTitle": "Conoce a Finny",
@@ -1124,6 +1155,327 @@
       "changelogTitle": "Mira el changelog completo",
       "changelogBody": "Cada versión está documentada aquí — ábrelo cuando quieras desde la insignia de versión."
     }
+  },
+  "superadmin": {
+    "navLabel": "Backoffice",
+    "title": "Backoffice",
+    "subtitle": "Administra la app: módulos, claves de API, avisos y uso agregado. Sin datos personales.",
+    "error": "No se pudo completar la operación",
+    "tabs": {
+      "overview": "Resumen",
+      "modules": "Módulos",
+      "apiKeys": "API keys",
+      "notifications": "Avisos"
+    },
+    "overview": {
+      "users": "Usuarios",
+      "usersNote": "{{count}} nuevos en 30 días",
+      "transactions": "Transacciones",
+      "transactionsNote": "{{count}} en las últimas 24 h",
+      "modules": "Elementos activos del catálogo",
+      "modulesNote": "{{count}} desactivados",
+      "modulesBreakdown": "{{modules}} módulos · {{components}} componentes · {{integrations}} integraciones · {{pages}} páginas · {{tabs}} pestañas",
+      "apiKeys": "API keys activas",
+      "keysNote": "Solo se guarda el hash",
+      "activity": "Transacciones por mes",
+      "activityHint": "Movimientos registrados en los últimos 6 meses. Cada barra se compara con el mes de mayor volumen.",
+      "movements": "mov.",
+      "activityEmpty": "Todavía no hay transacciones"
+    },
+    "modules": {
+      "add": "Registrar elemento",
+      "registered": "Registrados",
+      "name": "Nombre",
+      "namePlaceholder": "Informes mensuales",
+      "key": "Clave",
+      "category": "Categoría",
+      "version": "Versión",
+      "description": "Descripción",
+      "core": "Core",
+      "coreHint": "Los elementos core están siempre activos: desactivarlos rompería la app.",
+      "toggle": "Cambiar estado",
+      "statusLabel": "Estado",
+      "open": "Editar {{name}}",
+      "editTitle": "Editar {{name}}",
+      "updated": "Elemento actualizado",
+      "disable": "Desactivar",
+      "disabledToast": "Elemento desactivado",
+      "deleteNote": "Aquí no se borra nada: desactivar conserva el elemento y su historial. El borrado en cascada podría llegar más adelante.",
+      "created": "Elemento registrado",
+      "openInApp": "Abrir en la app",
+      "visibleHint": "Las páginas y módulos aparecen en tu menú lateral al instante. Los activos llegan a todas las cuentas; los beta y desactivados quedan solo para el superadmin como vista previa.",
+      "content": {
+        "title": "Contenido de la página",
+        "hint": "Lo que la página dice en la app: secciones ordenadas con bloques listos, componentes reutilizables y texto opcional. Sin código ni despliegues.",
+        "addSection": "Añadir sección",
+        "noSections": "Esta página aún no tiene secciones. Añade una para darle contenido real.",
+        "sectionNumber": "Sección {{n}}",
+        "sectionTitle": "Título de la sección",
+        "sectionBody": "Texto que se muestra en la app. Se respetan los saltos de línea.",
+        "sectionComponents": "Componentes de esta sección",
+        "noComponents": "Aún no hay componentes. Crea uno abajo.",
+        "moveUp": "Subir",
+        "moveDown": "Bajar",
+        "removeSection": "Quitar sección",
+        "save": "Guardar contenido",
+        "saveHint": "Las secciones vacías se descartan. La app muestra el contenido nuevo al instante.",
+        "saved": "Contenido de la página guardado",
+        "tabsTitle": "Orden de las pestañas",
+        "tabsHint": "El orden de abajo es el orden en que la página muestra sus pestañas.",
+        "tabsSaved": "Orden de pestañas guardado",
+        "noTabs": "Esta página aún no tiene pestañas.",
+        "addComponentTitle": "Añadir un componente a esta página",
+        "addComponent": "Añadir componente",
+        "addComponentHint": "El componente se registra dentro de esta página y queda disponible en todas sus secciones. Luego márcalo arriba y guarda.",
+        "componentAdded": "Componente {{name}} añadido"
+      },
+      "blocks": {
+        "title": "Bloques",
+        "empty": "Aún no hay bloques. Elige uno abajo y se muestra en la app.",
+        "items": "Elementos",
+        "item": "Elemento {{n}}",
+        "addItem": "Añadir elemento",
+        "removeItem": "Quitar elemento",
+        "remove": "Quitar bloque",
+        "loading": "Cargando bloques…",
+        "unknown": "Tipo de bloque desconocido: {{type}}",
+        "types": {
+          "callout": "Aviso",
+          "stats": "Cifras clave",
+          "steps": "Pasos",
+          "checklist": "Checklist",
+          "links": "Tarjetas de enlace",
+          "faq": "Preguntas frecuentes",
+          "cta": "Llamada a la acción",
+          "image": "Imagen",
+          "emergency-fund": "Fondo de emergencia",
+          "divider": "Separador"
+        },
+        "hints": {
+          "callout": "Mensaje teñido para un consejo, un aviso o una confirmación.",
+          "stats": "Hasta cuatro cifras con etiqueta y pista, una al lado de otra.",
+          "steps": "Recorrido numerado: un título y un texto por paso.",
+          "checklist": "Lista con ticks para mostrar qué incluye o qué está hecho.",
+          "links": "Tarjetas que abren otra página o un sitio externo.",
+          "faq": "Preguntas y respuestas que se despliegan.",
+          "cta": "Banner de cierre con un botón.",
+          "image": "Sube una imagen desde tu dispositivo o pega una URL, con texto alternativo y pie.",
+          "emergency-fund": "Herramienta viva: calcula tu colchón con tus gastos reales de los últimos meses.",
+          "divider": "Aire entre dos bloques."
+        },
+        "fields": {
+          "tone": "Tono",
+          "title": "Título",
+          "body": "Texto",
+          "label": "Etiqueta",
+          "value": "Valor",
+          "hint": "Pista",
+          "question": "Pregunta",
+          "answer": "Respuesta",
+          "description": "Descripción",
+          "href": "Enlace (URL o ruta /app)",
+          "actionLabel": "Texto del botón",
+          "actionHref": "Enlace del botón",
+          "src": "Imagen (archivo o URL)",
+          "alt": "Texto alternativo",
+          "caption": "Pie de imagen"
+        },
+        "image": {
+          "upload": "Subir imagen",
+          "uploading": "Subiendo…",
+          "hint": "PNG, JPEG, WebP o GIF de hasta 5 MB. Se guarda en el servidor y la página solo referencia el archivo.",
+          "tooLarge": "La imagen supera los 5 MB. Elige una más ligera.",
+          "unsupported": "Formato no admitido. Usa PNG, JPEG, WebP o GIF.",
+          "readError": "No se pudo leer el archivo. Inténtalo de nuevo."
+        },
+        "tones": {
+          "info": "Info",
+          "success": "Éxito",
+          "warning": "Aviso",
+          "critical": "Crítico"
+        }
+      },
+      "empty": "Aún no hay elementos registrados",
+      "status": {
+        "active": "Activo",
+        "beta": "Beta",
+        "disabled": "Desactivado"
+      },
+      "statusHints": {
+        "active": "Visible para todas las cuentas con sesión: aparece en el menú lateral y abre su página.",
+        "beta": "Solo lo ves tú, marcado como beta en tu menú lateral. Actívalo para publicarlo a todos.",
+        "disabled": "Oculto para los usuarios. Tú sigues viéndolo en el menú como desactivado, para previsualizarlo y arreglarlo."
+      },
+      "kind": "Tipo",
+      "kinds": {
+        "module": "Módulo",
+        "component": "Componente",
+        "integration": "Integración",
+        "page": "Página",
+        "tab": "Pestaña"
+      },
+      "parent": "Pertenece a",
+      "parentNone": "Sin padre (independiente)",
+      "parentHint": "Los componentes y páginas pertenecen a un módulo; las pestañas pertenecen a una página.",
+      "partOf": "parte de {{key}}",
+      "kindsHelp": "Módulo = una función completa de la app. Componente = una pieza reutilizable dentro de una pantalla. Integración = un servicio externo. Página = una pantalla navegable. Pestaña = una sección dentro de una página. Solo el superadmin ve este inventario: desactivar un elemento lo oculta sin borrar nada.",
+      "announce": {
+        "title": "Avisar de esta función",
+        "defaultTitle": "Nuevo: {{name}}",
+        "defaultBody": "{{name}} ya está disponible como {{kind}}. Ábrelo desde la app y cuéntanos qué te parece.",
+        "hint": "Avisa a los usuarios de {{name}} justo después de registrarlo. Publícalo ahora o guárdalo como borrador para probarlo antes.",
+        "publish": "Publicar aviso",
+        "draft": "Guardar para probar",
+        "skip": "Ahora no",
+        "draftHint": "Guardar para probar lo deja como borrador en Avisos; publícalo desde esa pestaña cuando estés listo.",
+        "created": "Aviso creado"
+      }
+    },
+    "apiKeys": {
+      "add": "Emitir API key",
+      "name": "Nombre",
+      "scopes": "Permisos",
+      "scopesHint": "modules:read, usage:read",
+      "create": "Emitir key",
+      "created": "API key emitida",
+      "secretTitle": "Copia esta clave ahora",
+      "secretHint": "No se puede volver a mostrar: el servidor solo guarda su hash.",
+      "copy": "Copiar",
+      "copied": "Clave copiada",
+      "revoke": "Revocar",
+      "revoked": "Revocada",
+      "active": "Activa",
+      "empty": "Aún no hay API keys",
+      "hint": "Claves para clientes máquina (integraciones, CLI). No son la clave de Finny: esas se gestionan arriba. Estas claves no están conectadas a ningún endpoint todavía."
+    },
+    "providerKeys": {
+      "title": "Claves de Finny (proveedor)",
+      "hint": "Se prueban en orden de prioridad. Si una es rechazada o falla, Finny usa la siguiente. Se guardan cifradas y solo este backoffice puede revelarlas.",
+      "label": "Etiqueta",
+      "labelPlaceholder": "OpenAI principal",
+      "key": "Clave del proveedor",
+      "priority": "Prioridad",
+      "priorityHint": "De 0 a 999. El número más bajo va primero: Finny prueba esta clave antes que una con número mayor y pasa a la siguiente si la rechazan o falla. Empate: primero la clave más antigua.",
+      "add": "Añadir clave",
+      "created": "Clave añadida",
+      "empty": "Aún no hay claves de Finny. Añade una para que pueda responder.",
+      "order": "orden {{order}}",
+      "reveal": "Mostrar u ocultar la clave",
+      "copied": "Clave copiada",
+      "active": "Activa",
+      "inactive": "Inactiva",
+      "toggle": "Activar o desactivar clave",
+      "undecryptable": "No se pudo descifrar: vuelve a introducirla",
+      "status": {
+        "checking": "Comprobando qué clave usaría Finny…",
+        "available": "Finny respondería con {{key}}",
+        "notConfigured": "No hay ninguna clave configurada: Finny está dormida",
+        "rejected": "El proveedor rechazó todas las claves: Finny está dormida",
+        "failing": "Todas las claves están fallando ahora mismo: Finny está dormida",
+        "refresh": "Volver a comprobar",
+        "explain": "Cada petición recorre esta lista en orden de prioridad y salta a la siguiente clave cuando el proveedor rechaza o falla una. La caducidad no se puede detectar por adelantado: se cambia en la misma petición y el error queda registrado abajo."
+      }
+    },
+    "notifications": {
+      "add": "Crear aviso",
+      "title": "Título",
+      "body": "Mensaje",
+      "level": "Nivel",
+      "audience": "Audiencia",
+      "publish": "Publicar o despublicar",
+      "published": "Publicado",
+      "draft": "Borrador",
+      "scheduled": "Programado",
+      "scheduledFor": "Se publica el {{date}}",
+      "schedule": "Programar publicación (opcional)",
+      "scheduleHint": "Sin fecha queda como borrador. Con fecha, el aviso se publica solo en ese momento.",
+      "created": "Aviso creado",
+      "empty": "Aún no hay avisos",
+      "levels": {
+        "info": "Info",
+        "success": "Éxito",
+        "warning": "Aviso",
+        "critical": "Crítico"
+      },
+      "audiences": {
+        "all": "Todos",
+        "free": "Gratis",
+        "premium": "Premium"
+      },
+      "audienceHints": {
+        "all": "Lo ve cualquier cuenta con sesión, sea premium o no.",
+        "free": "Solo lo ven las cuentas sin premium.",
+        "premium": "Solo lo ven las cuentas premium."
+      },
+      "freeAudienceWarning": "Todas las cuentas son premium durante el lanzamiento gratuito, así que este aviso no lo vería nadie. Usa «Todos»."
+    }
+  },
+  "catalog": {
+    "navGroup": "Catálogo",
+    "all": "Todo el catálogo",
+    "allTitle": "Catálogo",
+    "allHint": "Cada módulo, página, pestaña, componente e integración registrado en el backoffice. Los activos están visibles para todos; los beta y desactivados solo los ve el superadmin.",
+    "allEmpty": "Todavía no hay nada registrado. Crea el primer elemento en el backoffice.",
+    "beta": "Beta",
+    "disabled": "Desactivado",
+    "back": "Backoffice",
+    "backToApp": "Panel",
+    "notFound": "Este elemento no es visible",
+    "notFoundHint": "Puede estar desactivado, o ser una página beta que solo el superadmin puede previsualizar.",
+    "partOf": "Parte de",
+    "modulePages": "Páginas de este módulo",
+    "noPages": "Este módulo aún no tiene páginas",
+    "noPagesHint": "Crea una página en el backoffice y asígnale este módulo como padre. Aparecerá aquí al instante.",
+    "pageTabs": "Pestañas",
+    "noTabs": "Esta página aún no tiene pestañas",
+    "noTabsHint": "Una pestaña creada en el backoffice con esta página como padre aparece aquí como una sección real.",
+    "noDescription": "Esta sección aún no tiene descripción.",
+    "noChildren": "Todavía no hay nada registrado dentro.",
+    "components": "Componentes",
+    "integrations": "Integraciones",
+    "internalKind": "Es una pieza interna, no una pantalla: aparece listada en la página o módulo al que pertenece.",
+    "previewNote": "Vista previa: este elemento está en estado {{status}}. Solo el superadmin lo ve así; actívalo para publicarlo a todas las cuentas.",
+    "childSummary": "{{tabs}} pestañas · {{components}} componentes",
+    "emptySection": "Esta sección aún no tiene texto ni componentes. Edítala en el backoffice.",
+    "emergencyFund": {
+      "title": "Tu fondo de emergencia",
+      "detected": "Con los {{count}} mes(es) con gastos de tu historial reciente, tu mes típico es {{amount}}. Cámbialo si este mes es distinto.",
+      "noData": "Todavía no hay gastos en los últimos seis meses, así que no hay base para calcularlo.",
+      "noDataCta": "Registra tu primer gasto",
+      "monthlyLabel": "Gasto mensual típico",
+      "monthlyHint": "Sale de tus propias transacciones; edítalo para probar otro escenario.",
+      "savedLabel": "Lo que ya tienes ahorrado",
+      "savedHint": "Solo se usa en este cálculo; no se guarda nada.",
+      "savedSynced": "Sincronizado con tu presupuesto de ahorro: cada aporte se refleja aquí.",
+      "minimumLabel": "Mínimo · 3 meses",
+      "solidLabel": "Colchón sólido · 6 meses",
+      "goalLabel": "Tu meta en Presupuestos",
+      "progressLabel": "Avance hacia 6 meses",
+      "goalProgressLabel": "Avance hacia tu meta",
+      "contributionLabel": "Aportar a la meta",
+      "contributionDate": "Fecha del aporte",
+      "contributionHint": "Se suma al ahorro real y se registra como transacción de ahorro con esa fecha.",
+      "transactionDescription": "Aporte al fondo de emergencia",
+      "contribute": "Aportar",
+      "contributing": "Aportando…",
+      "contributed": "Aportados {{amount}} a tu meta y registrados como transacción.",
+      "contributionError": "No se pudo registrar el aporte. Inténtalo de nuevo.",
+      "covered": "Cubres {{months}} meses",
+      "createGoal": "Crear meta de ahorro",
+      "creatingGoal": "Creando meta…",
+      "goalCreated": "Meta creada: {{amount}} en tu presupuesto de ahorro.",
+      "goalExists": "Ya tienes una meta de {{amount}} en tu presupuesto de ahorro.",
+      "goalError": "No se pudo crear la meta. Inténtalo de nuevo.",
+      "viewGoal": "Ver mi meta",
+      "addExpense": "Registrar un gasto"
+    }
+  },
+  "announcements": {
+    "dismiss": "Descartar aviso"
+  },
+  "support": {
+    "dev": "Apoyar al dev",
+    "tooltip": "Apoya al desarrollador por PayPal"
   },
   "maintenance": {
     "title": "Estamos en mantenimiento",

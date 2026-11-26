@@ -133,6 +133,35 @@ export class BudgetRepository {
     return [...totals.values()];
   }
 
+  /**
+   * Sum of deposits linked to each savings category.
+   *
+   * Savings progress is layered like spending: the stored `manualSpent`
+   * baseline plus the ledger rows frozen to the category. Deriving the
+   * ledger half makes deleting, editing or re-adding a deposit transaction
+   * move the goal on the next read, with no second write to forget.
+   */
+  async sumLinkedSavingsByCategory(
+    userId: number,
+  ): Promise<Array<{ categoryId: number; total: number }>> {
+    const rows = await this.transactionRepo
+      .createQueryBuilder('t')
+      .innerJoin(BudgetCategory, 'bc', 'bc.id = t."budgetCategoryId"')
+      .innerJoin(Budget, 'b', 'b.id = bc."budgetId"')
+      .select('bc.id', 'categoryId')
+      .addSelect('SUM(ABS(t.amount))', 'total')
+      .where('t."userId" = :userId', { userId })
+      .andWhere('t.amount < 0')
+      .andWhere("b.type = 'savings'")
+      .groupBy('bc.id')
+      .getRawMany<{ categoryId: string; total: string }>();
+
+    return rows.map((row) => ({
+      categoryId: Number(row.categoryId),
+      total: Number(row.total) || 0,
+    }));
+  }
+
   async findByUser(userId: number): Promise<Budget[]> {
     return this.repo.find({
       where: { user: { id: userId } },

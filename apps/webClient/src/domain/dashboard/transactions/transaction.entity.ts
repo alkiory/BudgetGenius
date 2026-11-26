@@ -96,6 +96,29 @@ export const TRANSACTION_CATEGORIES = [
 
 export type Category = (typeof TRANSACTION_CATEGORIES)[number];
 
+/**
+ * Curated list offered by the transaction form.
+ *
+ * The full enum above stays for legacy rows and filters, but the picker only
+ * shows these plus whatever the user imported ("Import categories" in
+ * Transactions / "Importar categoría"). The defaults used to be 21 rows long,
+ * which turned the selector into an endless scroll and buried the categories
+ * people actually use.
+ */
+export const DEFAULT_TRANSACTION_CATEGORIES: string[] = [
+  "Housing",
+  "Food",
+  "Transportation",
+  "Groceries",
+  "Dining",
+  "Utilities",
+  "Shopping",
+  "Entertainment",
+  "Healthcare",
+  "Salary",
+  "Other",
+];
+
 // Phase 3 (T3.2): "income" | "expense" filter for transactions, used
 // by `useFetchTransactions`'s incomePage strangler-facade to request
 // only positive-amount rows from the backend via `?type=income`. Lives

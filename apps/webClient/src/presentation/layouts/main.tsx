@@ -1,13 +1,33 @@
 import { SidebarProvider } from "@adapters/hooks/sidebarContext";
+import { useGetSettings } from "@adapters/query/userQuery";
+import { setSettingsAction } from "@adapters/slices/user-settings/settingsSlice";
+import { useCrossDeviceSync } from "@infrastructure/use-cross-device-sync";
 import { AmbientBackground } from "@presentation/components/dashboard/ambient-background";
+import { AnnouncementBanner } from "@presentation/components/dashboard/announcement-banner";
 import { DashboardHeader } from "@presentation/components/dashboard/header";
 import { FinnyRail } from "@presentation/components/dashboard/finny-rail";
 import { MainContent } from "@presentation/components/dashboard/main-content";
 import { DashboardSidebar } from "@presentation/components/dashboard/sidebar";
 import { AppTour } from "@presentation/components/tour/app-tour";
+import { useEffect } from "react";
+import { useDispatch } from "react-redux";
 import { Outlet } from "react-router";
 
 export default function MainLayout() {
+  useCrossDeviceSync();
+
+  // The signed-in user's preferences (currency, language, timezone) are
+  // hydrated here rather than on the dashboard only: every money surface
+  // reads `state.userSettings`, so landing straight on /app/budgets (deep
+  // link, refresh, mobile cold start) used to format amounts with the EUR
+  // default until the dashboard was visited.
+  const dispatch = useDispatch();
+  const { data: settings } = useGetSettings();
+
+  useEffect(() => {
+    if (settings) dispatch(setSettingsAction(settings));
+  }, [dispatch, settings]);
+
   return (
     <SidebarProvider>
       <div className="relative flex min-h-screen bg-background text-slate-700 dark:text-slate-200">
@@ -16,6 +36,7 @@ export default function MainLayout() {
         <div className="relative z-10 flex min-w-0 flex-1">
           <MainContent>
             <DashboardHeader />
+            <AnnouncementBanner />
             {/* px-4 pt-4 (instead of p-4) so the safe-area-aware pb-declaration
               is the only one touching padding-bottom at <md. `max(env(...))`
               is used (rather than env(... , 1rem)) because modern browsers

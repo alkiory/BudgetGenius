@@ -1,9 +1,13 @@
 import { HttpBudgetRepository } from "@adapters/http/budget.repository";
 import { HttpDashboardRepository } from "@adapters/http/dashboard.repository";
 import { HttpTransactionRepository } from "@adapters/http/transaction.repository";
-import { QueryParam } from "@domain/dashboard/budgets/budget.repository";
+import { Budget } from "@domain/dashboard/budgets/budget.entity";
+import {
+  QueryParam,
+  SavingsContributionInput,
+} from "@domain/dashboard/budgets/budget.repository";
 import { TransactionTypeFilter } from "@domain/dashboard/transactions/transaction.entity";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 const STALE_TIME_MS = 30 * 1000;
 const GC_TIME_MS = 1000 * 60 * 5;
@@ -51,6 +55,40 @@ export const useFetchBudgets = () => {
     retry: 3,
     staleTime: STALE_TIME_MS,
     gcTime: GC_TIME_MS,
+  });
+};
+
+/**
+ * Creates a budget from any surface (the page composer's live tools included)
+ * and refreshes both the budgets list and the dashboard aggregates.
+ */
+export const useCreateBudget = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (budget: Partial<Budget>) =>
+      HttpBudgetRepository.createBudget(budget),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+};
+
+/**
+ * Deposit into a savings goal. The API writes the goal bump and its ledger
+ * transaction together; refreshing the lists here keeps every surface in sync.
+ */
+export const useContributeToSavings = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: SavingsContributionInput) =>
+      HttpBudgetRepository.contributeToSavings(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-summary"] });
+    },
   });
 };
 

@@ -101,4 +101,6 @@ export class User {
 export enum UserRole {
   USER = 'user',
   ADMIN = 'admin',
+  /** Operator of the product backoffice (modules, API keys, announcements). */
+  SUPERADMIN = 'superadmin',
 }

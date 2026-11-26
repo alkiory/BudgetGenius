@@ -32,6 +32,7 @@ import {
 } from '@application/dashboard/dto/update-budget.dto';
 import { BudgetCategory } from '@domain/dashboard/budget-category.entity';
 import { ReconcileExpenseDto } from '@application/dashboard/dto/reconcile-expense.dto';
+import { ContributeSavingsDto } from '@application/dashboard/dto/contribute-savings.dto';
 
 @ApiTags('budgets')
 @Controller('budgets')
@@ -107,6 +108,18 @@ export class BudgetController {
   @ApiResponse({ status: 201, type: Budget })
   create(@Req() req, @Body() dto: CreateBudgetDto) {
     return this.svc.createBudget(req.user.userId, dto);
+  }
+
+  /**
+   * One deposit into a savings goal: adds it to the goal and writes the
+   * matching ledger row in the same DB transaction, so the two can never
+   * disagree.
+   */
+  @Post('savings/contribute')
+  @ApiOperation({ summary: 'Deposit into a savings goal (goal + transaction)' })
+  @ApiResponse({ status: 201, description: 'Contribution saved' })
+  contributeToSavings(@Req() req, @Body() dto: ContributeSavingsDto) {
+    return this.svc.contributeToSavingsGoal(req.user.userId, dto);
   }
 
   @Post('category')

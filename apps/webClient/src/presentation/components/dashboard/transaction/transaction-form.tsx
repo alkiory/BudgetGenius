@@ -1,9 +1,9 @@
 import { useDecimalInput } from "@adapters/hooks/useDecimalInput";
 import { RootState } from "@adapters/store/rootStore";
 import {
+  DEFAULT_TRANSACTION_CATEGORIES,
   INCOME_RECURRENCES,
   IncomeRecurrence,
-  TRANSACTION_CATEGORIES,
   Transaction,
   TransactionPatch,
 } from "@domain/dashboard/transactions/transaction.entity";
@@ -210,8 +210,21 @@ export function TransactionForm({
           }
           options={[
             { value: "Other", label: t("categories.other") },
-            ...TRANSACTION_CATEGORIES.filter(
-              (category) => category !== "All" && category !== "Todos",
+            // A row created before the list was shortened keeps its own
+            // category selectable instead of silently becoming "Other".
+            ...(formData.category &&
+            !DEFAULT_TRANSACTION_CATEGORIES.includes(formData.category)
+              ? [
+                  {
+                    value: formData.category,
+                    label: t(`categories.${formData.category.toLowerCase()}`, {
+                      defaultValue: formData.category,
+                    }),
+                  },
+                ]
+              : []),
+            ...DEFAULT_TRANSACTION_CATEGORIES.filter(
+              (category) => category !== "Other",
             ).map((category) => ({
               value: category,
               label: t(`categories.${category.toLowerCase()}`),

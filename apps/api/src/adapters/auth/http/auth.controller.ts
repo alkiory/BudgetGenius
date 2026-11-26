@@ -37,6 +37,10 @@ import { CookieService } from '@infrastructure/config/cookie.service';
 import { AuthGuard } from '@nestjs/passport';
 import { User } from '@domain/user/user.entity';
 import { toPublicUser } from '@application/user/public-user';
+import {
+  bearerAccessTokenExtractor,
+  cookieAccessTokenExtractor,
+} from '@infrastructure/config/strategy/jwt.strategy';
 
 /** 7 días en milisegundos — coincide con el JWT expiry del refreshToken. */
 const REFRESH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
@@ -135,7 +139,8 @@ export class AuthController {
       // would replay this failure on every later attempt, even after the
       // cause is gone.
       const errorCode =
-        error instanceof HttpException && error.getStatus() === HttpStatus.CONFLICT
+        error instanceof HttpException &&
+        error.getStatus() === HttpStatus.CONFLICT
           ? 'email_in_use'
           : 'google_auth_failed';
 
@@ -450,9 +455,28 @@ export class AuthController {
   @SkipThrottle()
   @Post('logout')
   async logout(@Req() req, @Res({ passthrough: true }) res: Response) {
-    const token = req.cookies?.accessToken;
+    const tokens = Array.from(
+      new Set(
+        [
+          cookieAccessTokenExtractor(req),
+          bearerAccessTokenExtractor(req),
+        ].filter((t): t is string => typeof t === 'string' && t.length > 0),
+      ),
+    );
 
-    if (token) {
+    for (const token of tokens) {
+      let verified: Record<string, unknown>;
+      try {
+        // Verify signature before trusting claims or touching Redis (CWE-347).
+        verified = this.jwtService.verify(token, { ignoreExpiration: true });
+      } catch {
+        continue;
+      }
+
+      if (verified?.['typ'] !== undefined && verified['typ'] !== 'access') {
+        continue;
+      }
+
       try {
         await this.authService.addTokenToBlacklist(token);
       } catch (error) {
@@ -465,9 +489,9 @@ export class AuthController {
       // (e.g. in a Capacitor WebView where cookie clearing may not
       // propagate immediately) cannot be used to silently re-auth.
       try {
-        const userData = this.jwtService.decode(token);
-        if (userData && userData['id']) {
-          await this.authService.invalidateRefreshToken(userData['id']);
+        const userId = verified['id'] ?? verified['sub'];
+        if (userId) {
+          await this.authService.invalidateRefreshToken(Number(userId));
         }
       } catch (error) {
         this.logger.warn(
@@ -599,8 +623,7 @@ export class AuthController {
     // (where headers exist) and unit-test fixtures (where they may
     // not).
     if (!token) {
-      const headers =
-        ((req.headers ?? {}) as Record<string, string | undefined>);
+      const headers = (req.headers ?? {}) as Record<string, string | undefined>;
       this.logger.warn(
         `🛡️ /auth/refresh received NO refresh token in any of the ` +
           `three source channels ` +
@@ -615,6 +638,12 @@ export class AuthController {
 
     try {
       const payload = this.jwtService.verify(token);
+
+      // A refresh credential is not an access credential; keep legacy untyped
+      // tokens (`typ === undefined`) valid during deployment cutover.
+      if (payload['typ'] !== undefined && payload['typ'] !== 'refresh') {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
 
       // Check Redis to ensure the refresh token hasn't been revoked
       // (e.g. by a logout that deleted it from Redis).
@@ -634,8 +663,9 @@ export class AuthController {
           id: payload['id'],
           email: payload['email'],
           role: payload['role'],
+          typ: 'access',
         },
-        { expiresIn: '1h' },
+        { expiresIn: '7d' },
       );
 
       this.cookieService.setCookie(res, 'accessToken', newAccessToken);
@@ -659,5 +689,4 @@ export class AuthController {
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
-
 }
