@@ -43,7 +43,9 @@ describe('savings exclusion in aggregates', () => {
 
     expect(joins).toContain('bc:bc.id = tx."budgetCategoryId"');
     expect(joins).toContain('b:b.id = bc."budgetId"');
-    expect(filters).toContain("(b.type IS NULL OR b.type <> 'savings')");
+    expect(filters).toContain(
+      '(tx."isSavingsDeposit" = false AND (b.type IS NULL OR b.type <> \'savings\'))',
+    );
     expect(filters.some((sql) => sql.includes('LOWER(tx.category)'))).toBe(
       false,
     );
@@ -61,7 +63,9 @@ describe('savings exclusion in aggregates', () => {
     await repo.getExpensesByCategory(1);
 
     expect(joins).toContain('bc:bc.id = tx."budgetCategoryId"');
-    expect(filters).toContain("(b.type IS NULL OR b.type <> 'savings')");
+    expect(filters).toContain(
+      '(tx."isSavingsDeposit" = false AND (b.type IS NULL OR b.type <> \'savings\'))',
+    );
     expect(filters.some((sql) => sql.includes('LOWER(tx.category)'))).toBe(
       false,
     );

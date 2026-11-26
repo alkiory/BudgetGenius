@@ -99,6 +99,7 @@ export class BudgetService {
     return this.repo.createBudget({
       ...dto,
       type: budgetType,
+      goalKey: dto.goalKey ?? null,
       totalSpent,
       user: { id: userId } as User,
       categories,
@@ -160,6 +161,7 @@ export class BudgetService {
         category: 'Savings',
         amount: -amount,
         budgetCategoryId: category.id,
+        isSavingsDeposit: true,
         recurrence: null,
         user: { id: userId } as User,
         createdAt: new Date(),

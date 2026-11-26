@@ -20,33 +20,26 @@ async function bootstrap() {
 
   const isProduction = process.env.NODE_ENV === 'production';
 
-  // Enable middleware to read cookies
-  app.use(cookieParser());
-
-  // Backoffice image uploads are JSON data URLs: a 5 MiB file becomes ~6.7 MB
-  // of base64. Everything else keeps Express's small default so an oversized
-  // payload cannot be used to exhaust memory on ordinary endpoints.
-  app.use('/api/media', json({ limit: '8mb' }));
-  app.use(json({ limit: '100kb' }));
-  app.use(urlencoded({ extended: true, limit: '100kb' }));
-
   // ── CORS ───────────────────────────────────────────────────────────────
-  // Origin list + options live in `./cors` (shared with the preflight
-  // specs). FRONTEND_URL may be a single URL or a comma-separated list
-  // of origins; whatever the operator sets is merged with the
-  // environment defaults (production defaults to the Firebase Hosting
-  // domains + the Capacitor WebView origins, and every environment also
-  // gets the localhost:5173 Vite dev-server origin).
+  // Register CORS BEFORE all body parsers so parser rejections (e.g. 413
+  // Payload Too Large) still carry Access-Control-Allow-Origin headers and
+  // browsers see HTTP 413 instead of an opaque network error.
   const allowedOrigins = buildAllowedOrigins(
     isProduction,
     process.env.FRONTEND_URL,
   );
-
-  // Requests without an `Origin` header (curl, server-to-server) are
-  // allowed. Browser requests need an exact match against the allow-list
-  // after normalization. OPTIONS preflights are answered by the cors
-  // middleware with `optionsSuccessStatus: 204` + Allow-Origin headers.
   app.enableCors(buildCorsOptions(allowedOrigins));
+
+  // Enable middleware to read cookies
+  app.use(cookieParser());
+
+  // Backoffice image uploads are JSON data URLs (5 MiB file ≈ 6.7 MB base64),
+  // and bulk spreadsheet imports can carry up to 1,000 rows. Everything else
+  // keeps Express's small default so oversized payloads cannot exhaust memory.
+  app.use('/api/media', json({ limit: '8mb' }));
+  app.use('/api/transactions/import', json({ limit: '2mb' }));
+  app.use(json({ limit: '100kb' }));
+  app.use(urlencoded({ extended: true, limit: '100kb' }));
 
   // ── Security headers (QA-0.4) ──────────────────────────────────────────
   // The API served no helmet headers at all: no CSP, no nosniff, no

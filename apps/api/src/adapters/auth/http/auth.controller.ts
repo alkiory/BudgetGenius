@@ -37,6 +37,10 @@ import { CookieService } from '@infrastructure/config/cookie.service';
 import { AuthGuard } from '@nestjs/passport';
 import { User } from '@domain/user/user.entity';
 import { toPublicUser } from '@application/user/public-user';
+import {
+  bearerAccessTokenExtractor,
+  cookieAccessTokenExtractor,
+} from '@infrastructure/config/strategy/jwt.strategy';
 
 /** 7 días en milisegundos — coincide con el JWT expiry del refreshToken. */
 const REFRESH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
@@ -451,20 +455,28 @@ export class AuthController {
   @SkipThrottle()
   @Post('logout')
   async logout(@Req() req, @Res({ passthrough: true }) res: Response) {
-    const authHeader = req.headers?.authorization;
-    const bearerToken =
-      typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-        ? authHeader.slice('Bearer '.length).trim()
-        : undefined;
     const tokens = Array.from(
       new Set(
-        [req.cookies?.accessToken, bearerToken].filter(
-          (t): t is string => typeof t === 'string' && t.length > 0,
-        ),
+        [
+          cookieAccessTokenExtractor(req),
+          bearerAccessTokenExtractor(req),
+        ].filter((t): t is string => typeof t === 'string' && t.length > 0),
       ),
     );
 
     for (const token of tokens) {
+      let verified: Record<string, unknown>;
+      try {
+        // Verify signature before trusting claims or touching Redis (CWE-347).
+        verified = this.jwtService.verify(token, { ignoreExpiration: true });
+      } catch {
+        continue;
+      }
+
+      if (verified?.['typ'] !== undefined && verified['typ'] !== 'access') {
+        continue;
+      }
+
       try {
         await this.authService.addTokenToBlacklist(token);
       } catch (error) {
@@ -477,9 +489,9 @@ export class AuthController {
       // (e.g. in a Capacitor WebView where cookie clearing may not
       // propagate immediately) cannot be used to silently re-auth.
       try {
-        const userData = this.jwtService.decode(token);
-        if (userData && userData['id']) {
-          await this.authService.invalidateRefreshToken(userData['id']);
+        const userId = verified['id'] ?? verified['sub'];
+        if (userId) {
+          await this.authService.invalidateRefreshToken(Number(userId));
         }
       } catch (error) {
         this.logger.warn(
@@ -627,10 +639,9 @@ export class AuthController {
     try {
       const payload = this.jwtService.verify(token);
 
-      // A refresh credential is not an access credential: the two share a
-      // signer and lifetime, so without this check a stolen refresh token
-      // could call every protected endpoint as a bearer token.
-      if (payload['typ'] !== 'refresh') {
+      // A refresh credential is not an access credential; keep legacy untyped
+      // tokens (`typ === undefined`) valid during deployment cutover.
+      if (payload['typ'] !== undefined && payload['typ'] !== 'refresh') {
         throw new UnauthorizedException('Invalid refresh token');
       }
 

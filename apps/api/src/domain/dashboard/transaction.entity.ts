@@ -50,6 +50,14 @@ export class Transaction {
   @Column({ type: 'varchar', length: 32, nullable: true })
   recurrence: string | null;
 
+  /**
+   * True when this ledger row is a transfer into a savings goal. Persisted on
+   * the row so deleting the goal or category later does not turn historical
+   * savings deposits into ordinary expenses in reports or dashboard totals.
+   */
+  @Column({ type: 'boolean', default: false })
+  isSavingsDeposit: boolean;
+
   @CreateDateColumn({ type: 'timestamp', name: 'createdAt' })
   createdAt: Date;
 

@@ -7,7 +7,10 @@
  * Redis blacklist check.
  */
 
-import { JwtStrategy } from '@infrastructure/config/strategy/jwt.strategy';
+import {
+  JwtStrategy,
+  blacklistKeyForToken,
+} from '@infrastructure/config/strategy/jwt.strategy';
 
 const buildStrategy = (redisGet = jest.fn().mockResolvedValue(null)) =>
   new JwtStrategy(
@@ -42,21 +45,42 @@ describe('JwtStrategy credential type', () => {
     ).resolves.toBeNull();
   });
 
-  it('rejects tokens with no explicit type (pre-fix sessions)', async () => {
+  it('accepts legacy untyped tokens during deployment cutover', async () => {
     const strategy = buildStrategy();
     const { typ, ...untyped } = payload;
     void typ;
     await expect(
       strategy.validate(requestWith('untyped'), untyped),
-    ).resolves.toBeNull();
+    ).resolves.toEqual({ userId: 7, email: 'user@example.com', role: 'user' });
   });
 
-  it('rejects an access token revoked by logout', async () => {
-    const redisGet = jest.fn().mockResolvedValue('blacklisted');
+  it('rejects an access token revoked by logout via its hashed Redis key', async () => {
+    const redisGet = jest.fn().mockImplementation((key: string) =>
+      Promise.resolve(
+        key === blacklistKeyForToken('revoked') ? 'blacklisted' : null,
+      ),
+    );
     const strategy = buildStrategy(redisGet);
     await expect(
       strategy.validate(requestWith('revoked'), payload),
     ).resolves.toBeNull();
-    expect(redisGet).toHaveBeenCalledWith('revoked');
+    expect(redisGet).toHaveBeenCalledWith(blacklistKeyForToken('revoked'));
+  });
+
+  it('enforces revocation for lowercase or multi-space Bearer headers (CWE-613)', async () => {
+    const redisGet = jest.fn().mockImplementation((key: string) =>
+      Promise.resolve(
+        key === blacklistKeyForToken('revoked-bearer') ? 'blacklisted' : null,
+      ),
+    );
+    const strategy = buildStrategy(redisGet);
+    const req = {
+      cookies: {},
+      headers: { authorization: 'bearer  revoked-bearer' },
+    };
+    await expect(strategy.validate(req, payload)).resolves.toBeNull();
+    expect(redisGet).toHaveBeenCalledWith(
+      blacklistKeyForToken('revoked-bearer'),
+    );
   });
 });

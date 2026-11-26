@@ -27,6 +27,7 @@ import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { DataSource } from 'typeorm';
 import { ResendMailerService } from '@infrastructure/mail/resend-mailer.service';
 import { UserSettingsService } from '@application/user/user-settings.service';
+import { blacklistKeyForToken } from '@infrastructure/config/strategy/jwt.strategy';
 
 /** Per-email brute-force protection. Anything tighter would block legitimate users
  *  who mistype; anything looser would not stop a credential-stuffing script. */
@@ -549,7 +550,11 @@ export class AuthService {
     const ttl = tokenExpiration - Math.floor(Date.now() / 1000);
     if (ttl <= 0) return;
 
-    await this.redisService.set(token, 'blacklisted', ttl);
+    await this.redisService.set(
+      blacklistKeyForToken(token),
+      'blacklisted',
+      ttl,
+    );
   }
 
   async requestPasswordReset(dto: ForgotPasswordDto) {

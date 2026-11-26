@@ -100,14 +100,26 @@ export class CurrencyService {
     if (value === null || value === undefined) return Number.NaN;
     const trimmed = String(value).trim();
     if (trimmed === "") return Number.NaN;
-    const normalized = trimmed.replace(/,/g, ".");
-    const cleaned = normalized.replace(/[^.\d-]/g, "");
-    const firstDot = cleaned.indexOf(".");
-    const safe =
-      firstDot === -1
-        ? cleaned
-        : cleaned.slice(0, firstDot + 1) +
-          cleaned.slice(firstDot + 1).replace(/\./g, "");
+
+    const raw = trimmed.replace(/[^.,\d-]/g, "");
+    const hasDot = raw.includes(".");
+    const hasComma = raw.includes(",");
+
+    let safe = raw;
+    if (hasDot && hasComma) {
+      // Both separators present: the rightmost one is the decimal point
+      // (`1.234,56` -> `1234.56`, `1,234.56` -> `1234.56`).
+      const decimalIndex = Math.max(raw.lastIndexOf("."), raw.lastIndexOf(","));
+      const integerPart = raw.slice(0, decimalIndex).replace(/[.,]/g, "");
+      const fractionPart = raw.slice(decimalIndex + 1).replace(/[.,]/g, "");
+      safe = `${integerPart}.${fractionPart}`;
+    } else if (hasDot || hasComma) {
+      const sep = hasDot ? "." : ",";
+      const parts = raw.split(sep);
+      // Multiple identical separators are thousands groups (`1.234.567`).
+      safe = parts.length > 2 ? parts.join("") : raw.replace(",", ".");
+    }
+
     const parsed = parseFloat(safe);
     return Number.isFinite(parsed) ? parsed : Number.NaN;
   }

@@ -112,6 +112,8 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
     login: jest.Mock;
     signup: jest.Mock;
     refreshToken: jest.Mock;
+    addTokenToBlacklist: jest.Mock;
+    invalidateRefreshToken: jest.Mock;
   };
   let jwtService: { sign: jest.Mock; verify: jest.Mock };
 
@@ -164,6 +166,8 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
         isNewUser: true,
       }),
       refreshToken: jest.fn().mockResolvedValue(undefined),
+      addTokenToBlacklist: jest.fn().mockResolvedValue(undefined),
+      invalidateRefreshToken: jest.fn().mockResolvedValue(undefined),
     };
 
     const userService = {
@@ -533,6 +537,51 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
         expect.anything(),
         'header-persisted-refresh-token',
       );
+    });
+  });
+
+  describe('logout', () => {
+    it('does not revoke Redis state when the token signature is invalid (CWE-347)', async () => {
+      (jwtService.verify as jest.Mock).mockImplementationOnce(() => {
+        throw new Error('invalid signature');
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const req: any = {
+        cookies: {},
+        headers: { authorization: 'Bearer forged-token' },
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res: any = {};
+
+      const body = await controller.logout(req, res);
+
+      expect(body).toMatchObject({ success: true });
+      expect(authService.addTokenToBlacklist).not.toHaveBeenCalled();
+      expect(authService.invalidateRefreshToken).not.toHaveBeenCalled();
+      expect(cookieService.clearCookie).toHaveBeenCalledWith(res, 'accessToken');
+      expect(cookieService.clearCookie).toHaveBeenCalledWith(res, 'refreshToken');
+    });
+
+    it('revokes both blacklist and refresh session for a verified access token', async () => {
+      (jwtService.verify as jest.Mock).mockReturnValueOnce({
+        id: 42,
+        typ: 'access',
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const req: any = {
+        cookies: { accessToken: 'verified-access-token' },
+        headers: {},
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res: any = {};
+
+      const body = await controller.logout(req, res);
+
+      expect(body).toMatchObject({ success: true });
+      expect(authService.addTokenToBlacklist).toHaveBeenCalledWith(
+        'verified-access-token',
+      );
+      expect(authService.invalidateRefreshToken).toHaveBeenCalledWith(42);
     });
   });
 });

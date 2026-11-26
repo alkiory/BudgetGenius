@@ -14,7 +14,8 @@ import { Budget } from '@domain/dashboard/budget.entity';
  * is ordinary spending and must stay in the aggregates. The joins use entity
  * metadata, so the configured schema (`bg_public`) is preserved.
  */
-const DEPOSIT_FILTER = "(b.type IS NULL OR b.type <> 'savings')";
+const DEPOSIT_FILTER =
+  "(tx.\"isSavingsDeposit\" = false AND (b.type IS NULL OR b.type <> 'savings'))";
 
 const excludeSavingsDeposits = (
   query: SelectQueryBuilder<Transaction>,

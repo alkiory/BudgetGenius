@@ -1637,32 +1637,7 @@ function FeatureAnnouncementModal({
               )}
             </select>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="announce-audience">
-              {t("superadmin.notifications.audience")}
-            </Label>
-            <select
-              id="announce-audience"
-              value={audience}
-              onChange={(event) =>
-                setAudience(
-                  event.target.value as AppNotificationRow["audience"],
-                )
-              }
-              className={formSelectClass}
-            >
-              {(["all", "free", "premium"] as const).map((value) => (
-                <option key={value} value={value}>
-                  {t(`superadmin.notifications.audiences.${value}`)}
-                </option>
-              ))}
-            </select>
-            {audience === "free" && (
-              <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                {t("superadmin.notifications.freeAudienceWarning")}
-              </p>
-            )}
-          </div>
+          {/* Audience selector omitted while every account shares one tier. */}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -2563,37 +2538,6 @@ function NotificationsTab() {
                 ),
               )}
             </select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="notification-audience">
-              {t("superadmin.notifications.audience")}
-            </Label>
-            <select
-              id="notification-audience"
-              value={form.audience}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  audience: event.target
-                    .value as AppNotificationRow["audience"],
-                })
-              }
-              className={selectClass}
-            >
-              {(["all", "free", "premium"] as const).map((audience) => (
-                <option key={audience} value={audience}>
-                  {t(`superadmin.notifications.audiences.${audience}`)}
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              {t(`superadmin.notifications.audienceHints.${form.audience}`)}
-            </p>
-            {form.audience === "free" && (
-              <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                {t("superadmin.notifications.freeAudienceWarning")}
-              </p>
-            )}
           </div>
           <div className="space-y-1 sm:col-span-2">
             <Label htmlFor="notification-publish-at">

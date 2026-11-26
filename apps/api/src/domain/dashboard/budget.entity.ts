@@ -39,6 +39,13 @@ export class Budget {
   @Column({ type: 'varchar', length: 16, default: 'spending' })
   type: 'spending' | 'savings';
 
+  /**
+   * Optional stable identifier for system-recognized goals (e.g.
+   * `emergency-fund`) so renaming the budget or category never breaks the link.
+   */
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  goalKey?: string | null;
+
   @Column('numeric', {
     transformer: {
       to: (value: number) => value,

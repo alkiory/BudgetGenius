@@ -422,17 +422,17 @@ function EmergencyFund({ props }: { props: Record<string, unknown> }) {
   const createGoal = useCreateBudget();
   const contribute = useContributeToSavings();
   const [justCreated, setJustCreated] = useState(false);
-  // Find the goal by its savings nature, not only by its original name: a
-  // renamed goal must stay linked instead of being recreated as a duplicate.
+  // Find the emergency fund by its stable goalKey (survives renames) or by
+  // its original name. Never hijack an unrelated savings goal.
   const savingsBudgets = (budgets ?? []).filter(
     (budget) => budget.type === "savings",
   );
-  const existingGoal =
-    savingsBudgets.find(
-      (budget) =>
-        budget.name === EMERGENCY_GOAL ||
-        budget.categories?.some((category) => category.name === EMERGENCY_GOAL),
-    ) ?? (savingsBudgets.length === 1 ? savingsBudgets[0] : undefined);
+  const existingGoal = savingsBudgets.find(
+    (budget) =>
+      budget.goalKey === "emergency-fund" ||
+      budget.name === EMERGENCY_GOAL ||
+      budget.categories?.some((category) => category.name === EMERGENCY_GOAL),
+  );
   const goalCategory =
     existingGoal?.categories?.find(
       (category) => category.name === EMERGENCY_GOAL,
@@ -466,6 +466,7 @@ function EmergencyFund({ props }: { props: Record<string, unknown> }) {
         name: EMERGENCY_GOAL,
         period: "Yearly",
         type: "savings",
+        goalKey: "emergency-fund",
         startDate: start,
         endDate: end,
         totalAllocated: solid,

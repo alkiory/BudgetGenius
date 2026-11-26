@@ -86,6 +86,8 @@ export interface Budget {
   period: string;
   /** `spending` caps expenses; `savings` tracks money put aside. */
   type?: BudgetType;
+  /** Stable identifier for system-recognized goals (e.g. `emergency-fund`). */
+  goalKey?: string | null;
   startDate: Date;
   endDate: Date;
   totalAllocated: number;

@@ -16,7 +16,8 @@ export interface TransactionAggregate {
  * import happened to label "Savings"; the link is the actual discriminator.
  * Entity joins keep the query inside the configured schema (`bg_public`).
  */
-const DEPOSIT_FILTER = "(b.type IS NULL OR b.type <> 'savings')";
+const DEPOSIT_FILTER =
+  "(tx.\"isSavingsDeposit\" = false AND (b.type IS NULL OR b.type <> 'savings'))";
 
 @Injectable()
 export class OverviewRepository {
