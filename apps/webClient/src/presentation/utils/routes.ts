@@ -40,7 +40,8 @@ export enum RoutePaths {
   Reports = "dashboard/reports",
   Budgets = "dashboard/budgets",
   Income = "dashboard/income",
-  Modules = "modules",
+  // Catalogue pages registered from the backoffice (`/app/catalog/:key`)
+  Catalog = "catalog",
   // Superadmin backoffice (role-gated)
   Superadmin = "superadmin",
   // User section

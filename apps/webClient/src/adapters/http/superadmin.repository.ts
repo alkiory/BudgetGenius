@@ -14,7 +14,13 @@ export interface SuperAdminOverview {
     total: number;
     active: number;
     disabled: number;
-    byKind: { module: number; component: number; integration: number };
+    byKind: {
+      module: number;
+      component: number;
+      integration: number;
+      page: number;
+      tab: number;
+    };
   };
   apiKeys: { total: number; active: number };
   notifications: { total: number; live: number };
@@ -22,7 +28,53 @@ export interface SuperAdminOverview {
 }
 
 export type AppModuleStatus = "active" | "beta" | "disabled";
-export type AppModuleKind = "module" | "component" | "integration";
+export type AppModuleKind =
+  | "module"
+  | "component"
+  | "integration"
+  | "page"
+  | "tab";
+
+/** One placed content block: `type` picks the renderer, `props` is the form. */
+export interface AppModuleBlock {
+  id: string;
+  type: string;
+  props: Record<string, unknown>;
+}
+
+/** One authored section: optional heading and text, blocks and components. */
+export interface AppModuleSection {
+  id: string;
+  title: string;
+  body: string;
+  /** Ready-made UI blocks, in render order. */
+  blocks?: AppModuleBlock[];
+  /** `key`s of `component` entries rendered inside the section. */
+  componentKeys: string[];
+}
+
+export type BlockFieldInput = "text" | "textarea" | "url" | "select" | "image";
+
+/** Field the backoffice renders for a block; mirrors the API registry. */
+export interface BlockFieldSchema {
+  name: string;
+  input: BlockFieldInput;
+  required?: boolean;
+  maxLength?: number;
+  options?: Array<{ value: string; labelKey: string }>;
+}
+
+/** One block type the operator can place, with the form it needs. */
+export interface BlockTypeSchema {
+  type: string;
+  fields: BlockFieldSchema[];
+  items?: { max: number; fields: BlockFieldSchema[] };
+}
+
+/** Body of a page, module or tab, authored from the backoffice. */
+export interface AppModuleContent {
+  sections: AppModuleSection[];
+}
 
 export interface AppModuleRow {
   id: number;
@@ -37,6 +89,8 @@ export interface AppModuleRow {
   parentKey: string | null;
   sortOrder: number;
   isCore: boolean;
+  /** Authored copy; null until the page is edited in the backoffice. */
+  content: AppModuleContent | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -129,8 +183,31 @@ export const superAdminRepository = {
     const { data } = await api.put(`/superadmin/modules/${id}`, payload);
     return data;
   },
-  async deleteModule(id: number): Promise<void> {
-    await api.delete(`/superadmin/modules/${id}`);
+  /** Replaces the whole body (sections, texts, attached components). */
+  async updateModuleContent(
+    id: number,
+    content: AppModuleContent,
+  ): Promise<AppModuleRow> {
+    const { data } = await api.put(
+      `/superadmin/modules/${id}/content`,
+      content,
+    );
+    return data;
+  },
+  /** One call for the whole sibling list, so a reorder never lands halfway. */
+  async reorderModules(keys: string[]): Promise<AppModuleRow[]> {
+    const { data } = await api.put("/superadmin/modules/reorder", { keys });
+    return data;
+  },
+  /** Palette for the page composer, validated by the same registry. */
+  async listBlockTypes(): Promise<BlockTypeSchema[]> {
+    const { data } = await api.get("/superadmin/modules/block-types");
+    return data;
+  },
+  /** Picked file as a data URL; the API stores it and returns its path. */
+  async uploadImage(dataUrl: string): Promise<{ url: string }> {
+    const { data } = await api.post("/media", { dataUrl });
+    return data;
   },
 
   async listApiKeys(): Promise<AppApiKeyRow[]> {

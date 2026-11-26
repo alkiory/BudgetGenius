@@ -31,6 +31,10 @@ const calendarDay = (value: Date | string): string =>
     ? value.slice(0, 10)
     : value.toISOString().slice(0, 10);
 
+/** Case-insensitive category key used to detect an unchanged category. */
+const categoryKey = (name: string | undefined): string =>
+  (name ?? '').trim().toLowerCase();
+
 @Injectable()
 export class TransactionService {
   constructor(
@@ -156,8 +160,8 @@ export class TransactionService {
       } catch (error) {
         // Concurrent retry won the unique constraint: replay its receipt if
         // the payload is identical, otherwise refuse the reused key.
-        const code = (error as { driverError?: { code?: string } })
-          ?.driverError?.code;
+        const code = (error as { driverError?: { code?: string } })?.driverError
+          ?.code;
         if (code === '23505') {
           const winner = await this.transactionRepo.findImportReceipt(
             userId,
@@ -230,15 +234,33 @@ export class TransactionService {
     // Verify user exists - `findByUser` throws NotFoundException if not
     await this.transactionRepo.findByUser(userId);
 
+    // Savings deposits are invisible to the spending resolver (savings
+    // budgets are excluded there), so a plain description or amount edit
+    // used to unlink the row and silently shrink the goal. Keep the link
+    // while the row is still a negative outflow in the same category; an
+    // explicit category or a sign/category change still re-resolves.
+    const existing = await this.transactionRepo.findOne(dto.id, userId);
+    const keepsSavingsLink =
+      dto.budgetCategoryId === undefined &&
+      existing.budgetCategoryId != null &&
+      roundToCents(dto.amount) < 0 &&
+      categoryKey(dto.category) === categoryKey(existing.category) &&
+      (await this.transactionRepo.findOwnedSavingsCategoryId(
+        existing.budgetCategoryId,
+        userId,
+      )) !== null;
+
     // D2.2: re-resolve the attribution from the values being saved. Editing
     // an expense into income (or into another category/day) must not keep a
     // link that no longer describes the row.
-    const budgetCategoryId = await this.resolveBudgetCategoryId(userId, {
-      date: dto.date,
-      category: dto.category,
-      amount: dto.amount,
-      explicitId: dto.budgetCategoryId,
-    });
+    const budgetCategoryId = keepsSavingsLink
+      ? existing.budgetCategoryId
+      : await this.resolveBudgetCategoryId(userId, {
+          date: dto.date,
+          category: dto.category,
+          amount: dto.amount,
+          explicitId: dto.budgetCategoryId,
+        });
 
     // `recurrence` is intentionally NOT seeded separately — the repo's
     // destructured-undefined guard preserves the existing value when the

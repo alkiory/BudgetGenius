@@ -74,8 +74,11 @@ const TransactionsPage = lazy(
 const IncomePage = lazy(
   () => import("@presentation/pages/dashboard/incomePage"),
 );
-const ModulesPage = lazy(
-  () => import("@presentation/pages/modules/modulesPage"),
+const CatalogPage = lazy(
+  () => import("@presentation/pages/catalog/catalogPage"),
+);
+const CatalogIndexPage = lazy(
+  () => import("@presentation/pages/catalog/catalogIndexPage"),
 );
 
 // User protected routes
@@ -192,7 +195,13 @@ const RouteConfig = () => {
             <Route path={RoutePaths.Income} element={<IncomePage />} />
             <Route path={RoutePaths.Budgets} element={<BudgetsPage />} />
             <Route path={RoutePaths.Reports} element={<ReportsPage />} />
-            <Route path={RoutePaths.Modules} element={<ModulesPage />} />
+            {/* Catalogue screens authored in the backoffice. Modules list
+                their pages, pages render their tabs. */}
+            <Route path={RoutePaths.Catalog} element={<CatalogIndexPage />} />
+            <Route
+              path={`${RoutePaths.Catalog}/:key`}
+              element={<CatalogPage />}
+            />
             {/* superadmin backoffice — role-gated; the API enforces the
                 same role on every /superadmin/* route */}
             <Route element={<SuperAdminGuard />}>

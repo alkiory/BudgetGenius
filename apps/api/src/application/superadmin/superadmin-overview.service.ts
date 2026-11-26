@@ -24,7 +24,13 @@ export interface SuperAdminOverview {
     total: number;
     active: number;
     disabled: number;
-    byKind: { module: number; component: number; integration: number };
+    byKind: {
+      module: number;
+      component: number;
+      integration: number;
+      page: number;
+      tab: number;
+    };
   };
   apiKeys: { total: number; active: number };
   notifications: { total: number; live: number };
@@ -47,7 +53,8 @@ export class SuperAdminOverviewService {
     @InjectRepository(Budget) private readonly budgets: Repository<Budget>,
     @InjectRepository(ExpenseCategory)
     private readonly categories: Repository<ExpenseCategory>,
-    @InjectRepository(AppModule) private readonly modules: Repository<AppModule>,
+    @InjectRepository(AppModule)
+    private readonly modules: Repository<AppModule>,
     @InjectRepository(AppApiKey)
     private readonly apiKeys: Repository<AppApiKey>,
     @InjectRepository(AppNotification)
@@ -105,7 +112,13 @@ export class SuperAdminOverviewService {
     ]);
 
     const activeModules = modules.filter((m) => m.status !== 'disabled');
-    const byKind = { module: 0, component: 0, integration: 0 };
+    const byKind = {
+      module: 0,
+      component: 0,
+      integration: 0,
+      page: 0,
+      tab: 0,
+    };
     for (const item of activeModules) {
       if (item.kind in byKind) byKind[item.kind] += 1;
     }

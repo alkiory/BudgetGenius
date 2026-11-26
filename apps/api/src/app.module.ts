@@ -17,7 +17,6 @@ import { ThrottlerBehindProxyGuard } from '@infrastructure/config/guards/throttl
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { AiModule } from './infrastructure/ai/module/ai.module';
-import { CatalogModule } from '@infrastructure/catalog/catalog.module';
 import { CookieService } from '@infrastructure/config/cookie.service';
 import { RedisService } from '@infrastructure/config/redis.service';
 import { DashboardModule } from '@infrastructure/dashboard/dashboard.module';
@@ -30,6 +29,7 @@ import { TestController } from '@adapters/app.controller';
 import { SuperAdminModule } from '@infrastructure/superadmin/superadmin.module';
 import { SyncModule } from '@infrastructure/sync/sync.module';
 import { NotificationsModule } from '@infrastructure/notifications/notifications.module';
+import { AppCatalogModule } from '@infrastructure/catalog/app-catalog.module';
 
 @Module({
   imports: [
@@ -122,7 +122,7 @@ import { NotificationsModule } from '@infrastructure/notifications/notifications
     SuperAdminModule,
     SyncModule,
     NotificationsModule,
-    CatalogModule,
+    AppCatalogModule,
   ],
   controllers: [AppController, UserController, TestController],
   providers: [

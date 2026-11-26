@@ -15,18 +15,22 @@ export class OverviewRepository {
   async getExpensesByCategory(
     userId: number,
   ): Promise<{ name: string; value: number }[]> {
-    return this.ds
-      .getRepository(Transaction)
-      .createQueryBuilder('tx')
-      .select('tx.category', 'name')
-      .addSelect('SUM(tx.amount)', 'value')
-      .where('tx.userId = :userId', { userId })
-      .andWhere('tx.amount < 0')
-      .groupBy('tx.category')
-      .getRawMany<{ name: string; value: string }>()
-      .then((rows) =>
-        rows.map((r) => ({ name: r.name, value: Math.abs(Number(r.value)) })),
-      );
+    return (
+      this.ds
+        .getRepository(Transaction)
+        .createQueryBuilder('tx')
+        .select('tx.category', 'name')
+        .addSelect('SUM(tx.amount)', 'value')
+        .where('tx.userId = :userId', { userId })
+        .andWhere('tx.amount < 0')
+        // Savings deposits are transfers: visible in the ledger, never spending.
+        .andWhere("LOWER(tx.category) <> 'savings'")
+        .groupBy('tx.category')
+        .getRawMany<{ name: string; value: string }>()
+        .then((rows) =>
+          rows.map((r) => ({ name: r.name, value: Math.abs(Number(r.value)) })),
+        )
+    );
   }
 
   /**
@@ -51,6 +55,9 @@ export class OverviewRepository {
         'expense',
       )
       .where('tx.userId = :userId', { userId })
+      // A deposit into a savings goal is still the user's money, so it must
+      // not reduce the net total the dashboard shows.
+      .andWhere("LOWER(tx.category) <> 'savings'")
       .getRawOne<{ income: string | null; expense: string | null }>();
 
     const income = Number(row?.income) || 0;

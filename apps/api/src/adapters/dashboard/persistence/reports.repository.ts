@@ -3,6 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Transaction } from '@domain/dashboard/transaction.entity';
 
+/**
+ * Deposits into a savings goal are transfers, not spending: they must not
+ * inflate expense totals, category breakdowns or the savings-rate maths.
+ * The ledger keeps the row (and the app shows it in Transactions), but every
+ * expense aggregate skips this category.
+ */
+const NOT_SAVINGS = "LOWER(tx.category) <> 'savings'";
+
 @Injectable()
 export class ReportRepository {
   constructor(
@@ -28,6 +36,7 @@ export class ReportRepository {
       )
       .where('EXTRACT(YEAR FROM tx.date) = :year', { year })
       .andWhere('tx.userId = :userId', { userId })
+      .andWhere(NOT_SAVINGS)
       .groupBy("to_char(tx.date, 'Mon')")
       .orderBy('MIN(EXTRACT(MONTH FROM tx.date))')
       .getRawMany();
@@ -55,6 +64,7 @@ export class ReportRepository {
       )
       .where('tx.date >= :start AND tx.date < :end', { start, end })
       .andWhere('tx.userId = :userId', { userId })
+      .andWhere(NOT_SAVINGS)
       .groupBy("to_char(tx.date, 'Mon YYYY')")
       .addGroupBy("to_char(tx.date, 'YYYY-MM')")
       .orderBy("MIN(date_trunc('month', tx.date))")
@@ -73,6 +83,7 @@ export class ReportRepository {
       .addSelect('SUM(-tx.amount)', 'total')
       .where('tx.date >= :start AND tx.date < :end', { start, end })
       .andWhere('tx.amount < 0')
+      .andWhere(NOT_SAVINGS)
       .andWhere('tx.userId = :userId', { userId })
       .groupBy('tx.category')
       .orderBy('total', 'DESC')
@@ -84,9 +95,7 @@ export class ReportRepository {
     start: Date,
     end: Date,
     userId: number,
-  ): Promise<
-    { category: string; expenses: number; income: number }[]
-  > {
+  ): Promise<{ category: string; expenses: number; income: number }[]> {
     return this.txRepo
       .createQueryBuilder('tx')
       .select('tx.category', 'category')
@@ -100,6 +109,7 @@ export class ReportRepository {
       )
       .where('tx.date BETWEEN :start AND :end', { start, end })
       .andWhere('tx.userId = :userId', { userId })
+      .andWhere(NOT_SAVINGS)
       .groupBy('tx.category')
       .getRawMany();
   }
@@ -116,6 +126,7 @@ export class ReportRepository {
       .addSelect('SUM(-tx.amount)', 'amount')
       .where('tx.amount < 0')
       .andWhere('tx.userId = :userId', { userId })
+      .andWhere(NOT_SAVINGS)
       .groupBy("to_char(tx.date, 'Dy')")
       .orderBy('MIN(tx.date)');
     if (start && end) {

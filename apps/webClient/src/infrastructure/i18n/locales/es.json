@@ -412,6 +412,7 @@
     "medical": "Médico",
     "rent": "Alquiler",
     "salary": "Salario",
+    "savings": "Ahorro",
     "dining": "Restaurantes",
     "groceries": "Supermercado",
     "shopping": "Compras",
@@ -462,8 +463,7 @@
         "transactions": "Transacciones",
         "budgets": "Presupuestos",
         "reports": "Informes",
-        "income": "Ingresos",
-        "modules": "Módulos"
+        "income": "Ingresos"
       }
     }
   },
@@ -1119,7 +1119,7 @@
       "welcomeTitle": "Todo listo",
       "welcomeBody": "Tus preferencias están guardadas. Aquí tienes un recorrido de 60 segundos por la app.",
       "navTitle": "Cada sección, a un clic",
-      "navBody": "Panel, transacciones, presupuestos, reportes, ingresos y módulos viven en esta barra lateral. Ahora vemos cada una.",
+      "navBody": "Panel, transacciones, presupuestos, reportes e ingresos viven en esta barra lateral. Ahora vemos cada una.",
       "pages": {
         "dashboard": {
           "title": "Panel",
@@ -1140,10 +1140,6 @@
         "income": {
           "title": "Ingresos",
           "body": "Tus ingresos fijos y puntuales, separados del gasto para que el balance sea real."
-        },
-        "modules": {
-          "title": "Módulos",
-          "body": "Lo que el equipo ha activado para tu cuenta. Abre cualquier tarjeta para ver qué hace y qué componentes incluye."
         }
       },
       "addTitle": "Registra tu primera transacción",
@@ -1176,9 +1172,9 @@
       "usersNote": "{{count}} nuevos en 30 días",
       "transactions": "Transacciones",
       "transactionsNote": "{{count}} en las últimas 24 h",
-      "modules": "Módulos y componentes activos",
+      "modules": "Elementos activos del catálogo",
       "modulesNote": "{{count}} desactivados",
-      "modulesBreakdown": "{{modules}} módulos · {{components}} componentes · {{integrations}} integraciones",
+      "modulesBreakdown": "{{modules}} módulos · {{components}} componentes · {{integrations}} integraciones · {{pages}} páginas · {{tabs}} pestañas",
       "apiKeys": "API keys activas",
       "keysNote": "Solo se guarda el hash",
       "activity": "Transacciones por mes",
@@ -1187,31 +1183,153 @@
       "activityEmpty": "Todavía no hay transacciones"
     },
     "modules": {
-      "add": "Registrar módulo",
+      "add": "Registrar elemento",
+      "registered": "Registrados",
       "name": "Nombre",
       "namePlaceholder": "Informes mensuales",
       "key": "Clave",
       "category": "Categoría",
+      "version": "Versión",
+      "description": "Descripción",
       "core": "Core",
-      "toggle": "Activar o desactivar módulo",
-      "created": "Módulo registrado",
-      "empty": "Aún no hay módulos registrados",
+      "coreHint": "Los elementos core están siempre activos: desactivarlos rompería la app.",
+      "toggle": "Cambiar estado",
+      "statusLabel": "Estado",
+      "open": "Editar {{name}}",
+      "editTitle": "Editar {{name}}",
+      "updated": "Elemento actualizado",
+      "disable": "Desactivar",
+      "disabledToast": "Elemento desactivado",
+      "deleteNote": "Aquí no se borra nada: desactivar conserva el elemento y su historial. El borrado en cascada podría llegar más adelante.",
+      "created": "Elemento registrado",
+      "openInApp": "Abrir en la app",
+      "visibleHint": "Las páginas y módulos aparecen en tu menú lateral al instante. Los activos llegan a todas las cuentas; los beta y desactivados quedan solo para el superadmin como vista previa.",
+      "content": {
+        "title": "Contenido de la página",
+        "hint": "Lo que la página dice en la app: secciones ordenadas con bloques listos, componentes reutilizables y texto opcional. Sin código ni despliegues.",
+        "addSection": "Añadir sección",
+        "noSections": "Esta página aún no tiene secciones. Añade una para darle contenido real.",
+        "sectionNumber": "Sección {{n}}",
+        "sectionTitle": "Título de la sección",
+        "sectionBody": "Texto que se muestra en la app. Se respetan los saltos de línea.",
+        "sectionComponents": "Componentes de esta sección",
+        "noComponents": "Aún no hay componentes. Crea uno abajo.",
+        "moveUp": "Subir",
+        "moveDown": "Bajar",
+        "removeSection": "Quitar sección",
+        "save": "Guardar contenido",
+        "saveHint": "Las secciones vacías se descartan. La app muestra el contenido nuevo al instante.",
+        "saved": "Contenido de la página guardado",
+        "tabsTitle": "Orden de las pestañas",
+        "tabsHint": "El orden de abajo es el orden en que la página muestra sus pestañas.",
+        "tabsSaved": "Orden de pestañas guardado",
+        "noTabs": "Esta página aún no tiene pestañas.",
+        "addComponentTitle": "Añadir un componente a esta página",
+        "addComponent": "Añadir componente",
+        "addComponentHint": "El componente se registra dentro de esta página y queda disponible en todas sus secciones. Luego márcalo arriba y guarda.",
+        "componentAdded": "Componente {{name}} añadido"
+      },
+      "blocks": {
+        "title": "Bloques",
+        "empty": "Aún no hay bloques. Elige uno abajo y se muestra en la app.",
+        "items": "Elementos",
+        "item": "Elemento {{n}}",
+        "addItem": "Añadir elemento",
+        "removeItem": "Quitar elemento",
+        "remove": "Quitar bloque",
+        "loading": "Cargando bloques…",
+        "unknown": "Tipo de bloque desconocido: {{type}}",
+        "types": {
+          "callout": "Aviso",
+          "stats": "Cifras clave",
+          "steps": "Pasos",
+          "checklist": "Checklist",
+          "links": "Tarjetas de enlace",
+          "faq": "Preguntas frecuentes",
+          "cta": "Llamada a la acción",
+          "image": "Imagen",
+          "emergency-fund": "Fondo de emergencia",
+          "divider": "Separador"
+        },
+        "hints": {
+          "callout": "Mensaje teñido para un consejo, un aviso o una confirmación.",
+          "stats": "Hasta cuatro cifras con etiqueta y pista, una al lado de otra.",
+          "steps": "Recorrido numerado: un título y un texto por paso.",
+          "checklist": "Lista con ticks para mostrar qué incluye o qué está hecho.",
+          "links": "Tarjetas que abren otra página o un sitio externo.",
+          "faq": "Preguntas y respuestas que se despliegan.",
+          "cta": "Banner de cierre con un botón.",
+          "image": "Sube una imagen desde tu dispositivo o pega una URL, con texto alternativo y pie.",
+          "emergency-fund": "Herramienta viva: calcula tu colchón con tus gastos reales de los últimos meses.",
+          "divider": "Aire entre dos bloques."
+        },
+        "fields": {
+          "tone": "Tono",
+          "title": "Título",
+          "body": "Texto",
+          "label": "Etiqueta",
+          "value": "Valor",
+          "hint": "Pista",
+          "question": "Pregunta",
+          "answer": "Respuesta",
+          "description": "Descripción",
+          "href": "Enlace (URL o ruta /app)",
+          "actionLabel": "Texto del botón",
+          "actionHref": "Enlace del botón",
+          "src": "Imagen (archivo o URL)",
+          "alt": "Texto alternativo",
+          "caption": "Pie de imagen"
+        },
+        "image": {
+          "upload": "Subir imagen",
+          "uploading": "Subiendo…",
+          "hint": "PNG, JPEG, WebP o GIF de hasta 5 MB. Se guarda en el servidor y la página solo referencia el archivo.",
+          "tooLarge": "La imagen supera los 5 MB. Elige una más ligera.",
+          "unsupported": "Formato no admitido. Usa PNG, JPEG, WebP o GIF.",
+          "readError": "No se pudo leer el archivo. Inténtalo de nuevo."
+        },
+        "tones": {
+          "info": "Info",
+          "success": "Éxito",
+          "warning": "Aviso",
+          "critical": "Crítico"
+        }
+      },
+      "empty": "Aún no hay elementos registrados",
       "status": {
         "active": "Activo",
         "beta": "Beta",
         "disabled": "Desactivado"
       },
+      "statusHints": {
+        "active": "Visible para todas las cuentas con sesión: aparece en el menú lateral y abre su página.",
+        "beta": "Solo lo ves tú, marcado como beta en tu menú lateral. Actívalo para publicarlo a todos.",
+        "disabled": "Oculto para los usuarios. Tú sigues viéndolo en el menú como desactivado, para previsualizarlo y arreglarlo."
+      },
       "kind": "Tipo",
       "kinds": {
         "module": "Módulo",
         "component": "Componente",
-        "integration": "Integración"
+        "integration": "Integración",
+        "page": "Página",
+        "tab": "Pestaña"
       },
-      "parent": "Pertenece al módulo",
-      "parentNone": "Sin módulo (independiente)",
-      "parentHint": "Solo para componentes: elige el módulo al que pertenecen para que la app los agrupe dentro de él.",
+      "parent": "Pertenece a",
+      "parentNone": "Sin padre (independiente)",
+      "parentHint": "Los componentes y páginas pertenecen a un módulo; las pestañas pertenecen a una página.",
       "partOf": "parte de {{key}}",
-      "kindsHelp": "Módulo = una función completa de la app. Componente = una pieza reutilizable dentro de una pantalla. Integración = un servicio externo. Lo activo aparece en la página Módulos de la app; desactivarlo lo oculta."
+      "kindsHelp": "Módulo = una función completa de la app. Componente = una pieza reutilizable dentro de una pantalla. Integración = un servicio externo. Página = una pantalla navegable. Pestaña = una sección dentro de una página. Solo el superadmin ve este inventario: desactivar un elemento lo oculta sin borrar nada.",
+      "announce": {
+        "title": "Avisar de esta función",
+        "defaultTitle": "Nuevo: {{name}}",
+        "defaultBody": "{{name}} ya está disponible como {{kind}}. Ábrelo desde la app y cuéntanos qué te parece.",
+        "hint": "Avisa a los usuarios de {{name}} justo después de registrarlo. Publícalo ahora o guárdalo como borrador para probarlo antes.",
+        "publish": "Publicar aviso",
+        "draft": "Guardar para probar",
+        "skip": "Ahora no",
+        "draftHint": "Guardar para probar lo deja como borrador en Avisos; publícalo desde esa pestaña cuando estés listo.",
+        "created": "Aviso creado"
+      }
     },
     "apiKeys": {
       "add": "Emitir API key",
@@ -1292,51 +1410,68 @@
       "freeAudienceWarning": "Todas las cuentas son premium durante el lanzamiento gratuito, así que este aviso no lo vería nadie. Usa «Todos»."
     }
   },
+  "catalog": {
+    "navGroup": "Catálogo",
+    "all": "Todo el catálogo",
+    "allTitle": "Catálogo",
+    "allHint": "Cada módulo, página, pestaña, componente e integración registrado en el backoffice. Los activos están visibles para todos; los beta y desactivados solo los ve el superadmin.",
+    "allEmpty": "Todavía no hay nada registrado. Crea el primer elemento en el backoffice.",
+    "beta": "Beta",
+    "disabled": "Desactivado",
+    "back": "Backoffice",
+    "backToApp": "Panel",
+    "notFound": "Este elemento no es visible",
+    "notFoundHint": "Puede estar desactivado, o ser una página beta que solo el superadmin puede previsualizar.",
+    "partOf": "Parte de",
+    "modulePages": "Páginas de este módulo",
+    "noPages": "Este módulo aún no tiene páginas",
+    "noPagesHint": "Crea una página en el backoffice y asígnale este módulo como padre. Aparecerá aquí al instante.",
+    "pageTabs": "Pestañas",
+    "noTabs": "Esta página aún no tiene pestañas",
+    "noTabsHint": "Una pestaña creada en el backoffice con esta página como padre aparece aquí como una sección real.",
+    "noDescription": "Esta sección aún no tiene descripción.",
+    "noChildren": "Todavía no hay nada registrado dentro.",
+    "components": "Componentes",
+    "integrations": "Integraciones",
+    "internalKind": "Es una pieza interna, no una pantalla: aparece listada en la página o módulo al que pertenece.",
+    "previewNote": "Vista previa: este elemento está en estado {{status}}. Solo el superadmin lo ve así; actívalo para publicarlo a todas las cuentas.",
+    "childSummary": "{{tabs}} pestañas · {{components}} componentes",
+    "emptySection": "Esta sección aún no tiene texto ni componentes. Edítala en el backoffice.",
+    "emergencyFund": {
+      "title": "Tu fondo de emergencia",
+      "detected": "Con los {{count}} mes(es) con gastos de tu historial reciente, tu mes típico es {{amount}}. Cámbialo si este mes es distinto.",
+      "noData": "Todavía no hay gastos en los últimos seis meses, así que no hay base para calcularlo.",
+      "noDataCta": "Registra tu primer gasto",
+      "monthlyLabel": "Gasto mensual típico",
+      "monthlyHint": "Sale de tus propias transacciones; edítalo para probar otro escenario.",
+      "savedLabel": "Lo que ya tienes ahorrado",
+      "savedHint": "Solo se usa en este cálculo; no se guarda nada.",
+      "savedSynced": "Sincronizado con tu presupuesto de ahorro: cada aporte se refleja aquí.",
+      "minimumLabel": "Mínimo · 3 meses",
+      "solidLabel": "Colchón sólido · 6 meses",
+      "goalLabel": "Tu meta en Presupuestos",
+      "progressLabel": "Avance hacia 6 meses",
+      "goalProgressLabel": "Avance hacia tu meta",
+      "contributionLabel": "Aportar a la meta",
+      "contributionDate": "Fecha del aporte",
+      "contributionHint": "Se suma al ahorro real y se registra como transacción de ahorro con esa fecha.",
+      "transactionDescription": "Aporte al fondo de emergencia",
+      "contribute": "Aportar",
+      "contributing": "Aportando…",
+      "contributed": "Aportados {{amount}} a tu meta y registrados como transacción.",
+      "contributionError": "No se pudo registrar el aporte. Inténtalo de nuevo.",
+      "covered": "Cubres {{months}} meses",
+      "createGoal": "Crear meta de ahorro",
+      "creatingGoal": "Creando meta…",
+      "goalCreated": "Meta creada: {{amount}} en tu presupuesto de ahorro.",
+      "goalExists": "Ya tienes una meta de {{amount}} en tu presupuesto de ahorro.",
+      "goalError": "No se pudo crear la meta. Inténtalo de nuevo.",
+      "viewGoal": "Ver mi meta",
+      "addExpense": "Registrar un gasto"
+    }
+  },
   "announcements": {
     "dismiss": "Descartar aviso"
-  },
-  "modules": {
-    "title": "Módulos",
-    "subtitle": "Funciones, componentes e integraciones que el equipo del producto ha activado para tu cuenta.",
-    "empty": "El equipo aún no ha publicado módulos.",
-    "beta": "Beta",
-    "seeDetails": "Ver detalle",
-    "openDetails": "Abrir el detalle de {{name}}",
-    "status": {
-      "active": "Activo",
-      "beta": "Beta"
-    },
-    "kinds": {
-      "module": "Módulo",
-      "component": "Componente",
-      "integration": "Integración"
-    },
-    "kindsPlural": {
-      "module": "Módulos",
-      "component": "Componentes",
-      "integration": "Integraciones"
-    },
-    "kindsHelp": {
-      "module": "Funciones completas de la app.",
-      "component": "Piezas de interfaz que aparecen dentro de las pantallas.",
-      "integration": "Servicios externos conectados a tu cuenta."
-    },
-    "detail": {
-      "noDescription": "El equipo aún no ha añadido una descripción para esta entrada.",
-      "key": "Clave",
-      "category": "Categoría",
-      "version": "Versión",
-      "belongsTo": "Pertenece a",
-      "standalone": "Independiente",
-      "openParent": "Abrir {{name}}",
-      "components": "Componentes dentro",
-      "componentsEmpty": "Aún no hay componentes registrados en este módulo. El equipo los añade desde el backoffice.",
-      "howItWorks": {
-        "module": "Un módulo es un área completa de la app, como Tarjetas o Bancos. Los componentes dentro son las piezas que rellenas ahí.",
-        "component": "Un componente es un bloque dentro de un módulo: el tipo de tarjeta con sus campos, por ejemplo. Aparece donde aparece su módulo.",
-        "integration": "Una integración conecta un servicio externo con tu cuenta. Funciona detrás de las pantallas que ya usas."
-      }
-    }
   },
   "support": {
     "dev": "Apoyar al dev",

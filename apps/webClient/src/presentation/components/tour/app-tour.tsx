@@ -162,7 +162,6 @@ export function AppTour() {
                 "budgets",
                 "reports",
                 "income",
-                "modules",
               ] as const
             ).map((page) => ({
               element: `[data-tour="nav-${page}"]`,

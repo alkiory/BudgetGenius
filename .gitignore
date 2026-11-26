@@ -52,3 +52,7 @@ test-results/
 Thumbs.db
 # Local AI runtime state
 .atl/
+
+# Backoffice uploads (runtime files, not source)
+/uploads/
+apps/api/uploads/

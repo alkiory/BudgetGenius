@@ -105,6 +105,27 @@ export class TransactionRepository {
   }
 
   /**
+   * Ownership check for a category that belongs to a **savings** budget.
+   * Used to keep a deposit's attribution when its row is edited: the normal
+   * resolver only looks at spending categories, so a plain edit used to
+   * unlink the deposit and silently shrink the goal.
+   */
+  async findOwnedSavingsCategoryId(
+    categoryId: number,
+    userId: number,
+  ): Promise<number | null> {
+    const row = await this.categoryRepo
+      .createQueryBuilder('bc')
+      .innerJoin(Budget, 'b', 'b.id = bc."budgetId"')
+      .select('bc.id', 'id')
+      .where('bc.id = :categoryId', { categoryId })
+      .andWhere('b."userId" = :userId', { userId })
+      .andWhere("b.type = 'savings'")
+      .getRawOne<{ id: number }>();
+    return row ? Number(row.id) : null;
+  }
+
+  /**
    * D2.2 catch-up linker for write paths that insert many rows at once
    * (imports). Runs one set-based UPDATE and links every still-`NULL` row
    * that has at least one spending candidate, choosing the most specific

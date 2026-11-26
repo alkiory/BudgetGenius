@@ -40,7 +40,13 @@ export class OverviewService {
       .getRepository('transactions')
       .createQueryBuilder('t')
       .select('SUM(t.amount)', 'expenses')
-      .where('t.userId = :userId AND t.amount < 0', { userId })
+      // Savings deposits are transfers to the user's own goal, not spending.
+      .where(
+        "t.userId = :userId AND t.amount < 0 AND LOWER(t.category) <> 'savings'",
+        {
+          userId,
+        },
+      )
       .getRawOne();
 
     const inc = parseFloat(income) || 0;

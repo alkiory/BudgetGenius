@@ -2,6 +2,11 @@ import { HttpTransactionRepository } from "@adapters/http/transaction.repository
 import { RootState } from "@adapters/store/rootStore";
 import { Transaction } from "@domain/dashboard/transactions/transaction.entity";
 import { validateTransactionSelection } from "@domain/dashboard/transactions/validateTransactionSelection";
+import {
+  Trash2,
+  ArrowDown,
+  ArrowUp,
+} from "@presentation/components/ui/animated-icons";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
 import { translateCategory } from "@presentation/utils/display-translations";
 import {
@@ -19,7 +24,6 @@ import {
   SortingState,
   createColumnHelper,
 } from "@tanstack/react-table";
-import { Trash2, ArrowDown, ArrowUp } from "@presentation/components/ui/animated-icons";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSelector } from "react-redux";
@@ -60,6 +64,8 @@ export default function Table({
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["recent-summary"] });
+      // Bulk delete may remove savings deposits: refresh the goals too.
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
     },
     onError: (error) => {
       errorToast(error.message, 3000, "transaction-delete");
@@ -90,6 +96,7 @@ export default function Table({
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["recent-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
     },
     onError: (error) => {
       errorToast(error.message, 3000, "transaction-delete");

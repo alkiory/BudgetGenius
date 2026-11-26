@@ -421,6 +421,7 @@
     "medical": "Medical",
     "rent": "Rent",
     "salary": "Salary",
+    "savings": "Savings",
     "dining": "Dining",
     "groceries": "Groceries",
     "shopping": "Shopping",
@@ -462,8 +463,7 @@
         "transactions": "Transactions",
         "budgets": "Budgets",
         "reports": "Reports",
-        "income": "Income",
-        "modules": "Modules"
+        "income": "Income"
       }
     }
   },
@@ -1119,7 +1119,7 @@
       "welcomeTitle": "You're all set",
       "welcomeBody": "Your preferences are saved. Here's a 60-second tour of where everything lives.",
       "navTitle": "Every area, one click away",
-      "navBody": "Dashboard, transactions, budgets, reports, income and modules all live in this sidebar. Next we'll go through each one.",
+      "navBody": "Dashboard, transactions, budgets, reports and income all live in this sidebar. Next we'll go through each one.",
       "pages": {
         "dashboard": {
           "title": "Dashboard",
@@ -1140,10 +1140,6 @@
         "income": {
           "title": "Income",
           "body": "Your recurring and one-off income, kept apart from spending so the balance stays honest."
-        },
-        "modules": {
-          "title": "Modules",
-          "body": "What the team has enabled for your account. Open any card to see what it does and which components it includes."
         }
       },
       "addTitle": "Log your first transaction",
@@ -1176,9 +1172,9 @@
       "usersNote": "{{count}} new in 30 days",
       "transactions": "Transactions",
       "transactionsNote": "{{count}} in the last 24 h",
-      "modules": "Active modules and components",
+      "modules": "Active catalogue entries",
       "modulesNote": "{{count}} disabled",
-      "modulesBreakdown": "{{modules}} modules · {{components}} components · {{integrations}} integrations",
+      "modulesBreakdown": "{{modules}} modules · {{components}} components · {{integrations}} integrations · {{pages}} pages · {{tabs}} tabs",
       "apiKeys": "Active API keys",
       "keysNote": "Only the hash is stored",
       "activity": "Transactions per month",
@@ -1187,31 +1183,153 @@
       "activityEmpty": "No transactions yet"
     },
     "modules": {
-      "add": "Register module",
+      "add": "Register element",
+      "registered": "Registered",
       "name": "Name",
       "namePlaceholder": "Monthly reports",
       "key": "Key",
       "category": "Category",
+      "version": "Version",
+      "description": "Description",
       "core": "Core",
-      "toggle": "Enable or disable module",
-      "created": "Module registered",
-      "empty": "No modules registered yet",
+      "coreHint": "Core entries are always active: switching them off would break the app.",
+      "toggle": "Change status",
+      "statusLabel": "Status",
+      "open": "Edit {{name}}",
+      "editTitle": "Edit {{name}}",
+      "updated": "Entry updated",
+      "disable": "Disable",
+      "disabledToast": "Entry disabled",
+      "deleteNote": "Nothing is deleted here: disabling keeps the entry and its history. Cascade deletion may come later.",
+      "created": "Entry registered",
+      "openInApp": "Open in the app",
+      "visibleHint": "Pages and modules appear in your sidebar right away. Active ones reach every account; beta and disabled ones stay superadmin-only for preview.",
+      "content": {
+        "title": "Page content",
+        "hint": "What the page says in the app: ordered sections with ready-made blocks, reusable components and optional copy. No code or deploy needed.",
+        "addSection": "Add section",
+        "noSections": "This page has no sections yet. Add one to give it real content.",
+        "sectionNumber": "Section {{n}}",
+        "sectionTitle": "Section heading",
+        "sectionBody": "Text shown in the app. Line breaks are kept.",
+        "sectionComponents": "Components in this section",
+        "noComponents": "No components registered yet. Create one below.",
+        "moveUp": "Move up",
+        "moveDown": "Move down",
+        "removeSection": "Remove section",
+        "save": "Save content",
+        "saveHint": "Empty sections are discarded. The app shows the new content immediately.",
+        "saved": "Page content saved",
+        "tabsTitle": "Tab order",
+        "tabsHint": "The order below is the order the page renders its tabs.",
+        "tabsSaved": "Tab order saved",
+        "noTabs": "This page has no tabs yet.",
+        "addComponentTitle": "Add a component to this page",
+        "addComponent": "Add component",
+        "addComponentHint": "The component is registered under this page and becomes available in every section. Then tick it above and save.",
+        "componentAdded": "Component {{name}} added"
+      },
+      "blocks": {
+        "title": "Blocks",
+        "empty": "No blocks yet. Pick one below and it renders in the app.",
+        "items": "Items",
+        "item": "Item {{n}}",
+        "addItem": "Add item",
+        "removeItem": "Remove item",
+        "remove": "Remove block",
+        "loading": "Loading blocks…",
+        "unknown": "Unknown block type: {{type}}",
+        "types": {
+          "callout": "Notice",
+          "stats": "Key figures",
+          "steps": "Steps",
+          "checklist": "Checklist",
+          "links": "Link cards",
+          "faq": "FAQ",
+          "cta": "Call to action",
+          "image": "Image",
+          "emergency-fund": "Emergency fund",
+          "divider": "Divider"
+        },
+        "hints": {
+          "callout": "Tinted message for a tip, a warning or a confirmation.",
+          "stats": "Up to four figures with a label and a hint, side by side.",
+          "steps": "Numbered walkthrough: one title and one text per step.",
+          "checklist": "Ticked list to show what is included or done.",
+          "links": "Cards that open another page or an external site.",
+          "faq": "Collapsible questions and answers.",
+          "cta": "Closing banner with a button.",
+          "image": "Upload a file from your device or paste a URL, with alt text and a caption.",
+          "emergency-fund": "Live tool: works out your cushion from your real expenses over the last months.",
+          "divider": "Breathing room between two blocks."
+        },
+        "fields": {
+          "tone": "Tone",
+          "title": "Title",
+          "body": "Text",
+          "label": "Label",
+          "value": "Value",
+          "hint": "Hint",
+          "question": "Question",
+          "answer": "Answer",
+          "description": "Description",
+          "href": "Link (URL or /app path)",
+          "actionLabel": "Button text",
+          "actionHref": "Button link",
+          "src": "Image (file or URL)",
+          "alt": "Alt text",
+          "caption": "Caption"
+        },
+        "image": {
+          "upload": "Upload image",
+          "uploading": "Uploading…",
+          "hint": "PNG, JPEG, WebP or GIF up to 5 MB. Stored on the server; the page only references the file.",
+          "tooLarge": "The image is over 5 MB. Pick a lighter one.",
+          "unsupported": "Unsupported format. Use PNG, JPEG, WebP or GIF.",
+          "readError": "Could not read the file. Try again."
+        },
+        "tones": {
+          "info": "Info",
+          "success": "Success",
+          "warning": "Warning",
+          "critical": "Critical"
+        }
+      },
+      "empty": "No entries registered yet",
       "status": {
         "active": "Active",
         "beta": "Beta",
         "disabled": "Disabled"
       },
+      "statusHints": {
+        "active": "Live for every signed-in account: it shows in the sidebar and opens its page.",
+        "beta": "Only you see it for now, marked as beta in your sidebar. Activate it to publish it to everyone.",
+        "disabled": "Hidden for users. You still see it in the sidebar marked as disabled, so you can preview and fix it."
+      },
       "kind": "Kind",
       "kinds": {
         "module": "Module",
         "component": "Component",
-        "integration": "Integration"
+        "integration": "Integration",
+        "page": "Page",
+        "tab": "Tab"
       },
-      "parent": "Belongs to module",
+      "parent": "Belongs to",
       "parentNone": "No parent (standalone)",
-      "parentHint": "Components only: pick the module they live in so the app groups them under it.",
+      "parentHint": "Components and pages belong to a module; tabs belong to a page.",
       "partOf": "part of {{key}}",
-      "kindsHelp": "Module = a whole app feature. Component = a reusable piece inside a screen. Integration = an external service. What is active shows up on the Modules page in the app; disabling it hides it."
+      "kindsHelp": "Module = a whole app feature. Component = a reusable piece inside a screen. Integration = an external service. Page = a navigable screen. Tab = a section inside a page. Only the superadmin sees this inventory: disabling an entry hides it without deleting anything.",
+      "announce": {
+        "title": "Announce this feature",
+        "defaultTitle": "New: {{name}}",
+        "defaultBody": "{{name}} is now available as a {{kind}}. Open it from the app and tell us what you think.",
+        "hint": "Notify the users of {{name}} right after registering it. Publish it now or leave it as a draft to test first.",
+        "publish": "Publish announcement",
+        "draft": "Save for testing",
+        "skip": "Not now",
+        "draftHint": "Saving for testing keeps it as a draft in Announcements; publish it from that tab when you are ready.",
+        "created": "Announcement created"
+      }
     },
     "apiKeys": {
       "add": "Issue API key",
@@ -1292,51 +1410,68 @@
       "freeAudienceWarning": "Every account is premium during the free launch, so this announcement would reach nobody. Use \"Everyone\" instead."
     }
   },
+  "catalog": {
+    "navGroup": "Catalogue",
+    "all": "Full catalogue",
+    "allTitle": "Catalogue",
+    "allHint": "Every module, page, tab, component and integration registered in the backoffice. Active entries are live for everyone; beta and disabled ones only appear to the superadmin.",
+    "allEmpty": "Nothing registered yet. Create the first entry in the backoffice.",
+    "beta": "Beta",
+    "disabled": "Disabled",
+    "back": "Backoffice",
+    "backToApp": "Dashboard",
+    "notFound": "This entry is not visible",
+    "notFoundHint": "It may be disabled, or it is a beta page that only the superadmin can preview.",
+    "partOf": "Part of",
+    "modulePages": "Pages in this module",
+    "noPages": "This module has no pages yet",
+    "noPagesHint": "Create a page in the backoffice and set this module as its parent. It appears here immediately.",
+    "pageTabs": "Tabs",
+    "noTabs": "This page has no tabs yet",
+    "noTabsHint": "A tab created in the backoffice with this page as parent shows up here as a real section.",
+    "noDescription": "This section has no description yet.",
+    "noChildren": "Nothing registered inside yet.",
+    "components": "Components",
+    "integrations": "Integrations",
+    "internalKind": "This is a building block, not a screen: it is listed on the page or module it belongs to.",
+    "previewNote": "Preview: this entry is {{status}}. Only the superadmin sees it like this — activate it to publish it to every account.",
+    "childSummary": "{{tabs}} tabs · {{components}} components",
+    "emptySection": "This section has no text or components yet. Edit it in the backoffice.",
+    "emergencyFund": {
+      "title": "Your emergency fund",
+      "detected": "Across the {{count}} month(s) with expenses in your recent history, your typical month is {{amount}}. Change it if this month looks different.",
+      "noData": "You have no expenses in the last six months yet, so there is nothing to base the calculation on.",
+      "noDataCta": "Add your first expense",
+      "monthlyLabel": "Typical monthly expenses",
+      "monthlyHint": "Comes from your own transactions; edit it to try another scenario.",
+      "savedLabel": "What you already have saved",
+      "savedHint": "Only used for this calculation; nothing is stored.",
+      "savedSynced": "Synced with your savings budget: every deposit shows up here.",
+      "minimumLabel": "Minimum · 3 months",
+      "solidLabel": "Solid · 6 months",
+      "goalLabel": "Your goal in Budgets",
+      "progressLabel": "Progress toward 6 months",
+      "goalProgressLabel": "Progress toward your goal",
+      "contributionLabel": "Add to the goal",
+      "contributionDate": "Contribution date",
+      "contributionHint": "Added to the real savings and logged as a savings transaction with that date.",
+      "transactionDescription": "Emergency fund contribution",
+      "contribute": "Add",
+      "contributing": "Adding…",
+      "contributed": "Added {{amount}} to your goal and logged it as a transaction.",
+      "contributionError": "The contribution could not be saved. Try again.",
+      "covered": "{{months}} months covered",
+      "createGoal": "Create the savings goal",
+      "creatingGoal": "Creating goal…",
+      "goalCreated": "Goal created: {{amount}} in your savings budget.",
+      "goalExists": "You already have a {{amount}} goal in your savings budget.",
+      "goalError": "The goal could not be created. Try again.",
+      "viewGoal": "View my goal",
+      "addExpense": "Log an expense"
+    }
+  },
   "announcements": {
     "dismiss": "Dismiss announcement"
-  },
-  "modules": {
-    "title": "Modules",
-    "subtitle": "Features, components and integrations the product team has enabled for your account.",
-    "empty": "The team has not published any modules yet.",
-    "beta": "Beta",
-    "seeDetails": "See details",
-    "openDetails": "Open details for {{name}}",
-    "status": {
-      "active": "Active",
-      "beta": "Beta"
-    },
-    "kinds": {
-      "module": "Module",
-      "component": "Component",
-      "integration": "Integration"
-    },
-    "kindsPlural": {
-      "module": "Modules",
-      "component": "Components",
-      "integration": "Integrations"
-    },
-    "kindsHelp": {
-      "module": "Complete app features.",
-      "component": "Interface pieces found inside the screens.",
-      "integration": "External services connected to your account."
-    },
-    "detail": {
-      "noDescription": "The team has not added a description for this entry yet.",
-      "key": "Key",
-      "category": "Category",
-      "version": "Version",
-      "belongsTo": "Belongs to",
-      "standalone": "Standalone",
-      "openParent": "Open {{name}}",
-      "components": "Components inside",
-      "componentsEmpty": "No components registered under this module yet. The team adds them from the backoffice.",
-      "howItWorks": {
-        "module": "A module is a whole area of the app, like Cards or Banks. The components inside it are the pieces you fill in there.",
-        "component": "A component is one block inside a module: the card type with its fields, for example. It appears wherever its module does.",
-        "integration": "An integration connects an external service to your account. It works behind the screens you already use."
-      }
-    }
   },
   "support": {
     "dev": "Support the dev",
