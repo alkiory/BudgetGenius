@@ -50,3 +50,5 @@ playwright-report/
 test-results/
 .DS_Store
 Thumbs.db
+# Local AI runtime state
+.atl/

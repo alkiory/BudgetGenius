@@ -15,6 +15,8 @@ export interface CatalogItem {
   category: string;
   status: 'active' | 'beta';
   version: string;
+  /** Key of the parent module for a component, `null` when standalone. */
+  parentKey: string | null;
 }
 
 /**
@@ -45,6 +47,7 @@ export class ModuleCatalogService {
       category: row.category,
       status: row.status === 'beta' ? 'beta' : 'active',
       version: row.version,
+      parentKey: row.parentKey ?? null,
     }));
   }
 }

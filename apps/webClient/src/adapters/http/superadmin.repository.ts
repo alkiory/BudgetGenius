@@ -33,6 +33,8 @@ export interface AppModuleRow {
   category: string;
   status: AppModuleStatus;
   version: string;
+  /** Key of the parent module when this entry is a component. */
+  parentKey: string | null;
   sortOrder: number;
   isCore: boolean;
   createdAt: string;
@@ -66,6 +68,21 @@ export interface ProviderKeyRow {
   updatedAt: string;
 }
 
+/** `GET /ai/status`: whether Finny has a credential it can use right now. */
+export interface FinnyStatusRow {
+  available: boolean;
+  reason:
+    | "FINNY_NOT_CONFIGURED"
+    | "FINNY_INVALID_KEY"
+    | "FINNY_PROVIDER_ERROR"
+    | null;
+  /** Active credentials in the order they would be tried. */
+  activeKeys: number;
+  /** The credential the next prompt would use, when one is healthy. */
+  firstKey: string | null;
+  checkedAt: string;
+}
+
 export interface AppNotificationRow {
   id: number;
   title: string;
@@ -87,6 +104,8 @@ export type CreateModulePayload = {
   version?: string;
   description?: string;
   status?: AppModuleStatus;
+  /** Key of the module a component belongs to; empty clears it. */
+  parentKey?: string;
 };
 
 export const superAdminRepository = {
@@ -162,6 +181,11 @@ export const superAdminRepository = {
   },
   async deleteProviderKey(id: number): Promise<void> {
     await api.delete(`/superadmin/provider-keys/${id}`);
+  },
+  /** Same readiness endpoint the Finny rail uses, for the backoffice. */
+  async getFinnyStatus(): Promise<FinnyStatusRow> {
+    const { data } = await api.get("/ai/status");
+    return data;
   },
 
   async listNotifications(): Promise<AppNotificationRow[]> {

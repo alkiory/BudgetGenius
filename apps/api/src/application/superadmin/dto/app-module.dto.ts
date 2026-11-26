@@ -45,6 +45,18 @@ export class CreateAppModuleDto {
   @MaxLength(40)
   category?: string;
 
+  /**
+   * Key of the module this entry belongs to (`cards` for `card-type`).
+   * Empty string clears the relation.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  @Matches(/^([a-z0-9][a-z0-9-]*)?$/, {
+    message: 'parentKey must be lowercase letters, digits or dashes',
+  })
+  parentKey?: string;
+
   @IsOptional()
   @IsIn(STATUSES)
   status?: AppModuleStatus;

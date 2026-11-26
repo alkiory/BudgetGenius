@@ -11,6 +11,8 @@ export interface CatalogModule {
   category: string;
   status: "active" | "beta";
   version: string;
+  /** Key of the parent module for a component; `null` when standalone. */
+  parentKey: string | null;
 }
 
 /** Active catalogue entries, excluding anything disabled in the backoffice. */

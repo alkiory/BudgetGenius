@@ -1,9 +1,5 @@
 import { useGetSettings } from "@adapters/query/userQuery";
-import {
-  APP_PATHS,
-  landingHref,
-  RoutePaths,
-} from "@presentation/utils/routes";
+import { APP_PATHS, landingHref, RoutePaths } from "@presentation/utils/routes";
 import {
   consumeOnboardingJustFinished,
   hasPendingOnboardingTour,
@@ -57,9 +53,7 @@ function withChangelogLink(step: DriveStep, label: string): DriveStep {
       ...step.popover,
       onPopoverRender: (popover: PopoverDOM) => {
         // Popover re-renders (resize, theme changes) must not stack copies.
-        popover.description
-          .querySelector(".bg-tour__changelog-link")
-          ?.remove();
+        popover.description.querySelector(".bg-tour__changelog-link")?.remove();
         const link = document.createElement("a");
         link.className = "bg-tour__changelog-link";
         link.href = landingHref(RoutePaths.Changelog);
@@ -158,6 +152,27 @@ export function AppTour() {
                 align: "start",
               },
             },
+            // One step per page: what it is for and how to use it. They all
+            // live in the sidebar, so the tour can explain the whole app
+            // without navigating away from the dashboard.
+            ...(
+              [
+                "dashboard",
+                "transactions",
+                "budgets",
+                "reports",
+                "income",
+                "modules",
+              ] as const
+            ).map((page) => ({
+              element: `[data-tour="nav-${page}"]`,
+              popover: {
+                title: tr(`tour.onboarding.pages.${page}.title`),
+                description: tr(`tour.onboarding.pages.${page}.body`),
+                side: "right" as const,
+                align: "start" as const,
+              },
+            })),
             {
               element: '[data-tour="quick-add"]',
               popover: {
@@ -211,8 +226,7 @@ export function AppTour() {
           ];
 
       const reachable = steps.filter(
-        (step) =>
-          typeof step.element !== "string" || isReachable(step.element),
+        (step) => typeof step.element !== "string" || isReachable(step.element),
       );
 
       try {

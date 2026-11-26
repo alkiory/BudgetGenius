@@ -11,9 +11,23 @@ import { Repository } from 'typeorm';
 /** Raised when Finny cannot run because of its own configuration. The
  * controller maps it to a 503 with a machine-readable code so the rail can
  * show setup instructions instead of a generic failure message. */
-export type FinnyConfigErrorCode =
-  | 'FINNY_NOT_CONFIGURED'
-  | 'FINNY_INVALID_KEY';
+export type FinnyConfigErrorCode = 'FINNY_NOT_CONFIGURED' | 'FINNY_INVALID_KEY';
+
+/** Why Finny cannot answer right now, as reported by `GET /ai/status`. */
+export type FinnyStatusReason = FinnyConfigErrorCode | 'FINNY_PROVIDER_ERROR';
+
+export interface FinnyStatusView {
+  available: boolean;
+  reason: FinnyStatusReason | null;
+  /** Active credentials, in the order Finny would try them. */
+  activeKeys: number;
+  /** Label of the credential the next prompt would use, if any is healthy. */
+  firstKey: string | null;
+  checkedAt: string;
+}
+
+/** How long a recorded provider failure keeps a key out of the healthy set. */
+const FAILURE_WINDOW_MS = 15 * 60_000;
 
 export class FinnyConfigError extends Error {
   constructor(
@@ -26,9 +40,14 @@ export class FinnyConfigError extends Error {
 }
 
 interface ProviderCandidate {
-  /** Backoffice row, or `null` for the environment fallback. */
-  id: number | null;
+  /** Backoffice row id. */
+  id: number;
   key: string;
+  /** Row label, shown to the superadmin when a key is reporting its state. */
+  label: string;
+  lastFailedAt: Date | null;
+  /** The last recorded failure was the provider rejecting the credential. */
+  authFailure: boolean;
 }
 
 @Injectable()
@@ -54,7 +73,7 @@ export class AiService {
     if (candidates.length === 0) {
       throw new FinnyConfigError(
         'FINNY_NOT_CONFIGURED',
-        'Finny is not configured. Add a provider key in the backoffice or set AGENT_API_KEY.',
+        'Finny is not configured. Add a provider key in the backoffice.',
       );
     }
 
@@ -82,30 +101,28 @@ export class AiService {
       try {
         const aiResponse = await this.callOpenAI(messages, candidate.key);
         await this.saveToHistory(userId, userQuery, aiResponse);
-        if (candidate.id !== null) {
-          void this.providerKeys
-            .update(candidate.id, { lastUsedAt: new Date(), lastError: null })
-            .catch(() => undefined);
-        }
+        void this.providerKeys
+          .update(candidate.id, {
+            lastUsedAt: new Date(),
+            lastFailedAt: null,
+            lastError: null,
+          })
+          .catch(() => undefined);
         return aiResponse;
       } catch (error) {
         lastError = error;
         if (isProviderAuthError(error)) sawAuthError = true;
         this.logger.warn(
-          `🚨 Finny provider key ${
-            candidate.id === null ? '(env)' : candidate.id
-          } failed: ${(error as Error)?.message ?? error}`,
+          `🚨 Finny provider key ${candidate.id} failed: ${
+            (error as Error)?.message ?? error
+          }`,
         );
-        if (candidate.id !== null) {
-          void this.providerKeys
-            .update(candidate.id, {
-              lastFailedAt: new Date(),
-              lastError: String(
-                (error as Error)?.message ?? error,
-              ).slice(0, 240),
-            })
-            .catch(() => undefined);
-        }
+        void this.providerKeys
+          .update(candidate.id, {
+            lastFailedAt: new Date(),
+            lastError: String((error as Error)?.message ?? error).slice(0, 240),
+          })
+          .catch(() => undefined);
       }
     }
 
@@ -126,10 +143,56 @@ export class AiService {
   }
 
   /**
-   * Backoffice keys in priority order, then the environment fallback.
-   *
-   * The table may not exist yet on an API booted before the migration; that
-   * must not take Finny down, so a query failure falls back to the env key.
+   * Snapshot for the rail and the backoffice: whether the next prompt has a
+   * credential that is not known to be failing. Expiry is not predictable
+   * from an API key, so a key only counts as failed once the provider
+   * rejected it; the failover below keeps the next key in line.
+   */
+  async getStatus(): Promise<FinnyStatusView> {
+    const candidates = await this.resolveKeys();
+    const checkedAt = new Date().toISOString();
+
+    if (candidates.length === 0) {
+      return {
+        available: false,
+        reason: 'FINNY_NOT_CONFIGURED',
+        activeKeys: 0,
+        firstKey: null,
+        checkedAt,
+      };
+    }
+
+    const cutoff = Date.now() - FAILURE_WINDOW_MS;
+    const isHealthy = (candidate: ProviderCandidate) =>
+      !candidate.lastFailedAt || candidate.lastFailedAt.getTime() < cutoff;
+    const firstHealthy = candidates.find(isHealthy);
+
+    if (firstHealthy) {
+      return {
+        available: true,
+        reason: null,
+        activeKeys: candidates.length,
+        firstKey: firstHealthy.label,
+        checkedAt,
+      };
+    }
+
+    return {
+      available: false,
+      reason: candidates.every((candidate) => candidate.authFailure)
+        ? 'FINNY_INVALID_KEY'
+        : 'FINNY_PROVIDER_ERROR',
+      activeKeys: candidates.length,
+      firstKey: null,
+      checkedAt,
+    };
+  }
+
+  /**
+   * Backoffice keys in priority order. They are the only source: nothing is
+   * read from the server environment, so every credential is rotated from the
+   * backoffice without a redeploy. A missing table (API booted before the
+   * migration) simply yields no candidates and is reported as not configured.
    */
   private async resolveKeys(): Promise<ProviderCandidate[]> {
     const candidates: ProviderCandidate[] = [];
@@ -140,23 +203,19 @@ export class AiService {
       });
       for (const row of rows) {
         const key = openSecret(row.encryptedKey);
-        if (key) candidates.push({ id: row.id, key });
+        if (!key) continue;
+        candidates.push({
+          id: row.id,
+          key,
+          label: `${row.label} ···${row.lastFour}`,
+          lastFailedAt: row.lastFailedAt,
+          authFailure: looksLikeAuthError(row.lastError),
+        });
       }
     } catch (error) {
       this.logger.warn(
         `Could not read backoffice provider keys: ${(error as Error).message}`,
       );
-    }
-
-    // Legacy fallback: keeps deployments working until the operator moves the
-    // key into the backoffice.
-    const envKey = (
-      process.env.AGENT_API_KEY ||
-      process.env.OPENAI_API_KEY ||
-      ''
-    ).trim();
-    if (envKey && !candidates.some((candidate) => candidate.key === envKey)) {
-      candidates.push({ id: null, key: envKey });
     }
 
     return candidates;
@@ -208,10 +267,7 @@ export class AiService {
   }
 
   // --- Proveedor (Fácil de swappear) ---
-  private async callOpenAI(
-    messages: any[],
-    apiKey: string,
-  ): Promise<string> {
+  private async callOpenAI(messages: any[], apiKey: string): Promise<string> {
     let client = this.clients.get(apiKey);
     if (!client) {
       client = new OpenAI({ apiKey });
@@ -234,4 +290,10 @@ function isProviderAuthError(error: any): boolean {
     error?.code === 'invalid_api_key' ||
     error?.error?.code === 'invalid_api_key'
   );
+}
+
+/** The table keeps only the message text, so a stored rejection is recognised
+ * by the wording the provider uses for an unusable credential. */
+function looksLikeAuthError(message: string | null): boolean {
+  return !!message && /401|invalid.?api.?key|incorrect api key/i.test(message);
 }

@@ -46,6 +46,15 @@ export class AppModule {
   @Column({ length: 40, default: 'core' })
   category: string;
 
+  /**
+   * For `kind: 'component'` (and the odd integration that only makes sense
+   * inside a module): the `key` of the module it belongs to, e.g. the
+   * `card-type` component under the `cards` module. `null` means the entry
+   * stands on its own.
+   */
+  @Column({ type: 'varchar', length: 80, name: 'parentKey', nullable: true })
+  parentKey: string | null;
+
   @Column({ length: 16, default: 'active' })
   status: AppModuleStatus;
 

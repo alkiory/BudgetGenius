@@ -7,22 +7,21 @@ export type BudgetType = (typeof BUDGET_TYPE_OPTIONS)[number];
  * (Rental overlaps Rent) are intentionally excluded. Legacy budgets that
  * already use an excluded name still render it via the row's fallback
  * option, so editing never loses data.
+ *
+ * Kept deliberately short: this is a picker, not an inventory. Anything else
+ * is added by the user as a transaction category ("Import categories").
  */
 const EXPENSE_CATEGORY_OPTIONS = [
   "Housing",
   "Food",
   "Transportation",
-  "Entertainment",
-  "Education",
-  "Medical",
-  "Rent",
-  "Dining",
   "Groceries",
-  "Shopping",
+  "Dining",
   "Utilities",
+  "Shopping",
+  "Entertainment",
   "Healthcare",
   "Other",
-  "Gifts",
 ] as const;
 
 export const BUDGET_CATEGORY_OPTIONS: string[] = [

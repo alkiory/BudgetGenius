@@ -63,9 +63,21 @@ export interface ChangelogEntry {
  */
 export const changelog: ChangelogEntry[] = [
   {
+    version: "1.12",
+    date: "2026-11-26",
+    highlight: true,
+    title: {
+      en: "A shorter category list, and a tour of every screen",
+      es: "Una lista de categorías más corta y un recorrido por cada pantalla",
+    },
+    description: {
+      en: "The category picker now offers only the usual categories, so you stop scrolling: add the ones you use with Import categories in Transactions and they appear in the form from then on. The guided tour now explains every page, Finny can be dragged out of the way when it covers a button, and your chosen currency stays the same after you edit a budget.",
+      es: "El selector de categorías ahora muestra solo las habituales, así dejas de hacer scroll: añade las tuyas con Importar categoría en Transacciones y aparecerán en el formulario a partir de entonces. El recorrido guiado ya explica cada página, puedes arrastrar a Finny cuando tape un botón y tu moneda elegida se mantiene al editar un presupuesto.",
+    },
+  },
+  {
     version: "1.11",
     date: "2026-11-25",
-    highlight: true,
     title: {
       en: "A livelier interface, down to the details",
       es: "Una interfaz más viva, hasta en los detalles",

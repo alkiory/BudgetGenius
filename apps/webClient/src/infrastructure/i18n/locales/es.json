@@ -590,6 +590,7 @@
     "title": "Finny",
     "subtitle": "Tu asistente financiero con IA",
     "open": "Abrir Finny",
+    "dragHint": "Arrastra para mover",
     "close": "Cerrar Finny",
     "collapse": "Encoger Finny",
     "expand": "Expandir Finny",
@@ -599,14 +600,21 @@
       "badge": "Falta configurar",
       "missing": {
         "title": "Finny necesita una clave de API",
-        "body": "Añade AGENT_API_KEY al entorno de la API y reiníciala. La clave se queda en el servidor."
+        "body": "Añade una clave del proveedor en Backoffice → API keys. Se guarda cifrada en el servidor y se puede rotar sin reiniciar."
       },
       "invalid": {
         "title": "La clave de API de Finny fue rechazada",
-        "body": "Sustituye AGENT_API_KEY por una clave activa y reinicia la API."
+        "body": "Sustituye o desactiva la clave rechazada en Backoffice → API keys y Finny usará la siguiente al instante."
       },
       "placeholder": "Finny está desconectado hasta configurar la clave",
       "retry": "Reintentar"
+    },
+    "sleep": {
+      "badge": "Dormida",
+      "title": "Finny está dormida",
+      "body": "Ninguna clave de IA responde ahora mismo, así que el chat queda en pausa hasta que una vuelva a funcionar. Los insights se siguen actualizando con normalidad.",
+      "placeholder": "Finny está dormida y aún no puede responder",
+      "wake": "Volver a comprobar"
     },
     "insightsTitle": "Insights",
     "budgetRisk": "{{count}} presupuesto(s) en riesgo",
@@ -1111,7 +1119,33 @@
       "welcomeTitle": "Todo listo",
       "welcomeBody": "Tus preferencias están guardadas. Aquí tienes un recorrido de 60 segundos por la app.",
       "navTitle": "Cada sección, a un clic",
-      "navBody": "Panel, transacciones, presupuestos, reportes e ingresos viven en esta barra lateral.",
+      "navBody": "Panel, transacciones, presupuestos, reportes, ingresos y módulos viven en esta barra lateral. Ahora vemos cada una.",
+      "pages": {
+        "dashboard": {
+          "title": "Panel",
+          "body": "Tu mes de un vistazo: balance, ingresos, gastos y las categorías donde más gastas. Empieza aquí para ver cómo va el mes."
+        },
+        "transactions": {
+          "title": "Transacciones",
+          "body": "Todos los movimientos. Filtra, edita o importa los tuyos, y usa Importar categoría para traer las categorías que ya usas."
+        },
+        "budgets": {
+          "title": "Presupuestos",
+          "body": "Define un límite por categoría y periodo. Abre uno para añadir un gasto y ver la barra de progreso."
+        },
+        "reports": {
+          "title": "Reportes",
+          "body": "Tendencias, comparaciones y desgloses en el tiempo, para ver qué cambió y por qué."
+        },
+        "income": {
+          "title": "Ingresos",
+          "body": "Tus ingresos fijos y puntuales, separados del gasto para que el balance sea real."
+        },
+        "modules": {
+          "title": "Módulos",
+          "body": "Lo que el equipo ha activado para tu cuenta. Abre cualquier tarjeta para ver qué hace y qué componentes incluye."
+        }
+      },
       "addTitle": "Registra tu primera transacción",
       "addBody": "Usa el botón + para registrar un ingreso o un gasto. Categorizar toma un segundo.",
       "finnyTitle": "Conoce a Finny",
@@ -1173,6 +1207,10 @@
         "component": "Componente",
         "integration": "Integración"
       },
+      "parent": "Pertenece al módulo",
+      "parentNone": "Sin módulo (independiente)",
+      "parentHint": "Solo para componentes: elige el módulo al que pertenecen para que la app los agrupe dentro de él.",
+      "partOf": "parte de {{key}}",
       "kindsHelp": "Módulo = una función completa de la app. Componente = una pieza reutilizable dentro de una pantalla. Integración = un servicio externo. Lo activo aparece en la página Módulos de la app; desactivarlo lo oculta."
     },
     "apiKeys": {
@@ -1199,16 +1237,26 @@
       "labelPlaceholder": "OpenAI principal",
       "key": "Clave del proveedor",
       "priority": "Prioridad",
+      "priorityHint": "De 0 a 999. El número más bajo va primero: Finny prueba esta clave antes que una con número mayor y pasa a la siguiente si la rechazan o falla. Empate: primero la clave más antigua.",
       "add": "Añadir clave",
       "created": "Clave añadida",
-      "empty": "Aún no hay claves de Finny. Mientras no haya ninguna se usa AGENT_API_KEY del servidor.",
+      "empty": "Aún no hay claves de Finny. Añade una para que pueda responder.",
       "order": "orden {{order}}",
       "reveal": "Mostrar u ocultar la clave",
       "copied": "Clave copiada",
       "active": "Activa",
       "inactive": "Inactiva",
       "toggle": "Activar o desactivar clave",
-      "undecryptable": "No se pudo descifrar: vuelve a introducirla"
+      "undecryptable": "No se pudo descifrar: vuelve a introducirla",
+      "status": {
+        "checking": "Comprobando qué clave usaría Finny…",
+        "available": "Finny respondería con {{key}}",
+        "notConfigured": "No hay ninguna clave configurada: Finny está dormida",
+        "rejected": "El proveedor rechazó todas las claves: Finny está dormida",
+        "failing": "Todas las claves están fallando ahora mismo: Finny está dormida",
+        "refresh": "Volver a comprobar",
+        "explain": "Cada petición recorre esta lista en orden de prioridad y salta a la siguiente clave cuando el proveedor rechaza o falla una. La caducidad no se puede detectar por adelantado: se cambia en la misma petición y el error queda registrado abajo."
+      }
     },
     "notifications": {
       "add": "Crear aviso",
@@ -1235,7 +1283,13 @@
         "all": "Todos",
         "free": "Gratis",
         "premium": "Premium"
-      }
+      },
+      "audienceHints": {
+        "all": "Lo ve cualquier cuenta con sesión, sea premium o no.",
+        "free": "Solo lo ven las cuentas sin premium.",
+        "premium": "Solo lo ven las cuentas premium."
+      },
+      "freeAudienceWarning": "Todas las cuentas son premium durante el lanzamiento gratuito, así que este aviso no lo vería nadie. Usa «Todos»."
     }
   },
   "announcements": {
@@ -1246,6 +1300,12 @@
     "subtitle": "Funciones, componentes e integraciones que el equipo del producto ha activado para tu cuenta.",
     "empty": "El equipo aún no ha publicado módulos.",
     "beta": "Beta",
+    "seeDetails": "Ver detalle",
+    "openDetails": "Abrir el detalle de {{name}}",
+    "status": {
+      "active": "Activo",
+      "beta": "Beta"
+    },
     "kinds": {
       "module": "Módulo",
       "component": "Componente",
@@ -1260,6 +1320,22 @@
       "module": "Funciones completas de la app.",
       "component": "Piezas de interfaz que aparecen dentro de las pantallas.",
       "integration": "Servicios externos conectados a tu cuenta."
+    },
+    "detail": {
+      "noDescription": "El equipo aún no ha añadido una descripción para esta entrada.",
+      "key": "Clave",
+      "category": "Categoría",
+      "version": "Versión",
+      "belongsTo": "Pertenece a",
+      "standalone": "Independiente",
+      "openParent": "Abrir {{name}}",
+      "components": "Componentes dentro",
+      "componentsEmpty": "Aún no hay componentes registrados en este módulo. El equipo los añade desde el backoffice.",
+      "howItWorks": {
+        "module": "Un módulo es un área completa de la app, como Tarjetas o Bancos. Los componentes dentro son las piezas que rellenas ahí.",
+        "component": "Un componente es un bloque dentro de un módulo: el tipo de tarjeta con sus campos, por ejemplo. Aparece donde aparece su módulo.",
+        "integration": "Una integración conecta un servicio externo con tu cuenta. Funciona detrás de las pantallas que ya usas."
+      }
     }
   },
   "support": {

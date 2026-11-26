@@ -10,6 +10,8 @@ const KEYS = {
   modules: ["superadmin", "modules"] as const,
   apiKeys: ["superadmin", "api-keys"] as const,
   providerKeys: ["superadmin", "provider-keys"] as const,
+  /** Shared with the Finny rail: same endpoint, same cache entry. */
+  finnyStatus: ["ai", "status"] as const,
   notifications: ["superadmin", "notifications"] as const,
 };
 
@@ -115,6 +117,15 @@ export function useProviderKeys() {
   });
 }
 
+/** Which credential Finny would use for the next prompt. */
+export function useFinnyStatus() {
+  return useQuery({
+    queryKey: KEYS.finnyStatus,
+    queryFn: superAdminRepository.getFinnyStatus,
+    staleTime: 30_000,
+  });
+}
+
 export function useCreateProviderKey() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -126,6 +137,7 @@ export function useCreateProviderKey() {
     }) => superAdminRepository.createProviderKey(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: KEYS.providerKeys });
+      queryClient.invalidateQueries({ queryKey: KEYS.finnyStatus });
     },
   });
 }
@@ -146,6 +158,7 @@ export function useUpdateProviderKey() {
     }) => superAdminRepository.updateProviderKey(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: KEYS.providerKeys });
+      queryClient.invalidateQueries({ queryKey: KEYS.finnyStatus });
     },
   });
 }
@@ -156,6 +169,7 @@ export function useDeleteProviderKey() {
     mutationFn: (id: number) => superAdminRepository.deleteProviderKey(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: KEYS.providerKeys });
+      queryClient.invalidateQueries({ queryKey: KEYS.finnyStatus });
     },
   });
 }

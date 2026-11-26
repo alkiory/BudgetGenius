@@ -867,7 +867,7 @@ REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_URL=redis://localhost:6379
 
-# OpenAI (optional — for AI assistant "Finny")
+# OpenAI (optional — legacy report insights only; Finny keys live in the backoffice)
 OPENAI_API_KEY=sk-...
 
 # OAuth (optional)
@@ -965,9 +965,9 @@ API is the real boundary.
   credentials the assistant uses. They are sealed with AES-256-GCM at rest and
   the superadmin can reveal them again. Enabled keys are tried in `priority`
   order: when one is rejected, rate-limited or unreachable, the API records
-  `lastError` on that row and retries with the next key. That is the
-  contingency chain; the old `AGENT_API_KEY` env var remains as the last
-  fallback until it is moved into the backoffice.
+  `lastError` on that row and retries with the next key. That table is the
+  only source of credentials — the server environment is no longer read — so
+  rotating a key never needs a deploy.
 - **Avisos** publishes announcements to users. Leaving the schedule empty saves
   a draft; setting a date publishes it with that `publishedAt`, and the app
   reveals it on the first poll after that moment (no cron). `expiresAt` retires
@@ -987,15 +987,35 @@ Finny**, so rotating or adding contingency does not require a server change:
 3. The list shows the last provider error per key, which is what `FINNY_INVALID_KEY`
    was reporting.
 
+Selection happens on every prompt, in `AiService.resolveKeys()`: active
+backoffice rows ordered by `priority` then `createdAt`. Each candidate is tried
+in turn and the first answer wins; a rejection or provider failure records
+`lastFailedAt`/`lastError` on the row and moves on inside the same request —
+there is no cron and no separate rotation job. A success clears that failure,
+so a key that recovers returns to the front of the chain by itself.
+
+Expiry cannot be predicted: an API key carries no expiry date the API can read,
+so an expiring key is only noticed when the provider starts rejecting it, and
+the next key answers that same prompt. A key that failed stays out of the
+healthy set for 15 minutes, which is what keeps Finny visibly asleep until a
+different key answers.
+
+`GET /api/ai/status` reports the resolved chain without calling the provider:
+`{ available, reason, activeKeys, firstKey }`, where `reason` is
+`FINNY_NOT_CONFIGURED`, `FINNY_INVALID_KEY` (every failure was an auth
+rejection) or `FINNY_PROVIDER_ERROR`. The Finny rail reads it on open, so the
+launcher shows Finny asleep (closed eyes, pink glow) instead of waiting for a
+failed prompt, and the API keys tab shows the same snapshot above the list.
+
 The key is stored encrypted with `PROVIDER_KEYS_SECRET` (falling back to
 `JWT_SECRET`). If that secret is rotated, existing rows become undecryptable
-and must be re-entered. Until any backoffice key exists, `AGENT_API_KEY` in the
-API environment is still used as the last candidate.
+and must be re-entered. With no active key in the backoffice, Finny reports
+`FINNY_NOT_CONFIGURED`; `AGENT_API_KEY` and `OPENAI_API_KEY` in the API
+environment are ignored by the assistant.
 
-The dev `AGENT_API_KEY` in `apps/api/.env.development` looks like a free-tier
-gateway key; the OpenAI SDK calls `api.openai.com`, so a non-OpenAI key is
-rejected with the same code. Add a valid OpenAI key in the backoffice instead
-of editing the server.
+A non-OpenAI key (for example a free-tier gateway key) is rejected by
+`api.openai.com` with `FINNY_INVALID_KEY`. Add a valid OpenAI key in the
+backoffice instead of editing the server.
 
 ### Cross-device sync and announcements
 

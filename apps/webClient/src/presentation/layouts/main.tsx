@@ -1,4 +1,6 @@
 import { SidebarProvider } from "@adapters/hooks/sidebarContext";
+import { useGetSettings } from "@adapters/query/userQuery";
+import { setSettingsAction } from "@adapters/slices/user-settings/settingsSlice";
 import { useCrossDeviceSync } from "@infrastructure/use-cross-device-sync";
 import { AmbientBackground } from "@presentation/components/dashboard/ambient-background";
 import { AnnouncementBanner } from "@presentation/components/dashboard/announcement-banner";
@@ -7,10 +9,24 @@ import { FinnyRail } from "@presentation/components/dashboard/finny-rail";
 import { MainContent } from "@presentation/components/dashboard/main-content";
 import { DashboardSidebar } from "@presentation/components/dashboard/sidebar";
 import { AppTour } from "@presentation/components/tour/app-tour";
+import { useEffect } from "react";
+import { useDispatch } from "react-redux";
 import { Outlet } from "react-router";
 
 export default function MainLayout() {
   useCrossDeviceSync();
+
+  // The signed-in user's preferences (currency, language, timezone) are
+  // hydrated here rather than on the dashboard only: every money surface
+  // reads `state.userSettings`, so landing straight on /app/budgets (deep
+  // link, refresh, mobile cold start) used to format amounts with the EUR
+  // default until the dashboard was visited.
+  const dispatch = useDispatch();
+  const { data: settings } = useGetSettings();
+
+  useEffect(() => {
+    if (settings) dispatch(setSettingsAction(settings));
+  }, [dispatch, settings]);
 
   return (
     <SidebarProvider>

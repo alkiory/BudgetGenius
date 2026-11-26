@@ -1,11 +1,14 @@
 import { CatalogModule, ModuleKind } from "@adapters/http/modules.repository";
 import { useModules } from "@adapters/query/modules";
 import Loader from "@presentation/components/loader";
+import { Modal } from "@presentation/components/modal/modal";
 import {
   Link2,
   Settings,
   Sparkles,
 } from "@presentation/components/ui/animated-icons";
+import { Button } from "@presentation/components/ui/button";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 const KIND_ORDER: ModuleKind[] = ["module", "component", "integration"];
@@ -25,15 +28,29 @@ const KIND_TONE: Record<ModuleKind, string> = {
     "bg-cyan-500/15 text-cyan-600 ring-cyan-500/25 dark:bg-cyan-400/10 dark:text-cyan-300",
 };
 
-function ModuleCard({ module }: { module: CatalogModule }) {
+function ModuleCard({
+  module,
+  onOpen,
+}: {
+  module: CatalogModule;
+  onOpen: (module: CatalogModule) => void;
+}) {
   const { t } = useTranslation();
   const Icon = KIND_ICON[module.kind];
 
   return (
-    <div className="glass-panel hover-glow rounded-xl p-5">
+    <button
+      type="button"
+      onClick={() => onOpen(module)}
+      aria-haspopup="dialog"
+      aria-label={t("modules.openDetails", { name: module.name })}
+      className="glass-panel hover-glow group w-full rounded-xl p-5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/60"
+    >
       <div className="flex items-start gap-3">
         <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ${KIND_TONE[module.kind]}`}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ${
+            KIND_TONE[module.kind]
+          }`}
         >
           <Icon className="h-4 w-4" />
         </span>
@@ -65,7 +82,141 @@ function ModuleCard({ module }: { module: CatalogModule }) {
           </p>
         </div>
       </div>
+      <span className="mt-3 inline-block text-[11px] font-medium text-teal-600 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 dark:text-teal-300">
+        {t("modules.seeDetails")}
+      </span>
+    </button>
+  );
+}
+
+function MetaRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-t border-slate-200/70 py-2 first:border-t-0 dark:border-white/[0.06]">
+      <dt className="shrink-0 text-xs uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">
+        {label}
+      </dt>
+      <dd className="min-w-0 break-words text-right text-sm text-slate-700 dark:text-slate-300">
+        {value}
+      </dd>
     </div>
+  );
+}
+
+/**
+ * Detail of one catalogue entry. A module lists the components registered
+ * under it (e.g. `cards` → `card-type`); a component points back at the
+ * module it lives in, so clicking through either direction explains where
+ * the feature actually is in the app.
+ */
+function ModuleDetail({
+  module,
+  modules,
+  onClose,
+  onOpen,
+}: {
+  module: CatalogModule;
+  modules: CatalogModule[];
+  onClose: () => void;
+  onOpen: (module: CatalogModule) => void;
+}) {
+  const { t } = useTranslation();
+  const parent = module.parentKey
+    ? modules.find((candidate) => candidate.key === module.parentKey)
+    : undefined;
+  const children = useMemo(
+    () =>
+      modules.filter(
+        (candidate) =>
+          candidate.key !== module.key && candidate.parentKey === module.key,
+      ),
+    [modules, module.key],
+  );
+
+  return (
+    <Modal isOpen onClose={onClose} title={module.name}>
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">
+            {t(`modules.kinds.${module.kind}`)}
+          </span>
+          <span className="rounded-full border border-teal-400/40 px-1.5 py-0.5 text-[10px] font-medium text-teal-600 dark:text-teal-300">
+            {t(`modules.status.${module.status}`)}
+          </span>
+        </div>
+
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          {module.description || t("modules.detail.noDescription")}
+        </p>
+
+        <p className="rounded-lg bg-slate-500/5 px-3 py-2 text-xs text-slate-500 dark:bg-white/[0.04] dark:text-slate-400">
+          {t(`modules.detail.howItWorks.${module.kind}`)}
+        </p>
+
+        <dl className="rounded-lg border border-slate-200/80 px-3 dark:border-white/[0.08]">
+          <MetaRow label={t("modules.detail.key")} value={module.key} />
+          <MetaRow
+            label={t("modules.detail.category")}
+            value={module.category}
+          />
+          <MetaRow
+            label={t("modules.detail.version")}
+            value={`v${module.version}`}
+          />
+          <MetaRow
+            label={t("modules.detail.belongsTo")}
+            value={parent?.name ?? t("modules.detail.standalone")}
+          />
+        </dl>
+
+        {parent && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onOpen(parent)}
+          >
+            {t("modules.detail.openParent", { name: parent.name })}
+          </Button>
+        )}
+
+        {module.kind === "module" && (
+          <div className="space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+              {t("modules.detail.components")}
+            </h3>
+            {children.length === 0 ? (
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {t("modules.detail.componentsEmpty")}
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {children.map((child) => (
+                  <li key={child.id}>
+                    <button
+                      type="button"
+                      onClick={() => onOpen(child)}
+                      className="flex w-full items-start gap-2 rounded-lg border border-slate-200/80 px-3 py-2 text-left transition-colors hover:border-teal-400/40 hover:bg-teal-500/5 dark:border-white/[0.08]"
+                    >
+                      <Settings className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-500 dark:text-violet-300" />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">
+                          {child.name}
+                        </span>
+                        {child.description && (
+                          <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                            {child.description}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -73,11 +224,20 @@ function ModuleCard({ module }: { module: CatalogModule }) {
  * Catalogue of what the product currently offers, fed by the backoffice.
  *
  * A module disabled there disappears from this page; a beta one is labelled.
- * This is the user-facing side of the "Módulos" tab.
+ * Opening a card explains the entry and, for a module, lists the components
+ * that live inside it (`cards` → `card-type`).
  */
 export default function ModulesPage() {
   const { t } = useTranslation();
   const { data, isLoading } = useModules();
+  const [selected, setSelected] = useState<CatalogModule | null>(null);
+
+  // The selected row is the one in the list: a refresh that disables the
+  // module should also close (or re-target) the detail instead of showing a
+  // stale copy.
+  const activeModule = selected
+    ? data?.find((module) => module.id === selected.id) ?? selected
+    : null;
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
@@ -117,27 +277,28 @@ export default function ModulesPage() {
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 {items.map((module) => (
-                  <ModuleCard key={module.id} module={module} />
+                  <ModuleCard
+                    key={module.id}
+                    module={module}
+                    onOpen={setSelected}
+                  />
                 ))}
               </div>
-              {kind === "module" && (
-                <p className="text-xs text-slate-400 dark:text-slate-500">
-                  {t("modules.kindsHelp.module")}
-                </p>
-              )}
-              {kind === "component" && (
-                <p className="text-xs text-slate-400 dark:text-slate-500">
-                  {t("modules.kindsHelp.component")}
-                </p>
-              )}
-              {kind === "integration" && (
-                <p className="text-xs text-slate-400 dark:text-slate-500">
-                  {t("modules.kindsHelp.integration")}
-                </p>
-              )}
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                {t(`modules.kindsHelp.${kind}`)}
+              </p>
             </section>
           );
         })
+      )}
+
+      {activeModule && data && (
+        <ModuleDetail
+          module={activeModule}
+          modules={data}
+          onClose={() => setSelected(null)}
+          onOpen={setSelected}
+        />
       )}
     </div>
   );

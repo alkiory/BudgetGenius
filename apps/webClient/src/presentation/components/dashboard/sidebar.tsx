@@ -278,6 +278,7 @@ export function DashboardSidebar() {
                       navItemRefs.current[item.key] = element;
                     }}
                     to={item.href}
+                    data-tour={`nav-${item.key}`}
                     className={getLinkClasses(item, isActive)}
                     title={isCollapsed ? label : ""}
                     onClick={closeSidebar}

@@ -6,7 +6,11 @@ import {
   CreateAppProviderKeyDto,
   UpdateAppProviderKeyDto,
 } from './dto/app-provider-key.dto';
-import { lastFour, openSecret, sealSecret } from '@infrastructure/crypto/secret-box';
+import {
+  lastFour,
+  openSecret,
+  sealSecret,
+} from '@infrastructure/crypto/secret-box';
 
 /** Wire shape: the sealed value is replaced by the readable key. */
 export type AppProviderKeyView = Omit<AppProviderKey, 'encryptedKey'> & {

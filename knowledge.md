@@ -1140,7 +1140,7 @@ JWT_SECRET=<generated-secret>
 REDIS_HOST=redis            # 'redis' for Docker, 'localhost' for local
 REDIS_PORT=6379
 
-# OpenAI (for AI assistant)
+# OpenAI (legacy report insights; Finny provider keys live in the backoffice)
 OPENAI_API_KEY=sk-...
 
 # OAuth (optional)

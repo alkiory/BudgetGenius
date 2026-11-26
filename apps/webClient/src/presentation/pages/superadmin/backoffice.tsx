@@ -15,6 +15,7 @@ import {
   useDeleteAppModule,
   useDeleteNotification,
   useDeleteProviderKey,
+  useFinnyStatus,
   useNotifications,
   useProviderKeys,
   useRevokeApiKey,
@@ -24,7 +25,6 @@ import {
   useUpdateProviderKey,
 } from "@adapters/query/superadmin";
 import Loader from "@presentation/components/loader";
-import { Button } from "@presentation/components/ui/button";
 import {
   BarChart3,
   Building,
@@ -32,9 +32,11 @@ import {
   EyeOff,
   KeyRound,
   Plus,
+  RefreshCw,
   Send,
   Trash2,
 } from "@presentation/components/ui/animated-icons";
+import { Button } from "@presentation/components/ui/button";
 import { Input } from "@presentation/components/ui/input";
 import { Label } from "@presentation/components/ui/label";
 import { Switch } from "@presentation/components/ui/switch";
@@ -71,7 +73,9 @@ function StatCard({
         {value}
       </p>
       {note && (
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{note}</p>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          {note}
+        </p>
       )}
     </div>
   );
@@ -121,7 +125,9 @@ function OverviewTab() {
         />
         <StatCard
           label={t("superadmin.overview.modules")}
-          value={`${number(data.modules.active)} / ${number(data.modules.total)}`}
+          value={`${number(data.modules.active)} / ${number(
+            data.modules.total,
+          )}`}
           note={t("superadmin.overview.modulesBreakdown", {
             modules: number(data.modules.byKind.module),
             components: number(data.modules.byKind.component),
@@ -130,7 +136,9 @@ function OverviewTab() {
         />
         <StatCard
           label={t("superadmin.overview.apiKeys")}
-          value={`${number(data.apiKeys.active)} / ${number(data.apiKeys.total)}`}
+          value={`${number(data.apiKeys.active)} / ${number(
+            data.apiKeys.total,
+          )}`}
           note={t("superadmin.overview.keysNote")}
         />
       </div>
@@ -207,8 +215,16 @@ function ModuleRowItem({ module }: { module: AppModuleRow }) {
           )}
         </div>
         <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-          {t(`superadmin.modules.kinds.${module.kind}`)} · {module.category} ·
-          v{module.version}
+          {[
+            t(`superadmin.modules.kinds.${module.kind}`),
+            module.category,
+            `v${module.version}`,
+            module.parentKey
+              ? t("superadmin.modules.partOf", { key: module.parentKey })
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </p>
       </div>
 
@@ -251,7 +267,14 @@ function ModulesTab() {
     name: string;
     kind: AppModuleRow["kind"];
     category: string;
-  }>({ key: "", name: "", kind: "module", category: "" });
+    parentKey: string;
+  }>({ key: "", name: "", kind: "module", category: "", parentKey: "" });
+
+  // A component can be filed under a module so the app's Modules page can
+  // list them together (`cards` → `card-type`).
+  const parentOptions = (data ?? []).filter(
+    (module) => module.kind === "module",
+  );
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -261,10 +284,18 @@ function ModulesTab() {
         name: form.name.trim(),
         kind: form.kind,
         category: form.category.trim() || undefined,
+        parentKey:
+          form.kind === "component" ? form.parentKey || undefined : undefined,
       },
       {
         onSuccess: () => {
-          setForm({ key: "", name: "", kind: "module", category: "" });
+          setForm({
+            key: "",
+            name: "",
+            kind: "module",
+            category: "",
+            parentKey: "",
+          });
           toast.success(t("superadmin.modules.created"));
         },
         onError,
@@ -307,9 +338,7 @@ function ModulesTab() {
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="module-kind">
-              {t("superadmin.modules.kind")}
-            </Label>
+            <Label htmlFor="module-kind">{t("superadmin.modules.kind")}</Label>
             <select
               id="module-kind"
               value={form.kind}
@@ -321,13 +350,11 @@ function ModulesTab() {
               }
               className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             >
-              {(["module", "component", "integration"] as const).map(
-                (kind) => (
-                  <option key={kind} value={kind}>
-                    {t(`superadmin.modules.kinds.${kind}`)}
-                  </option>
-                ),
-              )}
+              {(["module", "component", "integration"] as const).map((kind) => (
+                <option key={kind} value={kind}>
+                  {t(`superadmin.modules.kinds.${kind}`)}
+                </option>
+              ))}
             </select>
           </div>
           <div className="space-y-1">
@@ -344,6 +371,31 @@ function ModulesTab() {
               maxLength={40}
             />
           </div>
+          {form.kind === "component" && (
+            <div className="space-y-1">
+              <Label htmlFor="module-parent">
+                {t("superadmin.modules.parent")}
+              </Label>
+              <select
+                id="module-parent"
+                value={form.parentKey}
+                onChange={(event) =>
+                  setForm({ ...form, parentKey: event.target.value })
+                }
+                className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              >
+                <option value="">{t("superadmin.modules.parentNone")}</option>
+                {parentOptions.map((module) => (
+                  <option key={module.id} value={module.key}>
+                    {module.name} ({module.key})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {t("superadmin.modules.parentHint")}
+              </p>
+            </div>
+          )}
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {t("superadmin.modules.kindsHelp")}
@@ -367,6 +419,61 @@ function ModulesTab() {
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * What Finny would actually do with the keys below, resolved by the API on
+ * every prompt. Makes the failover visible instead of leaving the operator to
+ * infer it from priority numbers and error lines.
+ */
+function FinnyStatusNotice() {
+  const { t } = useTranslation();
+  const { data, isLoading, isFetching, refetch } = useFinnyStatus();
+
+  const available = data?.available ?? false;
+  const dot = isLoading
+    ? "bg-slate-400"
+    : available
+    ? "bg-emerald-400"
+    : "bg-rose-400";
+  const tone = isLoading
+    ? "border-slate-300/70 bg-slate-500/5"
+    : available
+    ? "border-emerald-500/30 bg-emerald-500/10"
+    : "border-rose-500/30 bg-rose-500/10";
+
+  const headline = isLoading
+    ? t("superadmin.providerKeys.status.checking")
+    : available
+    ? t("superadmin.providerKeys.status.available", { key: data?.firstKey })
+    : data?.reason === "FINNY_NOT_CONFIGURED"
+    ? t("superadmin.providerKeys.status.notConfigured")
+    : data?.reason === "FINNY_INVALID_KEY"
+    ? t("superadmin.providerKeys.status.rejected")
+    : t("superadmin.providerKeys.status.failing");
+
+  return (
+    <div className={`rounded-lg border px-3 py-2.5 ${tone}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`h-2 w-2 rounded-full ${dot}`} />
+        <p className="text-xs font-semibold text-slate-800 dark:text-slate-100">
+          {headline}
+        </p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          disabled={isFetching}
+          className="ml-auto inline-flex items-center gap-1 text-[10px] underline-offset-2 hover:underline disabled:opacity-40"
+        >
+          <RefreshCw className="h-3 w-3" />
+          {t("superadmin.providerKeys.status.refresh")}
+        </button>
+      </div>
+      <p className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+        {t("superadmin.providerKeys.status.explain")}
+      </p>
     </div>
   );
 }
@@ -424,6 +531,8 @@ function ProviderKeysSection() {
         </p>
       </div>
 
+      <FinnyStatusNotice />
+
       <form onSubmit={submit} className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1">
@@ -466,6 +575,9 @@ function ProviderKeysSection() {
               value={priority}
               onChange={(event) => setPriority(event.target.value)}
             />
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              {t("superadmin.providerKeys.priorityHint")}
+            </p>
           </div>
         </div>
         <Button type="submit" disabled={create.isPending}>
@@ -506,7 +618,9 @@ function ProviderKeysSection() {
                     {row.key
                       ? revealed[row.id]
                         ? row.key
-                        : `${row.provider === "openai" ? "sk-" : ""}••••••••${row.lastFour}`
+                        : `${row.provider === "openai" ? "sk-" : ""}••••••••${
+                            row.lastFour
+                          }`
                       : t("superadmin.providerKeys.undecryptable")}
                   </code>
                   <button
@@ -634,9 +748,7 @@ function ApiKeysTab() {
         </h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
-            <Label htmlFor="api-key-name">
-              {t("superadmin.apiKeys.name")}
-            </Label>
+            <Label htmlFor="api-key-name">{t("superadmin.apiKeys.name")}</Label>
             <Input
               id="api-key-name"
               value={name}
@@ -679,7 +791,12 @@ function ApiKeysTab() {
             <code className="min-w-0 flex-1 truncate rounded-md bg-white/70 px-2 py-1.5 text-xs text-slate-800 dark:bg-black/30 dark:text-slate-100">
               {secret}
             </code>
-            <Button type="button" variant="outline" size="sm" onClick={copySecret}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={copySecret}
+            >
               {t("superadmin.apiKeys.copy")}
             </Button>
           </div>
@@ -954,6 +1071,14 @@ function NotificationsTab() {
                 </option>
               ))}
             </select>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              {t(`superadmin.notifications.audienceHints.${form.audience}`)}
+            </p>
+            {form.audience === "free" && (
+              <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                {t("superadmin.notifications.freeAudienceWarning")}
+              </p>
+            )}
           </div>
           <div className="space-y-1 sm:col-span-2">
             <Label htmlFor="notification-publish-at">
