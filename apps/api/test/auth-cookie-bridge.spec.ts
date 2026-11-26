@@ -113,6 +113,7 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
     signup: jest.Mock;
     refreshToken: jest.Mock;
   };
+  let jwtService: { sign: jest.Mock; verify: jest.Mock };
 
   beforeEach(() => {
     // The cookieService mock mirrors the production class's
@@ -169,11 +170,12 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
       findByEmail: jest.fn(),
       createUser: jest.fn(),
     };
-    const jwtService = {
+    jwtService = {
       sign: jest.fn().mockReturnValue('fresh-rotated-access-token'),
       verify: jest.fn().mockReturnValue({
         id: mockUserEntity.id,
         sub: mockUserEntity.id,
+        typ: 'refresh',
       }),
     };
     const logger = {
@@ -432,6 +434,24 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
       );
 
       expect(authService.refreshToken).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects an access token presented as a refresh token', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const req: any = {
+        cookies: { refreshToken: 'access-token-sent-to-refresh' },
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res: any = {};
+      (jwtService.verify as jest.Mock).mockReturnValueOnce({
+        id: mockUserEntity.id,
+        typ: 'access',
+      });
+
+      await expect(controller.refreshToken(req, res)).rejects.toMatchObject({
+        status: 401,
+      });
+      expect(authService.refreshToken).not.toHaveBeenCalled();
     });
 
     it('throws HTTP 401 when no refresh cookie is attached', async () => {

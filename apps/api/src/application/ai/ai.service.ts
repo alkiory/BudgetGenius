@@ -19,11 +19,15 @@ export type FinnyStatusReason = FinnyConfigErrorCode | 'FINNY_PROVIDER_ERROR';
 export interface FinnyStatusView {
   available: boolean;
   reason: FinnyStatusReason | null;
+  checkedAt: string;
+}
+
+/** Operator-only snapshot: includes credential inventory. */
+export interface FinnyAdminStatusView extends FinnyStatusView {
   /** Active credentials, in the order Finny would try them. */
   activeKeys: number;
   /** Label of the credential the next prompt would use, if any is healthy. */
   firstKey: string | null;
-  checkedAt: string;
 }
 
 /** How long a recorded provider failure keeps a key out of the healthy set. */
@@ -149,6 +153,13 @@ export class AiService {
    * rejected it; the failover below keeps the next key in line.
    */
   async getStatus(): Promise<FinnyStatusView> {
+    const { available, reason, checkedAt } = await this.getAdminStatus();
+    // Regular users only learn whether Finny can answer, never which
+    // credential it would use: labels and key suffixes are operator data.
+    return { available, reason, checkedAt };
+  }
+
+  async getAdminStatus(): Promise<FinnyAdminStatusView> {
     const candidates = await this.resolveKeys();
     const checkedAt = new Date().toISOString();
 

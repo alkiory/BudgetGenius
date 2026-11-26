@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { UserDto } from './dto/user.dto';
 import { LoggingService } from '@infrastructure/log/logger.service';
@@ -25,7 +26,9 @@ export class UserSeederService {
     // (production, test, staging, NODE_ENV unset) is a no-op.
     if (process.env.NODE_ENV !== 'development') {
       this.logger.log(
-        `🌱 User seeder skipped (NODE_ENV=${process.env.NODE_ENV ?? 'unset'}) — fixed-password demo accounts are development-only`,
+        `🌱 User seeder skipped (NODE_ENV=${
+          process.env.NODE_ENV ?? 'unset'
+        }) — fixed-password demo accounts are development-only`,
       );
       return;
     }
@@ -104,12 +107,13 @@ export class UserSeederService {
   /**
    * Ensures a super admin exists.
    *
-   * `SUPERADMIN_EMAIL` selects the operator. Promotion of an existing account
-   * only needs that variable: the account keeps its own password, so an
-   * operator who already signed up is granted the role without a credential
-   * reset. `SUPERADMIN_PASSWORD` is used only when the email does not exist
-   * yet and a new account has to be created — production without it is a
-   * no-op rather than a fixed-password account.
+   * `SUPERADMIN_EMAIL` selects the operator. Email signup does not verify
+   * mailbox ownership, so matching the address is not proof that the operator
+   * owns the row: an attacker could register it first. Promotion therefore
+   * also requires the account's current password to match
+   * `SUPERADMIN_PASSWORD`; otherwise the role is left untouched and the boot
+   * logs an actionable warning. New accounts are only created when the email
+   * is absent and a password is configured.
    *
    * In development the local fallback (`superadmin@admin.com` / `#Password123`)
    * keeps the backoffice reachable with no extra setup.
@@ -128,9 +132,25 @@ export class UserSeederService {
       return;
     }
 
+    const password =
+      process.env.SUPERADMIN_PASSWORD || (isDev ? '#Password123' : '');
     const existing = await this.userRepository.findByEmail(email);
     if (existing) {
       if (existing.role !== 'superadmin') {
+        const ownsAccount = Boolean(
+          password &&
+            existing.password &&
+            (await bcrypt.compare(password, existing.password)),
+        );
+        if (!ownsAccount) {
+          this.logger.warn(
+            `🛡️ Refusing to promote existing account id=${existing.id}: ` +
+              'its password does not match SUPERADMIN_PASSWORD. Promote it ' +
+              'manually after verifying the operator, or set the configured ' +
+              'password to the account password for one boot.',
+          );
+          return;
+        }
         // `setRole` avoids the entity password hook (see its docblock).
         await this.userRepository.setRole(existing.id, 'superadmin');
         this.logger.log(
@@ -140,8 +160,6 @@ export class UserSeederService {
       return;
     }
 
-    const password =
-      process.env.SUPERADMIN_PASSWORD || (isDev ? '#Password123' : '');
     if (!password) {
       this.logger.warn(
         '🛡️ Superadmin email does not match an existing account and SUPERADMIN_PASSWORD is empty — nothing was created',

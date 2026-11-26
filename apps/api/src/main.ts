@@ -4,6 +4,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import cookieParser from 'cookie-parser';
+import { json, urlencoded } from 'express';
 import helmet from 'helmet';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { buildAllowedOrigins, buildCorsOptions } from './cors';
@@ -11,12 +12,23 @@ import { buildAllowedOrigins, buildCorsOptions } from './cors';
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Body parsing is registered explicitly below: the media upload carries a
+  // base64 image and needs a larger limit than every other JSON route.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bodyParser: false,
+  });
 
   const isProduction = process.env.NODE_ENV === 'production';
 
   // Enable middleware to read cookies
   app.use(cookieParser());
+
+  // Backoffice image uploads are JSON data URLs: a 5 MiB file becomes ~6.7 MB
+  // of base64. Everything else keeps Express's small default so an oversized
+  // payload cannot be used to exhaust memory on ordinary endpoints.
+  app.use('/api/media', json({ limit: '8mb' }));
+  app.use(json({ limit: '100kb' }));
+  app.use(urlencoded({ extended: true, limit: '100kb' }));
 
   // ── CORS ───────────────────────────────────────────────────────────────
   // Origin list + options live in `./cors` (shared with the preflight

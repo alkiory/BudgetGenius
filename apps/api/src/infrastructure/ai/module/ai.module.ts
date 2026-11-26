@@ -12,5 +12,6 @@ import { AppProviderKey } from '@domain/superadmin/app-provider-key.entity';
   imports: [UserModule, TypeOrmModule.forFeature([AppProviderKey])],
   controllers: [AiController],
   providers: [AiService, JwtStrategy, RedisService, LoggingService],
+  exports: [AiService],
 })
 export class AiModule {}

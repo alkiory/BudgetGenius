@@ -259,9 +259,9 @@ export const superAdminRepository = {
   async deleteProviderKey(id: number): Promise<void> {
     await api.delete(`/superadmin/provider-keys/${id}`);
   },
-  /** Same readiness endpoint the Finny rail uses, for the backoffice. */
+  /** Operator readiness: includes labels the public `/ai/status` hides. */
   async getFinnyStatus(): Promise<FinnyStatusRow> {
-    const { data } = await api.get("/ai/status");
+    const { data } = await api.get("/superadmin/provider-keys/status");
     return data;
   },
 

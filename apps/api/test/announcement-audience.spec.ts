@@ -1,25 +1,18 @@
 /**
- * Audience filtering for the announcements authored in the backoffice.
+ * Announcements are part of the single free product.
  *
- * The banner is the only user-facing surface, and it must never show a
- * premium-only notice to a free account (or the reverse). The service builds
- * the audience set from the signed-in user's `isPremium` flag and passes it to
- * the query, so this spec pins the exact set for each case instead of trusting
- * the SQL builder.
+ * `users.isPremium` is dormant (default true) and the product has no paid
+ * tier, so filtering live announcements by the legacy plan column made the
+ * "free" audience unreachable. The read side must deliver every published,
+ * in-window announcement, regardless of that column.
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { AnnouncementService } from '@application/notifications/announcement.service';
-import {
-  AppNotification,
-  AppNotificationAudience,
-} from '@domain/superadmin/app-notification.entity';
-import { User } from '@domain/user/user.entity';
+import { AppNotification } from '@domain/superadmin/app-notification.entity';
 
-const audienceForUser = async (
-  isPremium: boolean,
-): Promise<AppNotificationAudience[]> => {
+const buildService = async () => {
   const andWhere = jest.fn().mockReturnThis();
   const queryBuilder = {
     where: jest.fn().mockReturnThis(),
@@ -36,30 +29,45 @@ const audienceForUser = async (
         provide: getRepositoryToken(AppNotification),
         useValue: { createQueryBuilder: jest.fn(() => queryBuilder) },
       },
-      {
-        provide: getRepositoryToken(User),
-        useValue: {
-          findOne: jest.fn().mockResolvedValue({ id: 1, isPremium }),
-        },
-      },
     ],
   }).compile();
 
-  await moduleRef.get(AnnouncementService).findLiveForUser(1);
-
-  const audienceCall = andWhere.mock.calls.find(
-    ([, params]) => params?.audiences !== undefined,
-  );
-  return (audienceCall?.[1] as { audiences: AppNotificationAudience[] })
-    ?.audiences;
+  return {
+    service: moduleRef.get(AnnouncementService),
+    queryBuilder,
+    andWhere,
+  };
 };
 
 describe('AnnouncementService audience', () => {
-  it('premium accounts see "all" and "premium" announcements', async () => {
-    await expect(audienceForUser(true)).resolves.toEqual(["all", "premium"]);
+  it('does not filter by the dormant premium flag', async () => {
+    const { service, andWhere } = await buildService();
+
+    await service.findLiveForUser(1);
+
+    const filterCalls = andWhere.mock.calls.map(([sql]) => String(sql));
+    expect(filterCalls.some((sql) => sql.includes('audience'))).toBe(false);
   });
 
-  it('free accounts see "all" and "free" announcements', async () => {
-    await expect(audienceForUser(false)).resolves.toEqual(["all", "free"]);
+  it('still applies the publish window and expiry', async () => {
+    const { service, queryBuilder } = await buildService();
+
+    await service.findLiveForUser(1);
+
+    expect(queryBuilder.where).toHaveBeenCalledWith(
+      'n.published = :published',
+      {
+        published: true,
+      },
+    );
+    const filterCalls = queryBuilder.andWhere.mock.calls.map(([sql]) =>
+      String(sql),
+    );
+    expect(
+      filterCalls.some((sql) => sql.includes('"publishedAt" IS NULL')),
+    ).toBe(true);
+    expect(filterCalls.some((sql) => sql.includes('"expiresAt" IS NULL'))).toBe(
+      true,
+    );
   });
 });

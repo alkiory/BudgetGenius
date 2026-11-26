@@ -1,12 +1,22 @@
 import { DataSource } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 import { Transaction } from '@domain/dashboard/transaction.entity';
+import { BudgetCategory } from '@domain/dashboard/budget-category.entity';
+import { Budget } from '@domain/dashboard/budget.entity';
 
 export interface TransactionAggregate {
   income: number;
   expense: number;
   net: number;
 }
+
+/**
+ * A savings deposit is a transaction linked to a category of a `savings`
+ * budget. Filtering by the category *name* also hid ordinary transactions an
+ * import happened to label "Savings"; the link is the actual discriminator.
+ * Entity joins keep the query inside the configured schema (`bg_public`).
+ */
+const DEPOSIT_FILTER = "(b.type IS NULL OR b.type <> 'savings')";
 
 @Injectable()
 export class OverviewRepository {
@@ -21,10 +31,12 @@ export class OverviewRepository {
         .createQueryBuilder('tx')
         .select('tx.category', 'name')
         .addSelect('SUM(tx.amount)', 'value')
+        .leftJoin(BudgetCategory, 'bc', 'bc.id = tx."budgetCategoryId"')
+        .leftJoin(Budget, 'b', 'b.id = bc."budgetId"')
         .where('tx.userId = :userId', { userId })
         .andWhere('tx.amount < 0')
         // Savings deposits are transfers: visible in the ledger, never spending.
-        .andWhere("LOWER(tx.category) <> 'savings'")
+        .andWhere(DEPOSIT_FILTER)
         .groupBy('tx.category')
         .getRawMany<{ name: string; value: string }>()
         .then((rows) =>
@@ -54,10 +66,12 @@ export class OverviewRepository {
         'SUM(CASE WHEN tx.amount < 0 THEN ABS(tx.amount) ELSE 0 END)',
         'expense',
       )
+      .leftJoin(BudgetCategory, 'bc', 'bc.id = tx."budgetCategoryId"')
+      .leftJoin(Budget, 'b', 'b.id = bc."budgetId"')
       .where('tx.userId = :userId', { userId })
       // A deposit into a savings goal is still the user's money, so it must
       // not reduce the net total the dashboard shows.
-      .andWhere("LOWER(tx.category) <> 'savings'")
+      .andWhere(DEPOSIT_FILTER)
       .getRawOne<{ income: string | null; expense: string | null }>();
 
     const income = Number(row?.income) || 0;

@@ -1,15 +1,28 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Transaction } from '@domain/dashboard/transaction.entity';
+import { BudgetCategory } from '@domain/dashboard/budget-category.entity';
+import { Budget } from '@domain/dashboard/budget.entity';
 
 /**
  * Deposits into a savings goal are transfers, not spending: they must not
  * inflate expense totals, category breakdowns or the savings-rate maths.
- * The ledger keeps the row (and the app shows it in Transactions), but every
- * expense aggregate skips this category.
+ *
+ * Detect them by their link to a `savings` budget category, not by the
+ * transaction's category label: a row an import happened to label "Savings"
+ * is ordinary spending and must stay in the aggregates. The joins use entity
+ * metadata, so the configured schema (`bg_public`) is preserved.
  */
-const NOT_SAVINGS = "LOWER(tx.category) <> 'savings'";
+const DEPOSIT_FILTER = "(b.type IS NULL OR b.type <> 'savings')";
+
+const excludeSavingsDeposits = (
+  query: SelectQueryBuilder<Transaction>,
+): SelectQueryBuilder<Transaction> =>
+  query
+    .leftJoin(BudgetCategory, 'bc', 'bc.id = tx."budgetCategoryId"')
+    .leftJoin(Budget, 'b', 'b.id = bc."budgetId"')
+    .andWhere(DEPOSIT_FILTER);
 
 @Injectable()
 export class ReportRepository {
@@ -23,7 +36,7 @@ export class ReportRepository {
     year: number,
     userId: number,
   ): Promise<{ month: string; income: number; expenses: number }[]> {
-    return this.txRepo
+    const query = this.txRepo
       .createQueryBuilder('tx')
       .select("to_char(tx.date, 'Mon')", 'month')
       .addSelect(
@@ -35,8 +48,9 @@ export class ReportRepository {
         'expenses',
       )
       .where('EXTRACT(YEAR FROM tx.date) = :year', { year })
-      .andWhere('tx.userId = :userId', { userId })
-      .andWhere(NOT_SAVINGS)
+      .andWhere('tx.userId = :userId', { userId });
+
+    return excludeSavingsDeposits(query)
       .groupBy("to_char(tx.date, 'Mon')")
       .orderBy('MIN(EXTRACT(MONTH FROM tx.date))')
       .getRawMany();
@@ -50,7 +64,7 @@ export class ReportRepository {
   ): Promise<
     { month: string; monthKey: string; income: number; expenses: number }[]
   > {
-    return this.txRepo
+    const query = this.txRepo
       .createQueryBuilder('tx')
       .select("to_char(tx.date, 'Mon YYYY')", 'month')
       .addSelect("to_char(tx.date, 'YYYY-MM')", 'monthKey')
@@ -63,8 +77,9 @@ export class ReportRepository {
         'expenses',
       )
       .where('tx.date >= :start AND tx.date < :end', { start, end })
-      .andWhere('tx.userId = :userId', { userId })
-      .andWhere(NOT_SAVINGS)
+      .andWhere('tx.userId = :userId', { userId });
+
+    return excludeSavingsDeposits(query)
       .groupBy("to_char(tx.date, 'Mon YYYY')")
       .addGroupBy("to_char(tx.date, 'YYYY-MM')")
       .orderBy("MIN(date_trunc('month', tx.date))")
@@ -77,14 +92,15 @@ export class ReportRepository {
     end: Date,
     userId: number,
   ): Promise<{ category: string; total: number }[]> {
-    return this.txRepo
+    const query = this.txRepo
       .createQueryBuilder('tx')
       .select('tx.category', 'category')
       .addSelect('SUM(-tx.amount)', 'total')
       .where('tx.date >= :start AND tx.date < :end', { start, end })
       .andWhere('tx.amount < 0')
-      .andWhere(NOT_SAVINGS)
-      .andWhere('tx.userId = :userId', { userId })
+      .andWhere('tx.userId = :userId', { userId });
+
+    return excludeSavingsDeposits(query)
       .groupBy('tx.category')
       .orderBy('total', 'DESC')
       .getRawMany();
@@ -96,7 +112,7 @@ export class ReportRepository {
     end: Date,
     userId: number,
   ): Promise<{ category: string; expenses: number; income: number }[]> {
-    return this.txRepo
+    const query = this.txRepo
       .createQueryBuilder('tx')
       .select('tx.category', 'category')
       .addSelect(
@@ -107,11 +123,12 @@ export class ReportRepository {
         'SUM(CASE WHEN tx.amount > 0 THEN tx.amount ELSE 0 END)',
         'income',
       )
-      .where('tx.date BETWEEN :start AND :end', { start, end })
-      .andWhere('tx.userId = :userId', { userId })
-      .andWhere(NOT_SAVINGS)
-      .groupBy('tx.category')
-      .getRawMany();
+      // Exclusive end: callers pass the day after the last day they want,
+      // matching the range endpoint and the planner's calendar window.
+      .where('tx.date >= :start AND tx.date < :end', { start, end })
+      .andWhere('tx.userId = :userId', { userId });
+
+    return excludeSavingsDeposits(query).groupBy('tx.category').getRawMany();
   }
 
   /** Weekly trend for last 7 days, scoped to the requesting user. */
@@ -125,16 +142,20 @@ export class ReportRepository {
       .select("to_char(tx.date, 'Dy')", 'day')
       .addSelect('SUM(-tx.amount)', 'amount')
       .where('tx.amount < 0')
-      .andWhere('tx.userId = :userId', { userId })
-      .andWhere(NOT_SAVINGS)
-      .groupBy("to_char(tx.date, 'Dy')")
-      .orderBy('MIN(tx.date)');
+      .andWhere('tx.userId = :userId', { userId });
+
+    excludeSavingsDeposits(query);
+
     if (start && end) {
       query.andWhere('tx.date >= :start AND tx.date < :end', { start, end });
     } else {
       query.andWhere("tx.date >= CURRENT_DATE - INTERVAL '6 days'");
     }
-    return query.getRawMany();
+
+    return query
+      .groupBy("to_char(tx.date, 'Dy')")
+      .orderBy('MIN(tx.date)')
+      .getRawMany();
   }
 
   /** Savings growth per month (income − expenses), scoped to the requesting user. */

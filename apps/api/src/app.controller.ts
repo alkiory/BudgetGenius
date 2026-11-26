@@ -23,6 +23,9 @@ export class AppController {
       status: 'running',
       message: 'Budget Genius API',
       timestamp: new Date().toISOString(),
+      // Injected at deploy time; lets the deploy probe prove the container
+      // answering is the revision that was just published.
+      revision: process.env.APP_REVISION || null,
       docs: '/api',
       health: '/health',
     };

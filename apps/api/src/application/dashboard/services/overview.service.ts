@@ -1,6 +1,8 @@
 import { OverviewRepository } from '@adapters/dashboard/persistence/overview.repository';
 import { TransactionRepository } from '@adapters/dashboard/persistence/transaction.repository';
 import { Transaction } from '@domain/dashboard/transaction.entity';
+import { BudgetCategory } from '@domain/dashboard/budget-category.entity';
+import { Budget } from '@domain/dashboard/budget.entity';
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
@@ -37,16 +39,16 @@ export class OverviewService {
 
     // sum of expenses (negative amounts)
     const { expenses } = await this.dataSource
-      .getRepository('transactions')
+      .getRepository(Transaction)
       .createQueryBuilder('t')
       .select('SUM(t.amount)', 'expenses')
       // Savings deposits are transfers to the user's own goal, not spending.
-      .where(
-        "t.userId = :userId AND t.amount < 0 AND LOWER(t.category) <> 'savings'",
-        {
-          userId,
-        },
-      )
+      // Match the link to a savings budget, not the category label: imported
+      // transactions labelled "Savings" are ordinary spending.
+      .leftJoin(BudgetCategory, 'bc', 'bc.id = t."budgetCategoryId"')
+      .leftJoin(Budget, 'b', 'b.id = bc."budgetId"')
+      .where('t.userId = :userId AND t.amount < 0', { userId })
+      .andWhere("(b.type IS NULL OR b.type <> 'savings')")
       .getRawOne();
 
     const inc = parseFloat(income) || 0;

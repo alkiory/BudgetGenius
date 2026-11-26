@@ -15,6 +15,7 @@ import { RolesGuard } from '@infrastructure/auth/guards/roles.guard';
 import { Roles } from '@infrastructure/auth/decorators/roles.decorator';
 import { UserRole } from '@domain/user/user.entity';
 import { AppProviderKeyService } from '@application/superadmin/app-provider-key.service';
+import { AiService } from '@application/ai/ai.service';
 import {
   CreateAppProviderKeyDto,
   UpdateAppProviderKeyDto,
@@ -31,7 +32,17 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.SUPERADMIN)
 export class AppProviderKeyController {
-  constructor(private readonly keys: AppProviderKeyService) {}
+  constructor(
+    private readonly keys: AppProviderKeyService,
+    private readonly ai: AiService,
+  ) {}
+
+  /** Operator view: key labels and suffixes belong behind the role guard. */
+  @Get('status')
+  @ApiOperation({ summary: 'Finny readiness with credential inventory' })
+  status() {
+    return this.ai.getAdminStatus();
+  }
 
   @Get()
   @ApiOperation({ summary: 'List provider keys (decrypted, superadmin only)' })

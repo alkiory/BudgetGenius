@@ -85,6 +85,9 @@ jobs:
       - name: Typecheck (frontend)
         run: pnpm --filter frontend-web check-types
 
+      - name: Unit tests (frontend)
+        run: pnpm --filter frontend-web test:unit
+
   api:
     name: API → GCE
     needs: verify
@@ -144,20 +147,28 @@ jobs:
             FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}
             FIREBASE_CLIENT_EMAIL=${{ secrets.FIREBASE_CLIENT_EMAIL }}
             FIREBASE_PRIVATE_KEY="${{ secrets.FIREBASE_PRIVATE_KEY }}"
+            APP_REVISION=${{ github.sha }}
             API_IMAGE=${{ secrets.DOCKER_USERNAME }}/finance-api:latest
             ENVEOF
 
             # Pull the image built above instead of rebuilding on the VM
             # (the VM only receives compose files, not the source tree).
-            docker compose -f docker-compose.yml -f docker-compose.gce.yml pull backend
-            docker compose -f docker-compose.yml -f docker-compose.gce.yml up -d --no-build backend database redis
+            if ! docker compose -f docker-compose.yml -f docker-compose.gce.yml pull backend; then
+              echo "Could not pull the new backend image — keeping the running release"
+              exit 1
+            fi
+            # Force the recreation: `up` alone would leave a container whose
+            # cached image failed to update, and the old code would pass the
+            # probe below.
+            docker compose -f docker-compose.yml -f docker-compose.gce.yml up -d --no-build --force-recreate backend
             docker compose -f docker-compose.yml -f docker-compose.gce.yml ps
 
-            # Fail the deploy instead of reporting success when the new
-            # container never answers (migrations or env mistakes show up here).
+            # The root payload includes APP_REVISION. A healthy old container
+            # would still answer `/api`, so require the new revision to prove
+            # the image that came up is the one just built.
             for attempt in $(seq 1 20); do
-              if curl -fsS http://localhost:3000/api >/dev/null; then
-                echo "API healthy after $attempt attempt(s)"
+              if curl -fsS http://localhost:3000/api | grep -q "${{ github.sha }}"; then
+                echo "API healthy on revision ${{ github.sha }} after $attempt attempt(s)"
                 exit 0
               fi
               sleep 3

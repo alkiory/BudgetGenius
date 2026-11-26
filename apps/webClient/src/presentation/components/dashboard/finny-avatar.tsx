@@ -196,15 +196,17 @@ export function FinnyAvatar({
         <rect x="34" y="42" width="52" height="36" rx="16" fill="#06101f" />
 
         {asleep ? (
-          /* Closed eyes: a soft downward curve reads as sleeping */
+          /* Closed eyes reuse the existing eye paths, squashed vertically:
+             no new hand-drawn icon geometry is introduced. */
           <g
+            transform="translate(0 68) scale(1 -0.25)"
             stroke={palette.glow}
             strokeWidth="3.2"
             strokeLinecap="round"
             opacity="0.9"
           >
-            <path d="M41 57C44.5 62 49.5 62 53 57" />
-            <path d="M67 57C70.5 62 75.5 62 79 57" />
+            <path d="M42 58C44 53 50 53 52 58" />
+            <path d="M68 58C70 53 76 53 78 58" />
           </g>
         ) : (
           /* Blinking eyes + lashes */

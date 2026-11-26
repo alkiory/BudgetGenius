@@ -15,6 +15,7 @@ const SYNCED_QUERY_KEYS = [
   "recent-summary",
   "reports",
   "announcements",
+  "user-settings",
 ] as const;
 
 /**

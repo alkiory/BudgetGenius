@@ -60,6 +60,16 @@ const PG_UNIQUE_VIOLATION = '23505';
 const EMAIL_ALREADY_IN_USE = '⚠️ Email already in use';
 
 /**
+ * JWTs carry their purpose so a refresh credential can never be replayed as
+ * a bearer access token (and vice versa). The two used to share identical
+ * claims and lifetimes, which made a stolen refresh token valid on every
+ * protected route.
+ */
+const ACCESS_TOKEN_TYPE = 'access';
+const REFRESH_TOKEN_TYPE = 'refresh';
+type SessionUser = { id: number; email: string; role: string };
+
+/**
  * TypeORM wraps driver errors in `QueryFailedError`; the SQLSTATE lives both on
  * the wrapper and on `driverError` depending on the path, so check both.
  */
@@ -83,7 +93,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly mailer: ResendMailerService,
     private readonly userSettingsService: UserSettingsService,
-  ) { }
+  ) {}
 
   findOne(email: string) {
     return this.userRepository.findByEmail(email);
@@ -150,13 +160,11 @@ export class AuthService {
         'email',
       );
 
-      const payload = {
+      const { accessToken, refreshToken } = this.issueSession({
         id: existingUser.id,
         email: existingUser.email,
         role: existingUser.role,
-      };
-      const accessToken = this.jwtService.sign(payload, { expiresIn: '7d' });
-      const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+      });
       await this.redisService.set(
         `refreshToken:${existingUser.id}`,
         refreshToken,
@@ -196,13 +204,11 @@ export class AuthService {
       throw error;
     }
 
-    const payload = {
+    const { accessToken, refreshToken } = this.issueSession({
       id: newUser.id,
       email: newUser.email,
       role: newUser.role,
-    };
-    const accessToken = this.jwtService.sign(payload, { expiresIn: '7d' });
-    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+    });
     await this.redisService.set(
       `refreshToken:${newUser.id}`,
       refreshToken,
@@ -217,6 +223,23 @@ export class AuthService {
       refreshToken,
       user: newUser,
       isNewUser: true,
+    };
+  }
+
+  /** Signs the access/refresh pair with an explicit, non-interchangeable type. */
+  private issueSession(user: SessionUser): {
+    accessToken: string;
+    refreshToken: string;
+  } {
+    return {
+      accessToken: this.jwtService.sign(
+        { ...user, typ: ACCESS_TOKEN_TYPE },
+        { expiresIn: '7d' },
+      ),
+      refreshToken: this.jwtService.sign(
+        { ...user, typ: REFRESH_TOKEN_TYPE },
+        { expiresIn: '7d' },
+      ),
     };
   }
 
@@ -295,9 +318,11 @@ export class AuthService {
       await this.redisService.delete(attemptsKey);
 
       // 5. Generar tokens (JWT)
-      const userData = { id: user.id, email: user.email, role: user.role };
-      const accessToken = this.jwtService.sign(userData, { expiresIn: '7d' });
-      const refreshToken = this.jwtService.sign(userData, { expiresIn: '7d' });
+      const { accessToken, refreshToken } = this.issueSession({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      });
 
       // 6. Guardar en Redis
       await this.redisService.set(
@@ -327,12 +352,9 @@ export class AuthService {
         throw new UnauthorizedException('⛔ Invalid refresh token');
       }
 
-      const userData = { sub: id };
-      const newAccessToken = this.jwtService.sign(userData, {
-        expiresIn: '7d',
-      });
-
-      return { accessToken: newAccessToken };
+      // The controller mints the new access token from the verified
+      // refresh claims; this method only enforces Redis-side revocation.
+      return { refreshed: true };
     } catch (error) {
       throw error;
     }
@@ -448,14 +470,11 @@ export class AuthService {
     // Delegar toda la lógica a validateOAuthUser
     const userEntity = await this.validateOAuthUser(profile);
 
-    const payload = {
+    const { accessToken, refreshToken } = this.issueSession({
       id: userEntity.id,
       email: userEntity.email,
       role: userEntity.role,
-    };
-
-    const accessToken = this.jwtService.sign(payload, { expiresIn: '7d' });
-    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+    });
 
     await this.redisService.set(
       `refreshToken:${userEntity.id}`,
@@ -501,7 +520,8 @@ export class AuthService {
       );
     } catch (settingsErr) {
       this.logger.warn(
-        `⚠️ Could not eagerly create user_settings for ${source} user ${email}: ${(settingsErr as Error).message
+        `⚠️ Could not eagerly create user_settings for ${source} user ${email}: ${
+          (settingsErr as Error).message
         }. Lazy fallback will still work on first GET /user-settings.`,
       );
     }
@@ -545,8 +565,8 @@ export class AuthService {
       const reason = !user
         ? 'unknown'
         : user.authProvider !== 'email'
-          ? 'social-only'
-          : 'no-password';
+        ? 'social-only'
+        : 'no-password';
       this.logger.warn(
         `🔍 Password reset requested for un-resettable account: ${dto.email} (reason: ${reason})`,
       );
@@ -616,7 +636,8 @@ export class AuthService {
         await this.passwordResetRepository.deleteToken(resetToken.id);
       } catch (cleanupErr) {
         this.logger.warn(
-          `Could not delete expired reset token ${resetToken.id}: ${(cleanupErr as Error).message
+          `Could not delete expired reset token ${resetToken.id}: ${
+            (cleanupErr as Error).message
           }`,
         );
       }

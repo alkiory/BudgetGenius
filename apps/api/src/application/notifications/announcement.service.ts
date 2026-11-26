@@ -1,11 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from '@domain/user/user.entity';
-import {
-  AppNotification,
-  AppNotificationAudience,
-} from '@domain/superadmin/app-notification.entity';
+import { AppNotification } from '@domain/superadmin/app-notification.entity';
 
 /**
  * Read side of the announcements authored in the backoffice.
@@ -20,25 +16,19 @@ export class AnnouncementService {
   constructor(
     @InjectRepository(AppNotification)
     private readonly notifications: Repository<AppNotification>,
-    @InjectRepository(User) private readonly users: Repository<User>,
   ) {}
 
   async findLiveForUser(userId: number): Promise<AppNotification[]> {
-    const user = await this.users.findOne({
-      where: { id: userId },
-      select: ['id', 'isPremium'],
-    });
-
-    const audiences: AppNotificationAudience[] = user?.isPremium
-      ? ['all', 'premium']
-      : ['all', 'free'];
-
+    // BudgetGenius is a single free product: `isPremium` is dormant and every
+    // account is created as premium, so filtering by plan made the "free"
+    // audience impossible to reach (and a premium-only notice unreachable if
+    // the column ever flips). Announcements are delivered to every signed-in
+    // account; the audience column stays for a future paid tier.
     return this.notifications
       .createQueryBuilder('n')
       .where('n.published = :published', { published: true })
       .andWhere('(n."publishedAt" IS NULL OR n."publishedAt" <= now())')
       .andWhere('(n."expiresAt" IS NULL OR n."expiresAt" > now())')
-      .andWhere('n.audience IN (:...audiences)', { audiences })
       .orderBy('n."publishedAt"', 'DESC')
       .limit(5)
       .getMany();

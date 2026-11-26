@@ -30,6 +30,7 @@ import {
   useUpdateProviderKey,
   useUploadImage,
 } from "@adapters/query/superadmin";
+import { resolveMediaUrl } from "@infrastructure/media-url";
 import Loader from "@presentation/components/loader";
 import { Modal } from "@presentation/components/modal/modal";
 import {
@@ -518,7 +519,7 @@ function ImagePicker({
       </div>
       {value && (
         <img
-          src={value}
+          src={resolveMediaUrl(value)}
           alt=""
           className="h-28 w-full max-w-xs rounded-md border border-slate-200 object-cover dark:border-white/10"
         />

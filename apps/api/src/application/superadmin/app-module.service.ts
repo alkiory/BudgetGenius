@@ -110,13 +110,41 @@ export class AppModuleService {
           : dto.description?.trim() || null,
     });
     const saved = await this.repo.save(module);
-    // A rename would orphan the components pointing at the old key, so the
-    // children follow the module instead of disappearing from its detail.
+    // A rename would orphan every reference to the old key: children stop
+    // showing under the module, and pages keep a placement `updateContent`
+    // then rejects as unknown. Follow the rename everywhere in one request.
     if (renamedFrom) {
       await this.repo.update(
         { parentKey: renamedFrom },
         { parentKey: saved.key },
       );
+
+      const pages = await this.repo.find();
+      for (const page of pages) {
+        const sections = page.content?.sections;
+        if (!sections?.length) continue;
+
+        let changed = false;
+        const migrated = sections.map((section) => {
+          if (!section.componentKeys?.includes(renamedFrom)) return section;
+          changed = true;
+          return {
+            ...section,
+            componentKeys: Array.from(
+              new Set(
+                section.componentKeys.map((key) =>
+                  key === renamedFrom ? saved.key : key,
+                ),
+              ),
+            ),
+          };
+        });
+
+        if (changed) {
+          page.content = { ...page.content!, sections: migrated };
+          await this.repo.save(page);
+        }
+      }
     }
     return saved;
   }

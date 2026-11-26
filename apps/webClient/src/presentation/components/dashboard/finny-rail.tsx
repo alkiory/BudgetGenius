@@ -42,8 +42,6 @@ type FinnyStatus = {
     | "FINNY_INVALID_KEY"
     | "FINNY_PROVIDER_ERROR"
     | null;
-  activeKeys: number;
-  firstKey: string | null;
   checkedAt: string;
 };
 

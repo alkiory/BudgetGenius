@@ -19,6 +19,7 @@ import {
   Send,
 } from "@presentation/components/ui/animated-icons";
 import { Currency, currencyService } from "@presentation/utils/currencyService";
+import { resolveMediaUrl } from "@infrastructure/media-url";
 import { RoutePaths } from "@presentation/utils/routes";
 import { useMemo, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
@@ -28,6 +29,14 @@ import { Link } from "react-router";
 
 /** Name of the savings budget the planner creates and later recognises. */
 const EMERGENCY_GOAL = "Fondo de emergencia";
+
+/** Calendar date in the user's timezone (never the UTC day). */
+const localIsoDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 const inner =
   "rounded-lg border border-slate-200/80 bg-white/60 p-4 dark:border-white/[0.08] dark:bg-white/[0.03]";
@@ -310,9 +319,10 @@ function Cta({ props }: { props: Record<string, unknown> }) {
 }
 
 function Image({ props }: { props: Record<string, unknown> }) {
-  const src = safeHref(str(props.src));
+  const safe = safeHref(str(props.src));
   // `/api/media/…` is an upload served by the API; mailto is never an image.
-  if (!src || src.startsWith("mailto:")) return null;
+  if (!safe || safe.startsWith("mailto:")) return null;
+  const src = resolveMediaUrl(safe);
   const alt = str(props.alt);
   return (
     <figure className="overflow-hidden rounded-lg border border-slate-200/80 dark:border-white/[0.08]">
@@ -350,11 +360,15 @@ function EmergencyFund({ props }: { props: Record<string, unknown> }) {
 
   // Last six calendar months, the window this planner averages over. Only
   // months with expenses count, so an uneven history still yields a figure.
+  // The API treats `end` as exclusive, so pass tomorrow: passing today used
+  // to drop today's (and the last day of the range's) transactions. Building
+  // the strings locally avoids the UTC shift that pulled in the previous
+  // month's last day east of UTC.
   const range = useMemo(() => {
-    const end = new Date();
-    const start = new Date(end.getFullYear(), end.getMonth() - 5, 1);
-    const iso = (date: Date) => date.toISOString().slice(0, 10);
-    return { start: iso(start), end: iso(end) };
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    return { start: localIsoDate(start), end: localIsoDate(end) };
   }, []);
   const { data } = useOverview(range);
   const monthsWithExpenses = useMemo(
@@ -376,12 +390,17 @@ function EmergencyFund({ props }: { props: Record<string, unknown> }) {
   const [savedInput, setSavedInput] = useState("");
   const [contribution, setContribution] = useState("");
   const [contributionDate, setContributionDate] = useState(() =>
-    new Date().toISOString().slice(0, 10),
+    localIsoDate(new Date()),
   );
+  // Money inputs accept the user's decimal comma, like every other form.
+  const parseMoney = (value: string): number => {
+    const parsed = currencyService.parseAmountInput(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
   const monthly =
     monthlyInput === ""
       ? Math.round(typical)
-      : Math.max(0, Number(monthlyInput) || 0);
+      : Math.max(0, parseMoney(monthlyInput));
   const minimum = monthly * 3;
   const solid = monthly * 6;
 
@@ -391,16 +410,27 @@ function EmergencyFund({ props }: { props: Record<string, unknown> }) {
   const createGoal = useCreateBudget();
   const contribute = useContributeToSavings();
   const [justCreated, setJustCreated] = useState(false);
-  const existingGoal = (budgets ?? []).find(
-    (budget) => budget.name === EMERGENCY_GOAL,
+  // Find the goal by its savings nature, not only by its original name: a
+  // renamed goal must stay linked instead of being recreated as a duplicate.
+  const savingsBudgets = (budgets ?? []).filter(
+    (budget) => budget.type === "savings",
   );
-  const goalCategory = existingGoal?.categories?.[0];
+  const existingGoal =
+    savingsBudgets.find(
+      (budget) =>
+        budget.name === EMERGENCY_GOAL ||
+        budget.categories?.some((category) => category.name === EMERGENCY_GOAL),
+    ) ?? (savingsBudgets.length === 1 ? savingsBudgets[0] : undefined);
+  const goalCategory =
+    existingGoal?.categories?.find(
+      (category) => category.name === EMERGENCY_GOAL,
+    ) ?? existingGoal?.categories?.[0];
   const goalReady = Boolean(existingGoal) || justCreated;
   // An existing budget is the single source of truth for how much is saved:
   // deposits made in Presupuestos (or here) show up without re-entering it.
   const saved = existingGoal
     ? Math.max(0, Number(goalCategory?.spent ?? existingGoal.totalSpent ?? 0))
-    : Math.max(0, Number(savedInput) || 0);
+    : Math.max(0, parseMoney(savedInput));
   const goalTarget = existingGoal
     ? Number(existingGoal.totalAllocated) || solid
     : solid;
@@ -455,7 +485,7 @@ function EmergencyFund({ props }: { props: Record<string, unknown> }) {
    * transaction with the chosen date, so both always agree.
    */
   const contributeToGoal = () => {
-    const amount = Math.round((Number(contribution) || 0) * 100) / 100;
+    const amount = Math.round(parseMoney(contribution) * 100) / 100;
     if (
       !goalCategory?.id ||
       amount <= 0 ||
@@ -630,7 +660,7 @@ function EmergencyFund({ props }: { props: Record<string, unknown> }) {
                 <input
                   type="date"
                   value={contributionDate}
-                  max={new Date().toISOString().slice(0, 10)}
+                  max={localIsoDate(new Date())}
                   onChange={(event) => setContributionDate(event.target.value)}
                   className="min-w-[9.5rem] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-teal-400 dark:border-white/10 dark:bg-white/[0.04] dark:text-white"
                 />
@@ -640,7 +670,7 @@ function EmergencyFund({ props }: { props: Record<string, unknown> }) {
                 onClick={contributeToGoal}
                 disabled={
                   contribute.isPending ||
-                  !(Number(contribution) > 0) ||
+                  !(parseMoney(contribution) > 0) ||
                   !contributionDate
                 }
                 className="inline-flex items-center gap-1.5 rounded-lg border border-teal-500/40 bg-teal-500/10 px-3.5 py-2 text-sm font-medium text-teal-700 transition-colors hover:bg-teal-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:text-teal-300"

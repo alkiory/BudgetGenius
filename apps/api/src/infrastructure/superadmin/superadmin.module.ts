@@ -21,6 +21,7 @@ import { AppApiKeyController } from '@adapters/superadmin/http/app-api-key.contr
 import { AppNotificationController } from '@adapters/superadmin/http/app-notification.controller';
 import { AppProviderKeyController } from '@adapters/superadmin/http/app-provider-key.controller';
 import { LoggingService } from '@infrastructure/log/logger.service';
+import { AiModule } from '@infrastructure/ai/module/ai.module';
 
 /**
  * Superadmin backoffice: modules, API keys, announcements and usage metrics.
@@ -29,6 +30,7 @@ import { LoggingService } from '@infrastructure/log/logger.service';
  */
 @Module({
   imports: [
+    AiModule,
     TypeOrmModule.forFeature([
       AppModuleEntity,
       AppApiKey,

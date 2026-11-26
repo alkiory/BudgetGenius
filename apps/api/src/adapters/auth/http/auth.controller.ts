@@ -135,7 +135,8 @@ export class AuthController {
       // would replay this failure on every later attempt, even after the
       // cause is gone.
       const errorCode =
-        error instanceof HttpException && error.getStatus() === HttpStatus.CONFLICT
+        error instanceof HttpException &&
+        error.getStatus() === HttpStatus.CONFLICT
           ? 'email_in_use'
           : 'google_auth_failed';
 
@@ -450,7 +451,12 @@ export class AuthController {
   @SkipThrottle()
   @Post('logout')
   async logout(@Req() req, @Res({ passthrough: true }) res: Response) {
-    const token = req.cookies?.accessToken;
+    const authHeader = req.headers?.authorization;
+    const bearerToken =
+      typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+        ? authHeader.slice('Bearer '.length).trim()
+        : undefined;
+    const token = req.cookies?.accessToken || bearerToken;
 
     if (token) {
       try {
@@ -599,8 +605,7 @@ export class AuthController {
     // (where headers exist) and unit-test fixtures (where they may
     // not).
     if (!token) {
-      const headers =
-        ((req.headers ?? {}) as Record<string, string | undefined>);
+      const headers = (req.headers ?? {}) as Record<string, string | undefined>;
       this.logger.warn(
         `🛡️ /auth/refresh received NO refresh token in any of the ` +
           `three source channels ` +
@@ -615,6 +620,13 @@ export class AuthController {
 
     try {
       const payload = this.jwtService.verify(token);
+
+      // A refresh credential is not an access credential: the two share a
+      // signer and lifetime, so without this check a stolen refresh token
+      // could call every protected endpoint as a bearer token.
+      if (payload['typ'] !== 'refresh') {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
 
       // Check Redis to ensure the refresh token hasn't been revoked
       // (e.g. by a logout that deleted it from Redis).
@@ -634,6 +646,7 @@ export class AuthController {
           id: payload['id'],
           email: payload['email'],
           role: payload['role'],
+          typ: 'access',
         },
         { expiresIn: '7d' },
       );
@@ -659,5 +672,4 @@ export class AuthController {
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
-
 }

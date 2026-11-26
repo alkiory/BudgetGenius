@@ -19,6 +19,11 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_URL=redis://redis:6379
+      # Uploaded catalogue images live outside the container so a deploy
+      # (which recreates it) does not delete pages' assets.
+      - UPLOAD_DIR=/data
+    volumes:
+      - api_uploads:/data
     depends_on:
       database:
         condition: service_healthy
@@ -72,3 +77,4 @@ services:
 volumes:
   pgdata_gce:
   redisdata_gce:
+  api_uploads:
