@@ -71,11 +71,21 @@ jobs:
           DB_NAME: budgetgenius_test
           REDIS_HOST: localhost
           REDIS_PORT: "6379"
+          # RedisService reads REDIS_URL and otherwise falls back to the
+          # compose hostname (`redis`), which does not resolve on the runner.
+          REDIS_URL: redis://localhost:6379
           COOKIE_DOMAIN: localhost
           FRONTEND_URL: http://localhost:5173
           # The mailer refuses to construct without a key (fail-fast against
           # silent forgot-password failures). Tests never hit the Resend API.
           RESEND_API_KEY: re_ci_placeholder
+          # ReportService constructs the OpenAI client in its constructor;
+          # the e2e AppModule boot needs a non-empty key even though no test
+          # calls the API. The Google strategy also validates a clientID at
+          # construction time.
+          OPENAI_API_KEY: sk-ci-placeholder
+          GOOGLE_CLIENT_ID: test-client-id.apps.googleusercontent.com
+          GOOGLE_CLIENT_SECRET: test-client-secret
 
       - name: Run Tests (api)
         run: pnpm --filter api test

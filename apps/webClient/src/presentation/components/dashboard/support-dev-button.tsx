@@ -5,11 +5,10 @@ import { useTranslation } from "react-i18next";
 /**
  * Support-the-developer call to action.
  *
- * TODO(paypal): the href is intentionally a placeholder (`#`) until the
- * developer's PayPal handle is provided. Replace `DONATION_URL` with the
- * `https://paypal.me/...` link — nothing else needs to change.
+ * PayPal Donate accepts the recipient's account email, so no paypal.me
+ * handle is needed. One-time donations in the app's default currency.
  */
-const DONATION_URL = "#";
+const DONATION_URL = "https://paypal.me/SergioCampbelldev";
 
 /**
  * Pink, glowing, magnetic CTA in the app header.
@@ -25,8 +24,8 @@ export function SupportDevButton() {
     <Magnet className="group" strength={0.4}>
       <a
         href={DONATION_URL}
-        target={DONATION_URL === "#" ? undefined : "_blank"}
-        rel="noreferrer"
+        target="_blank"
+        rel="noopener noreferrer"
         title={t("support.tooltip")}
         className="relative inline-flex h-8 items-center gap-1.5 rounded-full border border-pink-400/45 bg-pink-500/10 px-2.5 text-xs font-semibold text-pink-600 shadow-[0_0_22px_-8px_rgb(236_72_153_/_0.85)] transition-colors duration-200 hover:border-pink-400/70 hover:bg-pink-500/20 hover:text-pink-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pink-400 dark:border-pink-400/40 dark:bg-pink-500/10 dark:text-pink-200 dark:hover:bg-pink-500/20 dark:hover:text-pink-100 sm:px-3"
       >

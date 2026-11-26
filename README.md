@@ -11,6 +11,7 @@
   <img src="https://img.shields.io/badge/license-UNLICENSED-blue" alt="License" />
   <img src="https://img.shields.io/badge/version-v1.12.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen" alt="Node" />
+  <a href="https://paypal.me/SergioCampbelldev" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
 </p>
 
 ## ✨ What's New in v1.12.0
