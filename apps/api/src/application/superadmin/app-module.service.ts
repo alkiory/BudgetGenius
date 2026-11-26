@@ -199,10 +199,14 @@ export class AppModuleService {
           if (!schema) {
             throw new BadRequestException(`Unknown block type: ${type}`);
           }
-          let blockId = slugify(rawBlock.id ?? type, `${type}-${position + 1}`);
+          const baseBlockId = slugify(
+            rawBlock.id ?? type,
+            `${type}-${position + 1}`,
+          );
+          let blockId = baseBlockId;
           let suffix = 2;
           while (usedBlockIds.has(blockId)) {
-            blockId = `${blockId}-${suffix}`;
+            blockId = `${baseBlockId}-${suffix}`;
             suffix += 1;
           }
           usedBlockIds.add(blockId);
@@ -217,10 +221,11 @@ export class AppModuleService {
       // A row with nothing at all is the blank one an editor starts with.
       if (!title && !body && !blocks.length && !keys.length) return;
 
-      let sectionId = slugify(raw.id ?? title, `section-${index + 1}`);
+      const baseSectionId = slugify(raw.id ?? title, `section-${index + 1}`);
+      let sectionId = baseSectionId;
       let suffix = 2;
       while (usedIds.has(sectionId)) {
-        sectionId = `${sectionId}-${suffix}`;
+        sectionId = `${baseSectionId}-${suffix}`;
         suffix += 1;
       }
       usedIds.add(sectionId);

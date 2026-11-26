@@ -304,15 +304,27 @@ function Cta({ props }: { props: Record<string, unknown> }) {
             </p>
           )}
         </div>
-        {actionLabel && href && (
-          <Link
-            to={href}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-teal-700 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
-          >
-            <Send className="h-3.5 w-3.5" />
-            {actionLabel}
-          </Link>
-        )}
+        {actionLabel &&
+          href &&
+          (href.startsWith("/") ? (
+            <Link
+              to={href}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-teal-700 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
+            >
+              <Send className="h-3.5 w-3.5" />
+              {actionLabel}
+            </Link>
+          ) : (
+            <a
+              href={href}
+              target={href.startsWith("mailto:") ? undefined : "_blank"}
+              rel={href.startsWith("mailto:") ? undefined : "noreferrer"}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-teal-700 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400"
+            >
+              <Send className="h-3.5 w-3.5" />
+              {actionLabel}
+            </a>
+          ))}
       </div>
     </div>
   );

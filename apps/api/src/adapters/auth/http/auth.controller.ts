@@ -456,9 +456,15 @@ export class AuthController {
       typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
         ? authHeader.slice('Bearer '.length).trim()
         : undefined;
-    const token = req.cookies?.accessToken || bearerToken;
+    const tokens = Array.from(
+      new Set(
+        [req.cookies?.accessToken, bearerToken].filter(
+          (t): t is string => typeof t === 'string' && t.length > 0,
+        ),
+      ),
+    );
 
-    if (token) {
+    for (const token of tokens) {
       try {
         await this.authService.addTokenToBlacklist(token);
       } catch (error) {

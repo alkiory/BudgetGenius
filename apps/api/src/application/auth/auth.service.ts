@@ -542,13 +542,14 @@ export class AuthService {
     const userData = this.jwtService.decode(token);
     if (!userData) throw new Error('Invalid token');
 
-    // Store the token in Redis with an expiration time equal to the JWT's expiration time
-    const tokenExpiration = userData['exp']; // Get the expiration time from the JWT
-    await this.redisService.set(
-      token,
-      'blacklisted',
-      tokenExpiration - Math.floor(Date.now() / 1000),
-    );
+    // Store the token in Redis with its remaining TTL; an already-expired
+    // token cannot be accepted by JwtStrategy and Redis rejects ttl <= 0.
+    const tokenExpiration = userData['exp'];
+    if (typeof tokenExpiration !== 'number') return;
+    const ttl = tokenExpiration - Math.floor(Date.now() / 1000);
+    if (ttl <= 0) return;
+
+    await this.redisService.set(token, 'blacklisted', ttl);
   }
 
   async requestPasswordReset(dto: ForgotPasswordDto) {
