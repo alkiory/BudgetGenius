@@ -4,7 +4,7 @@ import { BudgetRepository } from '@adapters/dashboard/persistence/budget.reposit
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { LoggingService } from '@infrastructure/log/logger.service';
-import { QueryFailedError } from 'typeorm';
+import { DataSource, QueryFailedError } from 'typeorm';
 import { BUDGET_CATEGORY_UNIQUE_CONSTRAINT_NAME } from '@domain/dashboard/budget-category.entity';
 
 // Full mock User object matching the User entity
@@ -142,6 +142,7 @@ describe('BudgetService', () => {
             getBudgetCategory: jest.fn(),
             findCategotyQuery: jest.fn(),
             sumExpenseAmountsByBudget: jest.fn().mockResolvedValue([]),
+            sumLinkedSavingsByCategory: jest.fn().mockResolvedValue([]),
             updateBudget: jest.fn(),
             updateBudgetCategory: jest.fn(),
             deleteBudgetCategory: jest.fn(),
@@ -165,6 +166,9 @@ describe('BudgetService', () => {
             error: jest.fn(),
           },
         },
+        // Contribute-savings opens a DB transaction; these specs exercise the
+        // read/update paths, so an inert DataSource is enough.
+        { provide: DataSource, useValue: {} },
       ],
     }).compile();
 
@@ -172,7 +176,6 @@ describe('BudgetService', () => {
     repo = module.get(BudgetRepository);
     userRepo = module.get(UserRepositoryImpl);
     logger = module.get(LoggingService);
-
   });
 
   describe('createBudget', () => {
@@ -1072,9 +1075,9 @@ describe('BudgetService', () => {
     it('rejects an expense that is no longer unlinked', async () => {
       repo.findReconciliationRows.mockResolvedValue([]);
 
-      await expect(
-        service.reconcileExpense(1, 279, 49),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.reconcileExpense(1, 279, 49)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
       expect(repo.setTransactionBudgetCategory).not.toHaveBeenCalled();
     });
 
@@ -1137,7 +1140,11 @@ describe('BudgetService', () => {
 
       it('does not accept a category from another user budget', async () => {
         await expect(
-          service.reconcileExpense(userAId, unlinkedRow.id, userBRow.categoryId),
+          service.reconcileExpense(
+            userAId,
+            unlinkedRow.id,
+            userBRow.categoryId,
+          ),
         ).rejects.toBeInstanceOf(BadRequestException);
 
         expect(repo.setTransactionBudgetCategory).not.toHaveBeenCalled();

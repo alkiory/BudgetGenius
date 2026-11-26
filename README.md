@@ -9,9 +9,19 @@
 <p align="center">
   <img src="https://img.shields.io/badge/status-active-brightgreen" alt="Status" />
   <img src="https://img.shields.io/badge/license-UNLICENSED-blue" alt="License" />
-  <img src="https://img.shields.io/badge/version-v1.11.0-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v1.12.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen" alt="Node" />
 </p>
+
+## ✨ What's New in v1.12.0
+
+- **Guided catalogue** — step-by-step modules such as the **Emergency fund**, with its 4-week plan, checklist and FAQ.
+- **A calculator with your real numbers** — the emergency fund reads your last six months of expenses and turns the 3–6 month target into a real savings goal.
+- **Every contribution is a dated transaction** — choose the day you put the money aside and it appears in Transactions as a savings movement.
+- **Goals stay in sync** — edit or delete a contribution and the goal follows; savings never count as spending in reports.
+- **Backoffice page editor** — write the module pages, reorder tabs, add blocks and upload images without a deploy.
+
+Full history in [`docs/changelog.md`](docs/changelog.md).
 ---
 
 ## 📖 Table of Contents
@@ -46,6 +56,7 @@ The application follows a **Clean Architecture** pattern across both its fronten
 - **Budget Planning** — Create custom budgets with categorized allocations and real-time spending tracking
 - **Financial Goals** — Set short-term and long-term goals with progress visualization
 - **Savings Goals** — Track saving progress with target dates and percentage completion *(Premium)*
+- **Guided Catalogue** — Practical modules with their own pages, calculators and checklists
 - **Investment Tracking** — Monitor investment portfolio performance *(Premium)*
 - **Reports & Analytics** — Generate detailed financial reports with charts *(Premium)*
 - **AI Financial Assistant ("Finny")** — Get personalized insights and advice powered by OpenAI
@@ -700,17 +711,37 @@ If you see CORS errors in the emulator's WebView, make sure the backend's CORS a
 
 | Workflow | Trigger | Actions |
 |----------|---------|---------|
-| **CI/CD** | Push to `main`, PR to `main`/`dev` | Backend: test → build Docker → push to registry → deploy via SSH; Frontend: test |
-| **Playwright** | Push/PR to `main`/`dev` | E2E browser tests |
-| **Firebase Merge** | Push to `main` | Deploy frontend to Firebase Hosting |
-| **Firebase PR** | Pull request | Preview channel deployment |
+| **CI** (`.github/workflows/ci.yml`) | Push to `main`/`dev`/`feature*`, PR to `main`/`dev`, manual | API: migrations → tests → build. Web: typecheck → unit tests → landing + SPA build |
+| **Deploy** (`.github/workflows/deploy.yml`) | Push to `main`, manual | Verify → API image to DockerHub → pull/restart on GCE; landing + SPA → Firebase Hosting |
+| **Build Android APK** | Push/PR to `main`/`dev` | Debug APK artifact |
+| **Release Android** | Version tag | Signed APK on the GitHub Release |
 
 ### Deployment Architecture
 
-- **Frontend:** Vercel (primary) + Firebase Hosting (static assets)
-- **Backend:** Docker container deployed via SSH to VPS
-- **Database:** AWS RDS PostgreSQL (production) / Docker PostgreSQL (development)
-- **Cache:** Redis (Docker in development, managed service in production)
+- **Frontend:** Firebase Hosting (primary); Vercel can serve the same `dist/`
+- **Backend:** Docker container on GCE, image pulled from DockerHub
+- **Database:** PostgreSQL on the VM (compose) / Docker PostgreSQL (development)
+- **Cache:** Redis on the VM (compose, password-protected) / Docker Redis (development)
+
+#### Required GitHub secrets and variables
+
+The **Deploy** workflow fails fast if a required secret is missing:
+
+| Scope | Secrets / variables |
+|-------|--------------------|
+| API + GCE | `DOCKER_USERNAME`, `DOCKER_PASSWORD`, `GCE_HOST`, `GCE_USER`, `GCE_SSH_KEY`, `DB_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET` |
+| API runtime | `OPENAI_API_KEY`, `FRONTEND_URL`, `COOKIE_DOMAIN`, `RESEND_API_KEY`, `MAIL_FROM`, `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`, `PROVIDER_KEYS_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` |
+| Web build | `VITE_API_URL`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MEASUREMENT_ID`, `FIREBASE_SERVICE_ACCOUNT_BUDGETGENIUSIA` |
+| Variables | `PUBLIC_APP_URL`, `PUBLIC_APK_URL` (optional) |
+
+Push to `main` deploys automatically. To deploy the current branch without
+merging, run **Actions → Deploy → Run workflow** and pick the ref.
+
+```bash
+# Local production build (same artifact the deploy publishes)
+pnpm --filter api build   # apps/api/dist
+pnpm build:web             # dist/ → landing at /, SPA at /app/
+```
 
 #### Production environment file
 

@@ -21,6 +21,15 @@ const makeTransactionRepo = () => ({
   insertImportWithReceipt: jest.fn().mockResolvedValue(0),
   findBestBudgetCategoryId: jest.fn().mockResolvedValue(null),
   findOwnedBudgetCategoryId: jest.fn().mockResolvedValue(null),
+  // The update path reads the current row to keep a savings deposit linked;
+  // these fixtures are plain expenses, so the link starts empty.
+  findOne: jest.fn().mockResolvedValue({
+    id: 3,
+    category: 'Restaurantes',
+    amount: -10,
+    budgetCategoryId: null,
+  }),
+  findOwnedSavingsCategoryId: jest.fn().mockResolvedValue(null),
   update: jest.fn().mockImplementation(async (transaction) => transaction),
 });
 
@@ -181,8 +190,8 @@ describe('TransactionService — D2.2 attribution', () => {
 
     transactionRepo.insertImportWithReceipt.mockResolvedValue(1);
     await service.importTransactions(1, items, 'import-key-1234');
-    const { payloadHash } = transactionRepo.insertImportWithReceipt.mock
-      .calls[0][0];
+    const { payloadHash } =
+      transactionRepo.insertImportWithReceipt.mock.calls[0][0];
 
     transactionRepo.findImportReceipt.mockResolvedValue({
       payloadHash,

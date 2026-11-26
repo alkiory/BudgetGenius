@@ -1453,7 +1453,13 @@ git push origin main --tags
 
 ### 16.4 CI auto-versioning reminder
 
-The CI workflows (`firebase-hosting-merge.yml`, `build-apk.yml`, `firebase-pull-request.yml`) already inject `VITE_APP_VERSION` from `git describe --tags --always --dirty`. Once the tag exists, the version badge in the web UI and APK will display the correct version automatically.
+`.github/workflows/ci.yml` validates every push/PR (API migrations + tests +
+build, web typecheck + unit tests + assembled build). `.github/workflows/deploy.yml`
+runs on `main` or manually: it re-runs the checks, pushes the API image to
+DockerHub, pulls it on GCE and publishes the web build to Firebase Hosting.
+The web deploy sets `VITE_APP_VERSION` from the commit SHA, and
+`release-android.yml` derives `versionName`/`versionCode` from the published
+tag (`v1.12.0` → `1.12.0` / `11200`), so both surfaces show the release version.
 
 ### 16.5 Full release checklist
 

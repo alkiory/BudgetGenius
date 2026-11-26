@@ -67,12 +67,12 @@ export const changelog: ChangelogEntry[] = [
     date: "2026-11-26",
     highlight: true,
     title: {
-      en: "A shorter category list, and a tour of every screen",
-      es: "Una lista de categorías más corta y un recorrido por cada pantalla",
+      en: "A guide for every screen, and savings you can watch grow",
+      es: "Una guía para cada pantalla y ahorros que ves crecer",
     },
     description: {
-      en: "The category picker now offers only the usual categories, so you stop scrolling: add the ones you use with Import categories in Transactions and they appear in the form from then on. The guided tour now explains every page, Finny can be dragged out of the way when it covers a button, and your chosen currency stays the same after you edit a budget.",
-      es: "El selector de categorías ahora muestra solo las habituales, así dejas de hacer scroll: añade las tuyas con Importar categoría en Transacciones y aparecerán en el formulario a partir de entonces. El recorrido guiado ya explica cada página, puedes arrastrar a Finny cuando tape un botón y tu moneda elegida se mantiene al editar un presupuesto.",
+      en: "The category picker now offers only the usual categories, so you stop scrolling, and the guided tour explains every page. The new catalogue brings guided modules such as the Emergency fund: its calculator reads your real expenses, and every contribution becomes a dated savings transaction. Edit or delete one and the goal follows, while savings stay out of your spending totals.",
+      es: "El selector de categorías ahora muestra solo las habituales, así dejas de hacer scroll, y el recorrido guiado explica cada página. El nuevo catálogo trae módulos guiados como el Fondo de emergencia: su calculadora lee tus gastos reales y cada aporte queda como una transacción de ahorro con su fecha. Edítalo o bórralo y la meta se ajusta, mientras el ahorro no cuenta como gasto.",
     },
   },
   {
