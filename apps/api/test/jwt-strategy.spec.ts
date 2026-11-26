@@ -45,13 +45,13 @@ describe('JwtStrategy credential type', () => {
     ).resolves.toBeNull();
   });
 
-  it('accepts legacy untyped tokens during deployment cutover', async () => {
+  it('rejects legacy untyped tokens on protected routes (CWE-613)', async () => {
     const strategy = buildStrategy();
     const { typ, ...untyped } = payload;
     void typ;
     await expect(
       strategy.validate(requestWith('untyped'), untyped),
-    ).resolves.toEqual({ userId: 7, email: 'user@example.com', role: 'user' });
+    ).resolves.toBeNull();
   });
 
   it('rejects an access token revoked by logout via its hashed Redis key', async () => {

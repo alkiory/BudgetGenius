@@ -116,8 +116,20 @@ export class CurrencyService {
     } else if (hasDot || hasComma) {
       const sep = hasDot ? "." : ",";
       const parts = raw.split(sep);
-      // Multiple identical separators are thousands groups (`1.234.567`).
-      safe = parts.length > 2 ? parts.join("") : raw.replace(",", ".");
+      if (parts.length > 2) {
+        const sign = raw.startsWith("-") ? "-" : "";
+        const unsigned = sign ? raw.slice(1) : raw;
+        const unsignedParts = unsigned.split(sep);
+        const isValidGrouping =
+          /^\d{1,3}$/.test(unsignedParts[0]) &&
+          unsignedParts.slice(1).every((part) => /^\d{3}$/.test(part));
+        if (!isValidGrouping) {
+          return Number.NaN;
+        }
+        safe = `${sign}${unsignedParts.join("")}`;
+      } else {
+        safe = raw.replace(",", ".");
+      }
     }
 
     const parsed = parseFloat(safe);

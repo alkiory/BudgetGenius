@@ -262,6 +262,17 @@ export class TransactionService {
           explicitId: dto.budgetCategoryId,
         });
 
+    // Preserve `isSavingsDeposit` when an edit keeps the deposit's
+    // classification (including when its savings goal was deleted and
+    // `budgetCategoryId` is already null), and clear it in the same write
+    // when the edit reclassifies the row as income or ordinary spending.
+    const keepsDepositClassification =
+      Boolean(existing.isSavingsDeposit) &&
+      roundToCents(dto.amount) < 0 &&
+      categoryKey(dto.category) === categoryKey(existing.category) &&
+      dto.budgetCategoryId === undefined &&
+      (keepsSavingsLink || budgetCategoryId === null);
+
     // `recurrence` is intentionally NOT seeded separately — the repo's
     // destructured-undefined guard preserves the existing value when the
     // dto omits the field (matches the partial-update contract on the
@@ -271,6 +282,9 @@ export class TransactionService {
     const transaction = {
       ...dto,
       budgetCategoryId,
+      ...(existing.isSavingsDeposit
+        ? { isSavingsDeposit: keepsDepositClassification }
+        : {}),
       ...(typeof dto.amount === 'number'
         ? { amount: roundToCents(dto.amount) }
         : {}),

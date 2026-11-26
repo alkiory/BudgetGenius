@@ -264,4 +264,117 @@ describe('TransactionService — D2.2 attribution', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(transactionRepo.createMany).not.toHaveBeenCalled();
   });
+
+  describe('savings deposit reclassification', () => {
+    it('clears isSavingsDeposit when a deposit is reclassified as income', async () => {
+      transactionRepo.findOne.mockResolvedValue({
+        id: 10,
+        category: 'Savings',
+        amount: -100,
+        budgetCategoryId: 42,
+        isSavingsDeposit: true,
+      } as never);
+
+      await service.updateTransaction(1, {
+        id: 10,
+        date: '2026-11-10T00:00:00.000Z',
+        description: 'Refund',
+        category: 'Savings',
+        amount: 100,
+      } as never);
+
+      expect(transactionRepo.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 10,
+          budgetCategoryId: null,
+          isSavingsDeposit: false,
+        }),
+        1,
+      );
+    });
+
+    it('clears isSavingsDeposit when a deposit is reclassified as ordinary spending', async () => {
+      transactionRepo.findOne.mockResolvedValue({
+        id: 11,
+        category: 'Savings',
+        amount: -100,
+        budgetCategoryId: 42,
+        isSavingsDeposit: true,
+      } as never);
+      transactionRepo.findBestBudgetCategoryId.mockResolvedValue(9);
+
+      await service.updateTransaction(1, {
+        id: 11,
+        date: '2026-11-10T00:00:00.000Z',
+        description: 'Groceries',
+        category: 'Food',
+        amount: -100,
+      } as never);
+
+      expect(transactionRepo.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 11,
+          budgetCategoryId: 9,
+          isSavingsDeposit: false,
+        }),
+        1,
+      );
+    });
+
+    it('preserves isSavingsDeposit on edits that keep the savings classification', async () => {
+      transactionRepo.findOne.mockResolvedValue({
+        id: 12,
+        category: 'Savings',
+        amount: -100,
+        budgetCategoryId: 42,
+        isSavingsDeposit: true,
+      } as never);
+      transactionRepo.findOwnedSavingsCategoryId.mockResolvedValue(42);
+
+      await service.updateTransaction(1, {
+        id: 12,
+        date: '2026-11-10T00:00:00.000Z',
+        description: 'Updated deposit note',
+        category: 'Savings',
+        amount: -150,
+      } as never);
+
+      expect(transactionRepo.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 12,
+          budgetCategoryId: 42,
+          isSavingsDeposit: true,
+        }),
+        1,
+      );
+    });
+
+    it('preserves isSavingsDeposit when editing a deposit whose goal was deleted', async () => {
+      transactionRepo.findOne.mockResolvedValue({
+        id: 13,
+        category: 'Savings',
+        amount: -100,
+        budgetCategoryId: null,
+        isSavingsDeposit: true,
+      } as never);
+      transactionRepo.findBestBudgetCategoryId.mockResolvedValue(null);
+
+      await service.updateTransaction(1, {
+        id: 13,
+        date: '2026-11-10T00:00:00.000Z',
+        description: 'Edited orphan deposit',
+        category: 'Savings',
+        amount: -120,
+      } as never);
+
+      expect(transactionRepo.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 13,
+          budgetCategoryId: null,
+          isSavingsDeposit: true,
+        }),
+        1,
+      );
+    });
+  });
 });

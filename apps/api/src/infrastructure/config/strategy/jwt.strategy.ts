@@ -42,10 +42,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(req: any, payload: any) {
-    // Reject refresh (or other non-access) tokens used as bearer credentials.
-    // Legacy untyped tokens (`typ === undefined`) remain accepted during the
-    // deployment cutover so existing sessions are not logged out mid-flight.
-    if (payload?.typ !== undefined && payload.typ !== 'access') {
+    // Require an explicit access token type on protected routes so legacy
+    // untyped refresh tokens cannot bypass refresh-session revocation.
+    if (payload?.typ !== 'access') {
       return null;
     }
 

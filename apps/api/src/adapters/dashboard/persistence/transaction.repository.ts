@@ -260,6 +260,7 @@ export class TransactionRepository {
       amount,
       recurrence,
       budgetCategoryId,
+      isSavingsDeposit,
     } = data;
     // findOneOrFail with the userId where-clause: throws
     // EntityNotFoundError if the row does not belong to the user — the
@@ -286,6 +287,9 @@ export class TransactionRepository {
     // of keeping it silently.
     if (budgetCategoryId !== undefined) {
       transaction.budgetCategoryId = budgetCategoryId;
+    }
+    if (isSavingsDeposit !== undefined) {
+      transaction.isSavingsDeposit = isSavingsDeposit;
     }
     await this.repo.save(transaction);
     return transaction;
