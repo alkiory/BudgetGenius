@@ -396,6 +396,12 @@ describe('AuthService', () => {
       .calls[0];
     expect(updateArg.password).toBe('NewP4ssword!');
 
+    // The session opened before the reset must not survive it: a stolen
+    // refresh token would otherwise keep rotating access tokens.
+    expect(redisServiceMock.delete).toHaveBeenCalledWith(
+      `refreshToken:${user.id}`,
+    );
+
     // Token must be deleted so it can't be reused.
     expect(passwordResetRepositoryMock.deleteToken).toHaveBeenCalledWith(
       'tok-1',

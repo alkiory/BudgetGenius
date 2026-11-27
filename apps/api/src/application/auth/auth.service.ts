@@ -773,6 +773,13 @@ export class AuthService {
     await this.userRepository.updateUser(user.id, {
       password: dto.newPassword,
     });
+
+    // A reset is the flow you reach for when the account may be compromised.
+    // The stored refresh token lives in Redis, so changing the row does not
+    // touch it: revoke it here too, or a stolen session keeps minting access
+    // tokens for up to seven days after the victim "recovered" the account.
+    await this.invalidateRefreshToken(user.id);
+
     await this.passwordResetRepository.deleteToken(resetToken.id);
 
     this.logger.log(`🔑 Password reset successfully for user ${user.email}`);

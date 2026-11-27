@@ -971,8 +971,9 @@ account loses access immediately instead of keeping it until its token expires
 — and a leftover `superadmin` row cannot use the backoffice even if the cleanup
 failed. Passwords are changed through `PUT /user/password` with the current
 password, which also revokes the stored refresh token so every other device
-has to sign in again; a wrong current password answers 400 (a 401 would be
-read by the SPA as an expired session). `PUT /user/:id` only accepts name and
+has to sign in again — the emailed reset revokes it too, since a reset is what
+you use when the account may be compromised; a wrong current password answers
+400 (a 401 would be read by the SPA as an expired session). `PUT /user/:id` only accepts name and
 surname. In development a local fallback is used (`superadmin@admin.com` /
 `#Password123`). Nothing is seeded when `SUPERADMIN_EMAIL` is empty.
 
