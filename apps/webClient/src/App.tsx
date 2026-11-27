@@ -3,6 +3,7 @@ import useRestoreSession from "@adapters/hooks/useLoadUser";
 import ErrorBoundary from "@infrastructure/errorBoundary";
 import { LocaleProvider } from "@infrastructure/i18n/LocaleProvider";
 import ToastConfig from "@infrastructure/toast.config";
+import { ApkUpdateGate } from "@presentation/components/app-update/apk-update-gate";
 import { OfflineIndicator } from "@presentation/components/offline-indicator";
 import RouteConfig from "@presentation/routes/route-config";
 import { useEffect } from "react";
@@ -28,6 +29,8 @@ function App() {
       <ErrorBoundary>
         <LocaleProvider>
           <RouteConfig />
+          {/* Android only; renders nothing on the web. */}
+          <ApkUpdateGate />
         </LocaleProvider>
       </ErrorBoundary>
       <ToastConfig />

@@ -637,6 +637,17 @@
     "settings": "Configuración",
     "logout": "Cerrar sesión"
   },
+  "appUpdate": {
+    "title": "Nueva versión disponible",
+    "description": "La versión {{version}} está lista. La app descargará el paquete y abrirá el instalador de Android; solo tendrás que confirmar la instalación.",
+    "notificationTitle": "Actualización de BudgetGenius",
+    "notificationBody": "La versión {{version}} está disponible. Toca para actualizar.",
+    "updateNow": "Actualizar",
+    "downloading": "Descargando…",
+    "permissionHint": "Android necesita tu permiso para instalar la actualización: activa «Instalar apps desconocidas» para BudgetGenius y vuelve a intentarlo.",
+    "openSettings": "Abrir ajustes",
+    "downloadError": "No se pudo descargar la actualización. Comprueba tu conexión e inténtalo de nuevo."
+  },
   "profile": {
     "title": "Configuración del Perfil",
     "description": "Gestiona la configuración y preferencias de tu cuenta.",
