@@ -2,6 +2,32 @@
 
 ---
 
+## [v1.13.0] — 2026-11-27
+
+> Session: the Android app finally updates itself. `releases/latest` is the single source of truth, the bundle compares it with the version baked in at build time, downloads the APK into the app cache and hands it to the system installer — including Android 6, where the installer cannot read a `file://` URI and the flow has to go through a `PackageInstaller` session with its own confirmation step. The same window hardens sessions: a password change or reset ends live access tokens and stored refresh tokens, a demoted operator cannot rotate back in, and the offline queue is dropped and sealed instead of keeping credentials after logout.
+
+### Added
+
+- **In-app APK update** — `apps/webClient/src/infrastructure/apk-update.ts` reads `https://api.github.com/repos/alkiory/BudgetGenius/releases/latest`, accepts only a plain `vX.Y.Z` tag, picks the `.apk` asset and remembers the offer across restarts. `apps/webClient/src/application/app-update/use-apk-update.ts` compares it with `__APP_VERSION__` (the version baked into the build), throttles the check to one every six hours and reuses a finished download, keyed by `version:updated_at`, so a retry after the Settings detour does not transfer the file again. `apps/webClient/src/presentation/components/app-update/apk-update-gate.tsx` renders the dialog over the app.
+- **Native installer bridge** — `apps/mobile/android/app/src/main/java/com/budgetgenius/mobile/ApkUpdatePlugin.java` checks `REQUEST_INSTALL_PACKAGES`, asks for `POST_NOTIFICATIONS` on API 33+, posts the tray notice for a release found in the background and installs the downloaded APK through the system installer's own component (explicit intent, so no other app can claim the `content://` file).
+- **Android 6 install path** — the installer on API 23 cannot open the FileProvider `file://` URI (the grant only covers `content://`), so `installWithSession` writes the APK into a `PackageInstaller` session, and `apps/mobile/android/app/src/main/java/com/budgetgenius/mobile/ApkInstallReceiver.java` starts the `STATUS_PENDING_USER_ACTION` confirmation intent the session returns — `commit()` alone shows no dialog. The plugin resolves the call then (30 s timeout, single resolution guarded), so cancel/allow both end the flow instead of hanging it.
+
+### Changed
+
+- **Backoffice split into eight files** — the 2 585-line `apps/webClient/src/presentation/pages/superadmin/backoffice.tsx` became `modules-tab.tsx`, `module-form.tsx`, `module-edit-modal.tsx`, `page-content-editor.tsx`, `api-keys-tab.tsx`, `notifications-tab.tsx`, `overview-tab.tsx` and `shared.tsx`, with `backoffice.tsx` keeping only the shell.
+- **Update copy in both locales** — the dialog, the download/permission failures and the tray notice are translated in `apps/webClient/src/infrastructure/i18n/locales/{en,es}.json` instead of hard-coded strings.
+
+### Fixed
+
+- **Android 6 showed no install prompt** — the session was committed and the call resolved without ever surfacing the confirmation activity, so the APK silently did not install; the receiver now promotes `EXTRA_INTENT` with `FLAG_ACTIVITY_NEW_TASK` and degrades to `STATUS_FAILURE` when it cannot.
+- **A republished release kept the stale APK** — an existing download was reused by version alone; `releaseAssetKey()` includes the asset's `updated_at`, so a re-upload under the same tag is downloaded again.
+- **A withdrawn release stayed offered** — when `releases/latest` moved back to (or behind) the running build, the pending offer is cleared instead of promoting a version maintainers pulled.
+- **Password change and reset left live sessions** — a credentials change now revokes the stored refresh token and ends the access tokens minted before it, refresh tokens issued by a racing rotation are refused, and a wrong current password answers `400` with the token revoked; the `429` from the throttle is surfaced in `apps/webClient/src/presentation/components/profile/security-settings.tsx`.
+- **Demoted operators kept a way back in** — promotion is idempotent across failures, a squatter's password is dropped when the Google provider claims the operator address, and a single superadmin is enforced (`apps/api/test/user-seeder-superadmin.spec.ts`).
+- **The offline queue outlived the session** — logout drops it and keeps it sealed until the next sign-in, and queued writes no longer carry credentials.
+
+---
+
 ## [v1.12.0] — 2026-11-26
 
 > Session: the catalogue becomes a real product surface. Modules and pages are created and edited from the backoffice (sections, texts, tab order, uploaded images), the emergency-fund module turns the last six months of real expenses into a savings goal, and every calculator contribution is written as a dated savings transaction. Savings progress now derives from those linked transactions, so editing or deleting a deposit keeps the goal in sync and savings never inflate expense totals. Checks and deployment are also split: every feature branch is validated, and production only ships through a gated deploy workflow.
