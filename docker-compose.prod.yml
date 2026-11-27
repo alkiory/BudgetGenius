@@ -21,6 +21,12 @@ services:
       # QA-0.6 — Redis exige AUTH. RedisService y el ThrottlerModule
       # leen esta misma variable.
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+      # Catalogue images are authored assets: keep them on a volume so a
+      # redeploy (which recreates the container) does not drop every page's
+      # image.
+      - UPLOAD_DIR=/data
+    volumes:
+      - api_uploads:/data
     networks:
       - app-network
       - npm_network
@@ -88,3 +94,4 @@ networks:
 volumes:
   pgdata_prod:
   redisdata_prod:
+  api_uploads:

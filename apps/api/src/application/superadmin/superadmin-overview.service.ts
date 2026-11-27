@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { MoreThanOrEqual, Repository } from 'typeorm';
+import { IsNull, MoreThanOrEqual, Repository } from 'typeorm';
 import { Budget } from '@domain/dashboard/budget.entity';
 import { ExpenseCategory } from '@domain/dashboard/expense-category.entity';
 import { Transaction } from '@domain/dashboard/transaction.entity';
@@ -8,6 +8,7 @@ import { User } from '@domain/user/user.entity';
 import { AppApiKey } from '@domain/superadmin/app-api-key.entity';
 import { AppModule } from '@domain/superadmin/app-module.entity';
 import { AppNotification } from '@domain/superadmin/app-notification.entity';
+import { applyLiveAnnouncementFilter } from '@application/notifications/announcement-window';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -75,8 +76,9 @@ export class SuperAdminOverviewService {
       transactions30d,
       budgetsTotal,
       categoriesTotal,
-      modules,
-      apiKeys,
+      moduleRows,
+      apiKeysTotal,
+      apiKeysActive,
       notificationsTotal,
       notificationsLive,
       activity,
@@ -96,10 +98,22 @@ export class SuperAdminOverviewService {
       }),
       this.budgets.count(),
       this.categories.count(),
-      this.modules.find(),
-      this.apiKeys.find(),
+      // One grouped read instead of loading every row (and every page's
+      // `content` jsonb) just to increment five counters.
+      this.modules
+        .createQueryBuilder('m')
+        .select('m.kind', 'kind')
+        .addSelect('m.status', 'status')
+        .addSelect('COUNT(*)::int', 'count')
+        .groupBy('m.kind')
+        .addGroupBy('m.status')
+        .getRawMany<{ kind: string; status: string; count: number }>(),
+      this.apiKeys.count(),
+      this.apiKeys.count({ where: { revokedAt: IsNull() } }),
       this.notifications.count(),
-      this.notifications.count({ where: { published: true } }),
+      applyLiveAnnouncementFilter(
+        this.notifications.createQueryBuilder('n'),
+      ).getCount(),
       this.transactions
         .createQueryBuilder('t')
         .select(`to_char(date_trunc('month', t.date), 'YYYY-MM')`, 'month')
@@ -111,7 +125,6 @@ export class SuperAdminOverviewService {
         .getRawMany<{ month: string; transactions: number; amount: number }>(),
     ]);
 
-    const activeModules = modules.filter((m) => m.status !== 'disabled');
     const byKind = {
       module: 0,
       component: 0,
@@ -119,8 +132,15 @@ export class SuperAdminOverviewService {
       page: 0,
       tab: 0,
     };
-    for (const item of activeModules) {
-      if (item.kind in byKind) byKind[item.kind] += 1;
+    let modulesTotal = 0;
+    let modulesActive = 0;
+    for (const row of moduleRows) {
+      modulesTotal += row.count;
+      if (row.status === 'disabled') continue;
+      modulesActive += row.count;
+      if (row.kind in byKind) {
+        byKind[row.kind as keyof typeof byKind] += row.count;
+      }
     }
 
     return {
@@ -133,14 +153,14 @@ export class SuperAdminOverviewService {
       },
       data: { budgets: budgetsTotal, categories: categoriesTotal },
       modules: {
-        total: modules.length,
-        active: activeModules.length,
-        disabled: modules.length - activeModules.length,
+        total: modulesTotal,
+        active: modulesActive,
+        disabled: modulesTotal - modulesActive,
         byKind,
       },
       apiKeys: {
-        total: apiKeys.length,
-        active: apiKeys.filter((key) => !key.revokedAt).length,
+        total: apiKeysTotal,
+        active: apiKeysActive,
       },
       notifications: {
         total: notificationsTotal,

@@ -43,7 +43,7 @@ describe('AnnouncementService audience', () => {
   it('does not filter by the dormant premium flag', async () => {
     const { service, andWhere } = await buildService();
 
-    await service.findLiveForUser(1);
+    await service.findLive();
 
     const filterCalls = andWhere.mock.calls.map(([sql]) => String(sql));
     expect(filterCalls.some((sql) => sql.includes('audience'))).toBe(false);
@@ -52,14 +52,9 @@ describe('AnnouncementService audience', () => {
   it('still applies the publish window and expiry', async () => {
     const { service, queryBuilder } = await buildService();
 
-    await service.findLiveForUser(1);
+    await service.findLive();
 
-    expect(queryBuilder.where).toHaveBeenCalledWith(
-      'n.published = :published',
-      {
-        published: true,
-      },
-    );
+    expect(queryBuilder.where).toHaveBeenCalledWith('n."published" = true');
     const filterCalls = queryBuilder.andWhere.mock.calls.map(([sql]) =>
       String(sql),
     );

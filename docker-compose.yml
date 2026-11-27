@@ -6,6 +6,12 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: always
+    # Uploaded catalogue images live outside the container: recreating the
+    # service must not delete the assets authored in the backoffice.
+    environment:
+      - UPLOAD_DIR=/data
+    volumes:
+      - api_uploads:/data
     networks:
       - app-network
 
@@ -24,3 +30,6 @@ services:
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  api_uploads:

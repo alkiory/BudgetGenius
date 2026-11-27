@@ -58,7 +58,14 @@ describe('AppModuleService — key rename', () => {
       update: jest.fn().mockResolvedValue(undefined),
       find: jest.fn().mockResolvedValue([page, component]),
     };
-    const service = new AppModuleService(repo as any);
+    // The rename runs inside a transaction; the stub hands the same fake
+    // repository back so the assertions keep watching the same calls.
+    const dataSource = {
+      transaction: jest.fn(async (run: (manager: unknown) => Promise<unknown>) =>
+        run({ getRepository: () => repo }),
+      ),
+    };
+    const service = new AppModuleService(repo as any, dataSource as any);
 
     await service.update(1, { key: 'new-key' });
 
