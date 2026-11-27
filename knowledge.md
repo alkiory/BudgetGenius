@@ -1201,8 +1201,8 @@ VITE_FIREBASE_MEASUREMENT_ID=
 
 The API is deployed by pulling `main` on the server and running
 `source .env.secrets && DB_PASSWORD=$DB_PASSWORD REDIS_PASSWORD=$REDIS_PASSWORD docker compose -f docker-compose.prod.yml up -d --build`.
-`docker-compose.gce.yml` and `scripts/gce-setup.sh` belong to an unused GCE
-target and must not be mixed in. DB queries go through
+There is no second compose variant: the old GCE target was removed. DB queries
+go through
 `docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod`
 (schema `bg_public`), because `docker compose exec` aborts when
 `REDIS_PASSWORD` is not in the shell.

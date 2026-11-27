@@ -727,10 +727,9 @@ If you see CORS errors in the emulator's WebView, make sure the backend's CORS a
 - **Cache:** Redis 7.2 container `bg-redis-prod`, password-protected /
   Docker Redis (development)
 
-`docker-compose.gce.yml` and `scripts/gce-setup.sh` are leftovers from an
-earlier Google Cloud VM target that is not used anymore. Do not run them on the
-production server: they require `REDIS_PASSWORD` at parse time, create
-`bg-*-gce` containers and write to separate volumes.
+The earlier Google Cloud VM target (`docker-compose.gce.yml`,
+`scripts/gce-setup.sh`) has been removed: this stack is the only supported
+production deployment.
 
 #### Required secrets and variables
 
@@ -744,9 +743,8 @@ publish the web build only — the API credentials live on the server.
 | Web build | GitHub repository secrets | `VITE_API_URL`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MEASUREMENT_ID`, `FIREBASE_SERVICE_ACCOUNT_BUDGETGENIUSIA` |
 | Variables | GitHub repository variables | `PUBLIC_APP_URL`, `PUBLIC_APK_URL` (optional) |
 
-> `deploy.yml` no longer builds or ships the API image: the `API → GCE` job was
-> removed, so the workflow only verifies the code and publishes the web build.
-> No DockerHub or GCE secrets are needed anymore.
+> `deploy.yml` only verifies the code and publishes the web build; it does not
+> build or ship the API image, so no DockerHub or SSH secrets are needed.
 
 Push to `main` publishes the web build automatically. To deploy the current
 branch without merging, run **Actions → Deploy → Run workflow** and pick the ref.
