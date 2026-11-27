@@ -5,6 +5,7 @@ import { UserService } from '@application/user/user.service';
 import { User } from '@domain/user/user.entity';
 import { UserSeederService } from '@application/user/user-seeder.service';
 import { LoggingService } from '@infrastructure/log/logger.service';
+import { RedisService } from '@infrastructure/config/redis.service';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { UserSettingsService } from '@application/user/user-settings.service';
 
@@ -86,6 +87,11 @@ describe('UserService', () => {
         {
           provide: LoggingService,
           useValue: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
+        },
+        {
+          // `changePassword` revokes the stored refresh token here.
+          provide: RedisService,
+          useValue: { delete: jest.fn(), get: jest.fn(), set: jest.fn() },
         },
         {
           // Android APK audit, 2026-06: UserService.createUser now

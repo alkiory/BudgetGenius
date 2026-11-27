@@ -2,10 +2,10 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  UnauthorizedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
+import { RedisService } from '@infrastructure/config/redis.service';
 import { UserDto } from './dto/user.dto';
 import { CreateUserDto } from '@application/user/dto/create.dto';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
@@ -18,6 +18,7 @@ export class UserService {
     private readonly userRepository: UserRepositoryImpl,
     private readonly logger: LoggingService,
     private readonly userSettingsService: UserSettingsService,
+    private readonly redisService: RedisService,
   ) {}
 
   async getById(id: number) {
@@ -150,10 +151,19 @@ export class UserService {
 
     const matches = await bcrypt.compare(currentPassword, user.password);
     if (!matches) {
-      throw new UnauthorizedException('🔒 Current password is incorrect');
+      // 400, not 401: the SPA's response interceptor treats every non-auth 401
+      // as "session expired" — it tries to refresh and then ends the session.
+      // A rejected current password is a validation error, not a dead token.
+      throw new BadRequestException('🔒 Current password is incorrect');
     }
 
     await this.userRepository.updateUser(userId, { password: newPassword });
+
+    // Revoke the stored refresh token: every other device's session is bound
+    // to it, so they have to sign in with the new password. The current
+    // access token keeps working until it expires (JWT, not revocable here).
+    await this.redisService.delete(`refreshToken:${userId}`);
+
     this.logger.log(`🔑 Password changed for user id=${userId}`);
     return { message: '🔑 Password updated successfully' };
   }
