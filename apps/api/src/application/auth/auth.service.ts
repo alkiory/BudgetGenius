@@ -247,6 +247,39 @@ export class AuthService {
     if (!configured) return user;
     if (normalizeEmail(user.email) !== configured) return user;
 
+    // The provider just proved this mailbox belongs to the person signing in.
+    // A local password on the row is therefore a second owner — someone who
+    // registered the address before it was the operator's — and it must not
+    // survive the promotion. Clear it, then revoke the session it could have
+    // opened, so the earlier registrant loses the backoffice they were never
+    // granted.
+    if (user.password) {
+      try {
+        await this.userRepository.clearPassword(user.id);
+        this.logger.warn(
+          `🛡️ Removed a local password from the operator account (id=${user.id})`,
+        );
+      } catch (error) {
+        // Best effort, retried on the next sign-in. Denying this sign-in would
+        // not remove the squatter's access and would lock out the owner.
+        this.logger.error(
+          `🛡️ Could not clear the operator's local password (id=${user.id}): ${
+            (error as Error).message
+          }`,
+        );
+      }
+
+      try {
+        await this.invalidateRefreshToken(user.id);
+      } catch (error) {
+        this.logger.error(
+          `🛡️ Could not revoke the operator's refresh token (id=${user.id}): ${
+            (error as Error).message
+          }`,
+        );
+      }
+    }
+
     if (user.role !== UserRole.SUPERADMIN) {
       try {
         await this.userRepository.setRole(user.id, UserRole.SUPERADMIN);

@@ -89,6 +89,19 @@ export class UserRepositoryImpl implements UserRepositoryPort {
   }
 
   /**
+   * Removes the local password of an account.
+   *
+   * Used when a provider proves the mailbox of the operator account: a
+   * password registered before the address belonged to its owner is a second
+   * credential, and it must not survive the promotion. The column is nullable;
+   * the entity types it as `string` because every hydrated row with a password
+   * has one, so the cast writes SQL NULL through the targeted update.
+   */
+  async clearPassword(id: number): Promise<void> {
+    await this.repo.update(id, { password: null as unknown as string });
+  }
+
+  /**
    * Role-only update. Deliberately uses `repo.update` instead of
    * `preload` + `save`: the entity's `@BeforeUpdate hashPassword` hook would
    * re-hash the already-hashed column and lock the account out. No password

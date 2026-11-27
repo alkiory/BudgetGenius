@@ -25,6 +25,7 @@ const buildService = (options: { password?: string | null } = {}) => {
   };
   const userRepository = {
     setRole: jest.fn().mockResolvedValue(undefined),
+    clearPassword: jest.fn().mockResolvedValue(undefined),
     demoteSuperAdminsExcept: jest.fn().mockResolvedValue(0),
     findByEmail: jest.fn().mockResolvedValue(user),
   };
@@ -84,6 +85,65 @@ describe('operator promotion at sign-in', () => {
     expect(issueSession).toHaveBeenCalledWith(
       expect.objectContaining({ id: 5, role: 'superadmin' }),
     );
+  });
+
+  it('removes a password registered before the provider proved the address', async () => {
+    const { service, user, userRepository } = buildService({
+      password: '$2a$04$squatter-hash',
+    });
+    jest.spyOn(service as any, 'validateOAuthUser').mockResolvedValue(user);
+
+    const session = await service.oauthLogin({
+      email: OPERATOR_EMAIL,
+      name: 'Operator',
+    });
+
+    // The local credential is dropped before the role is granted, and the
+    // session it could have opened is revoked with it.
+    expect(userRepository.clearPassword).toHaveBeenCalledWith(5);
+    expect(userRepository.setRole).toHaveBeenCalledWith(5, 'superadmin');
+    expect(session.userEntity.role).toBe('superadmin');
+  });
+
+  it('revokes the refresh token that the cleared password could have opened', async () => {
+    const { service, user } = buildService({
+      password: '$2a$04$squatter-hash',
+    });
+    jest.spyOn(service as any, 'validateOAuthUser').mockResolvedValue(user);
+    const invalidate = jest.spyOn(service, 'invalidateRefreshToken');
+
+    await service.oauthLogin({ email: OPERATOR_EMAIL, name: 'Operator' });
+
+    expect(invalidate).toHaveBeenCalledWith(5);
+  });
+
+  it('leaves the password of a non-operator address alone', async () => {
+    const { service, user, userRepository } = buildService({
+      password: '$2a$04$someone-else',
+    });
+    user.email = 'someone-else@example.com';
+    jest.spyOn(service as any, 'validateOAuthUser').mockResolvedValue(user);
+
+    await service.oauthLogin({ email: user.email, name: 'Someone' });
+
+    expect(userRepository.clearPassword).not.toHaveBeenCalled();
+  });
+
+  it('still signs the verified owner in when the cleanup fails', async () => {
+    const { service, user, userRepository } = buildService({
+      password: '$2a$04$squatter-hash',
+    });
+    userRepository.clearPassword.mockRejectedValueOnce(new Error('db down'));
+    jest.spyOn(service as any, 'validateOAuthUser').mockResolvedValue(user);
+
+    const session = await service.oauthLogin({
+      email: OPERATOR_EMAIL,
+      name: 'Operator',
+    });
+
+    // Fail-open on purpose: the cleanup retries next sign-in, while denying
+    // this one would lock out the owner and keep the squatter's access.
+    expect(session.userEntity.role).toBe('superadmin');
   });
 
   it('retires the previous operator in the same sign-in (handover)', async () => {

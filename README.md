@@ -960,7 +960,10 @@ alone and the role is granted on its next Google sign-in, where the provider
 verifies the mailbox; that same session is issued with the role (the JWT
 carries it), and every other superadmin is demoted in the same step, so a
 handover leaves exactly one operator. Password logins never grant the role:
-signup does not verify the address. The profile endpoint only edits name and
+signup does not verify the address, so a password registered at that address
+before the operator's first Google sign-in is deleted (and its refresh token
+revoked) in the same step — the earlier registrant loses the credential instead
+of sharing the account the provider just proved. The profile endpoint only edits name and
 surname, so `role`, `email` and `authProvider` are not client-controlled. The
 backoffice guard and the catalogue resolve the role from the database, and the
 guard also requires the account address to be the configured one, so a demoted
