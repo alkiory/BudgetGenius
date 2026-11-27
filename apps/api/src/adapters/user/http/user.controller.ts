@@ -13,7 +13,11 @@ import {
   Put,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '@infrastructure/auth/guards/jwt-auth.guard';
-import { UserDto } from '@application/user/dto/user.dto';
+import {
+  profilePatch,
+  UpdateUserDto,
+} from '@application/user/dto/update-user.dto';
+import { ChangePasswordDto } from '@application/user/dto/change-password.dto';
 import { UserService } from '@application/user/user.service';
 import { User } from '@domain/user/user.entity';
 import { LoggingService } from '@infrastructure/log/logger.service';
@@ -25,7 +29,7 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly logger: LoggingService,
-  ) { }
+  ) {}
 
   @Get('profile')
   async getProfile(@Request() req): Promise<PublicUser | null> {
@@ -37,10 +41,23 @@ export class UserController {
     return toPublicUser(user);
   }
 
+  /**
+   * Declared before `PUT :id`: Nest matches routes in declaration order, and
+   * `password` would otherwise bind to the id parameter.
+   */
+  @Put('password')
+  async changePassword(@Body() dto: ChangePasswordDto, @Req() req) {
+    return this.userService.changePassword(
+      req.user.userId,
+      dto.currentPassword,
+      dto.newPassword,
+    );
+  }
+
   @Put(':id')
   async updateUser(
     @Param('id') id: string,
-    @Body() updateUserDto: Partial<UserDto>,
+    @Body() updateUserDto: UpdateUserDto,
     @Req() req,
   ) {
     const currentUser = req.user;
@@ -54,10 +71,12 @@ export class UserController {
       );
     }
 
-    const updated = await this.userService.updateUser(currentUser.userId, {
-      ...updateUserDto,
-      updatedAt: new Date(),
-    });
+    // Only the editable profile fields reach the repository. Spreading the
+    // body would let the caller write `role`, `email` or `authProvider`.
+    const updated = await this.userService.updateUser(
+      currentUser.userId,
+      profilePatch(updateUserDto),
+    );
 
     // Same leak class as /user/profile: the updated row still contains
     // `password`/`refreshToken`.

@@ -97,9 +97,12 @@ export function PersonalInfoForm() {
     e.preventDefault();
     setIsSaving(true);
     try {
+      // Only the fields the API persists. Email is identity, not profile:
+      // changing it needs a verified flow, and sending it here would be
+      // silently dropped.
       updateUserMutation({
         id: Number(user?.id),
-        user: formData,
+        user: { name: formData.name, surname: formData.surname },
       });
     } catch (error) {
       console.error("Error submitting form:", error);
@@ -184,9 +187,11 @@ export function PersonalInfoForm() {
                 name="email"
                 type="email"
                 value={formData.email}
-                onChange={handleChange}
-                disabled={!isEditing}
+                disabled
               />
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {t("profile.emailReadOnly")}
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="phone">{t("profile.phoneNumber")}</Label>

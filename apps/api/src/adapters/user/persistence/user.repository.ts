@@ -1,15 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { UserDto } from '@application/user/dto/user.dto';
 import { Budget } from '@domain/dashboard/budget.entity';
 import { ExpenseCategory } from '@domain/dashboard/expense-category.entity';
 import { Overview } from '@domain/dashboard/overview.entity';
 import { Transaction } from '@domain/dashboard/transaction.entity';
-import { User, normalizeEmail } from '@domain/user/user.entity';
+import { User, BCRYPT_COST, normalizeEmail } from '@domain/user/user.entity';
 import { UserSettings } from '@domain/user/user-settings.entity';
 import { UserRepositoryPort } from '@domain/user/user.repository.port';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 
 @Injectable()
 export class UserRepositoryImpl implements UserRepositoryPort {
@@ -87,6 +89,19 @@ export class UserRepositoryImpl implements UserRepositoryPort {
   }
 
   /**
+   * Removes the local password of an account.
+   *
+   * Used when a provider proves the mailbox of the operator account: a
+   * password registered before the address belonged to its owner is a second
+   * credential, and it must not survive the promotion. The column is nullable;
+   * the entity types it as `string` because every hydrated row with a password
+   * has one, so the cast writes SQL NULL through the targeted update.
+   */
+  async clearPassword(id: number): Promise<void> {
+    await this.repo.update(id, { password: null as unknown as string });
+  }
+
+  /**
    * Role-only update. Deliberately uses `repo.update` instead of
    * `preload` + `save`: the entity's `@BeforeUpdate hashPassword` hook would
    * re-hash the already-hashed column and lock the account out. No password
@@ -96,28 +111,71 @@ export class UserRepositoryImpl implements UserRepositoryPort {
     await this.repo.update(id, { role });
   }
 
+  /**
+   * Demotes every superadmin except `keepUserId`, returning how many rows
+   * changed.
+   *
+   * `SUPERADMIN_EMAIL` names the one operator, so a second row with the role
+   * is always a leftover — an old address, a manual UPDATE, or the signup
+   * role hole — and it would keep full backoffice access. `update()` bypasses
+   * the entity hooks on purpose (see `setRole`).
+   */
+  /**
+   * Demotes every superadmin except `keepUserId` and returns the ids it
+   * demoted.
+   *
+   * The ids matter: a demoted operator's refresh token still lives in Redis,
+   * and `/auth/refresh` would keep renewing it. A bare count would leave the
+   * caller unable to revoke those sessions.
+   */
+  async demoteSuperAdminsExcept(keepUserId: number): Promise<number[]> {
+    const result = await this.repo
+      .createQueryBuilder()
+      .update(User)
+      .set({ role: 'user' })
+      .where('role = :role', { role: 'superadmin' })
+      .andWhere('id != :id', { id: keepUserId })
+      .returning(['id'])
+      .execute();
+
+    return ((result.raw ?? []) as Array<{ id: number }>).map((row) => row.id);
+  }
+
+  /** Reads only the role, for flows that must not trust a token claim. */
+  async findRoleById(id: number): Promise<{ id: number; role: string } | null> {
+    return this.repo.findOne({ where: { id }, select: ['id', 'role'] });
+  }
+
+  /**
+   * Targeted UPDATE: only the columns present in the patch are written.
+   *
+   * `repo.preload` + `repo.save` used to read the row, merge the partial and
+   * write EVERY column back. That read-modify-write could resurrect a stale
+   * `role` — a profile save racing the operator handover would undo the
+   * demotion — and it rewrote fields nobody asked to change.
+   *
+   * Hashing lives here because `repo.update` bypasses the entity hooks; the
+   * `@BeforeUpdate` hook still covers callers that go through `repo.save`.
+   */
   async updateUser(id: number, updateUserDto: Partial<UserDto>): Promise<User> {
-    // `repo.preload({ id, ...partial })` reads the row, builds a User
-    // entity instance with the partial MERGED on top of the loaded
-    // values (so `password` overwrites the existing hash in memory
-    // BEFORE hooks fire), and returns the hydrated entity. The
-    // subsequent `repo.save(preloaded)` then fires the User entity's
-    // `@BeforeUpdate hashPassword` hook which bcrypt-hashes the new
-    // plaintext — see `User.hashPassword` in
-    // `apps/api/src/domain/user/user.entity.ts`.
-    //
-    // This is the TypeORM-idiomatic pattern for an UPDATE-with-hooks.
-    // The previous `repo.update(id, partial)` ran a bare UPDATE
-    // statement that BYPASSed hooks; service-layer callers compensated
-    // by manually pre-hashing, which is the exact footgun that caused
-    // the /profile password update 401-on-login bug. The hook is now
-    // the single source of truth for password hashing — callers
-    // forward plaintext and trust the entity.
-    const preloaded = await this.repo.preload({ id, ...updateUserDto });
-    if (!preloaded) {
+    const { password, ...rest } = updateUserDto;
+    const patch: QueryDeepPartialEntity<User> = { ...rest };
+    if (password) {
+      patch.password = await bcrypt.hash(password, BCRYPT_COST);
+    }
+
+    if (Object.keys(patch).length > 0) {
+      const result = await this.repo.update(id, patch);
+      if (!result.affected) {
+        throw new NotFoundException(`⚠️ User with id ${id} not found`);
+      }
+    }
+
+    const updated = await this.repo.findOne({ where: { id } });
+    if (!updated) {
       throw new NotFoundException(`⚠️ User with id ${id} not found`);
     }
-    return this.repo.save(preloaded);
+    return updated;
   }
 
   async deleteUserTransactional(id: number): Promise<void> {

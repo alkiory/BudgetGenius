@@ -953,9 +953,39 @@ browsing accounts. It is gated by the `superadmin` role (`user` and `admin`
 are both rejected by the API).
 
 **Operator account.** Set `SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD`; on boot
-the seeder creates that account, or promotes an existing one with that email.
-In development a local fallback is used (`superadmin@admin.com` /
-`#Password123`). Nothing is seeded when both variables are empty.
+the seeder creates that account, or promotes an existing one whose password
+matches `SUPERADMIN_PASSWORD` — the only proof of mailbox ownership available
+without a provider. A Google account has no local password, so boot leaves it
+alone and the role is granted on its next Google sign-in, where the provider
+verifies the mailbox; that same session is issued with the role (the JWT
+carries it), and every other superadmin is demoted in the same step, so a
+handover leaves exactly one operator. Password logins never grant the role:
+signup does not verify the address, so a password registered at that address
+before the operator's first Google sign-in is deleted (and its refresh token
+revoked) in the same step — the earlier registrant loses the credential instead
+of sharing the account the provider just proved. The profile endpoint only edits name and
+surname, so `role`, `email` and `authProvider` are not client-controlled. The
+backoffice guard and the catalogue resolve the role from the database, and the
+guard also requires the account address to be the configured one, so a demoted
+account loses access immediately instead of keeping it until its token expires
+— and a leftover `superadmin` row cannot use the backoffice even if the cleanup
+failed. `/auth/refresh` re-reads the role too (the claim is only a snapshot
+from sign-in time), and a demotion revokes the demoted account's refresh token,
+so rotation cannot mint a `superadmin` access token for an account the row no
+longer backs. Passwords are changed through `PUT /user/password` with the current
+password, which revokes the stored refresh token **and** bumps the account's
+session epoch: access tokens carry the epoch they were signed with,
+`JwtStrategy` compares it with the stored counter, so every token already
+issued — this device's included — stops working and each device signs in again
+with the new password. The emailed reset revokes and bumps the same way, since
+a reset is what you use when the account may be compromised; a wrong current
+password answers 400 (a 401 would be read by the SPA as an expired session)
+and counts against a per-account bucket of 5 attempts / 15 minutes, because the
+global throttle keys on the client-chosen `X-Device-Id`. Rotation reads the
+epoch *before* validating the stored refresh token, so a change racing a
+refresh cannot mint a token that outlives it. `PUT /user/:id` only accepts name and
+surname. In development a local fallback is used (`superadmin@admin.com` /
+`#Password123`). Nothing is seeded when `SUPERADMIN_EMAIL` is empty.
 
 **Schema.** The backoffice tables (`app_modules`, `app_api_keys`,
 `app_notifications`) are created by migration `1800000000015`; migration

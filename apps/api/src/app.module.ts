@@ -19,6 +19,7 @@ import { LoggingService } from '@infrastructure/log/logger.service';
 import { AiModule } from './infrastructure/ai/module/ai.module';
 import { CookieService } from '@infrastructure/config/cookie.service';
 import { RedisService } from '@infrastructure/config/redis.service';
+import { TokenEpochService } from '@application/auth/token-epoch.service';
 import { DashboardModule } from '@infrastructure/dashboard/dashboard.module';
 import { CoreModule } from '@infrastructure/core/core.module';
 import { UserSettingsService } from '@application/user/user-settings.service';
@@ -132,6 +133,8 @@ import { AppCatalogModule } from '@infrastructure/catalog/app-catalog.module';
     UserSettingsService,
     LoggingService,
     RedisService,
+    // UserService (provided here) bumps it on a password change.
+    TokenEpochService,
     {
       provide: 'APP_GUARD',
       useClass: ThrottlerBehindProxyGuard,

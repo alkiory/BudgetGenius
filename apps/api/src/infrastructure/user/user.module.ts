@@ -6,11 +6,21 @@ import { UserService } from '@application/user/user.service';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { UserSettingsModule } from './user-settings.module';
+import { RedisService } from '@infrastructure/config/redis.service';
+import { TokenEpochService } from '@application/auth/token-epoch.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([User]), UserSettingsModule],
   controllers: [UserController],
-  providers: [UserService, UserRepositoryImpl, LoggingService],
+  providers: [
+    UserService,
+    UserRepositoryImpl,
+    LoggingService,
+    // Used to revoke the stored refresh token on a password change.
+    RedisService,
+    // Bumped by that same change so access tokens die with it.
+    TokenEpochService,
+  ],
   exports: [UserService, UserRepositoryImpl],
 })
 export class UserModule {}

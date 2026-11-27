@@ -6,7 +6,7 @@ import {
   AppModuleKind,
   AppModuleStatus,
 } from '@domain/superadmin/app-module.entity';
-import { UserRole } from '@domain/user/user.entity';
+import { User, UserRole } from '@domain/user/user.entity';
 
 /**
  * Read side of the catalogue registered in the backoffice.
@@ -26,10 +26,23 @@ export class AppCatalogService {
   constructor(
     @InjectRepository(AppModule)
     private readonly modules: Repository<AppModule>,
+    // The role is read from the row, not from the JWT. A demoted operator's
+    // token keeps claiming `superadmin` for up to seven days, and the private
+    // half of the inventory (beta/disabled pages, internal modules) must not
+    // stay readable through it.
+    @InjectRepository(User)
+    private readonly users: Repository<User>,
   ) {}
 
-  async findVisibleFor(role?: string): Promise<AppModule[]> {
+  async findVisibleFor(userId?: number): Promise<AppModule[]> {
     const order = { sortOrder: 'ASC' as const, name: 'ASC' as const };
+    const account = userId
+      ? await this.users.findOne({
+          where: { id: Number(userId) },
+          select: ['id', 'role'],
+        })
+      : null;
+    const role = account?.role;
 
     if (role === UserRole.SUPERADMIN) {
       // The operator reviews the whole inventory, including what is not live

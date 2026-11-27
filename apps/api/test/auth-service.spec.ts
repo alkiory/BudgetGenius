@@ -6,6 +6,7 @@ import { LoggingService } from '@infrastructure/log/logger.service';
 import { RedisService } from '@infrastructure/config/redis.service';
 import { PasswordResetRepository } from '@adapters/auth/persistence/password-reset.repository';
 import { User } from '@domain/user/user.entity';
+import { TokenEpochService } from '@application/auth/token-epoch.service';
 
 import * as bcrypt from 'bcryptjs';
 import { ForgotPasswordDto } from '@application/auth/dto/forgot-password.dto';
@@ -49,6 +50,8 @@ describe('AuthService', () => {
   // instance that the AuthService is using for its Redis interactions.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let redisServiceMock: any;
+  // Session epoch: bumped on password change/reset, read by JwtStrategy.
+  let tokenEpochMock: any;
 
   beforeEach(async () => {
     // Mock bcrypt.compare so we don't need a real bcrypt hash in the fixture.
@@ -57,6 +60,10 @@ describe('AuthService', () => {
       .spyOn(bcrypt, 'compare')
       .mockImplementation((() => Promise.resolve(true)) as never);
 
+    tokenEpochMock = {
+      current: jest.fn().mockResolvedValue(0),
+      bump: jest.fn().mockResolvedValue(1),
+    };
     const jwtServiceMock = {
       sign: jest.fn(() => 'mock-access-token'),
     };
@@ -69,6 +76,9 @@ describe('AuthService', () => {
     };
     const userRepositoryMock = {
       findByEmail: jest.fn().mockResolvedValue(user),
+      findRoleById: jest
+        .fn()
+        .mockResolvedValue({ id: user.id, role: user.role }),
       // Default implementation for `resetPassword` — mirrors the real one
       // (records the call) so per-test spies can inspect / override.
       updateUser: jest
@@ -129,6 +139,7 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: jwtServiceMock },
         { provide: UserRepositoryImpl, useValue: userRepositoryMock },
         { provide: RedisService, useValue: redisServiceMock },
+        { provide: TokenEpochService, useValue: tokenEpochMock },
         { provide: LoggingService, useValue: loggerMock },
         {
           provide: PasswordResetRepository,
@@ -396,9 +407,48 @@ describe('AuthService', () => {
       .calls[0];
     expect(updateArg.password).toBe('NewP4ssword!');
 
+    // The session opened before the reset must not survive it: a stolen
+    // refresh token would otherwise keep rotating access tokens.
+    expect(redisServiceMock.delete).toHaveBeenCalledWith(
+      `refreshToken:${user.id}`,
+    );
+    // Access tokens already issued for the account are dead as well.
+    expect(tokenEpochMock.bump).toHaveBeenCalledWith(user.id);
+
     // Token must be deleted so it can't be reused.
     expect(passwordResetRepositoryMock.deleteToken).toHaveBeenCalledWith(
       'tok-1',
+    );
+  });
+
+  it('returns the stored role on refresh instead of the token claim', async () => {
+    redisServiceMock.get.mockResolvedValueOnce('stored-refresh-token');
+    (userRepository as any).findRoleById.mockResolvedValueOnce({
+      id: user.id,
+      role: 'user',
+    });
+
+    await expect(
+      authService.refreshToken(user.id, 'stored-refresh-token'),
+    ).resolves.toEqual({ refreshed: true, role: 'user', epoch: 0 });
+    expect((userRepository as any).findRoleById).toHaveBeenCalledWith(user.id);
+  });
+
+  it('reads the epoch before the stored refresh token so a racing change wins', async () => {
+    redisServiceMock.get.mockResolvedValueOnce('stored-refresh-token');
+    tokenEpochMock.current.mockResolvedValueOnce(0);
+
+    const result = await authService.refreshToken(
+      user.id,
+      'stored-refresh-token',
+    );
+
+    // The token is stamped with the epoch read BEFORE the credential was
+    // confirmed. A password change that lands in between bumps the epoch, so
+    // this token is already stale instead of inheriting the new value.
+    expect(result.epoch).toBe(0);
+    expect(tokenEpochMock.current.mock.invocationCallOrder[0]).toBeLessThan(
+      redisServiceMock.get.mock.invocationCallOrder[0],
     );
   });
 
@@ -625,6 +675,13 @@ describe('AuthService', () => {
           AuthService,
           { provide: JwtService, useValue: { sign: jest.fn() } },
           {
+            provide: TokenEpochService,
+            useValue: {
+              current: jest.fn().mockResolvedValue(0),
+              bump: jest.fn().mockResolvedValue(1),
+            },
+          },
+          {
             provide: UserRepositoryImpl,
             useValue: { findByEmail: jest.fn(), createUser: jest.fn() },
           },
@@ -671,7 +728,9 @@ describe('AuthService', () => {
       expect(result.email).toBe('returning@user.com');
       // No new user → no save, no settings seed.
       expect(queryRunnerStub.manager.save).not.toHaveBeenCalled();
-      expect(userSettingsServiceMock.getOrCreateSettings).not.toHaveBeenCalled();
+      expect(
+        userSettingsServiceMock.getOrCreateSettings,
+      ).not.toHaveBeenCalled();
       expect(queryRunnerStub.commitTransaction).toHaveBeenCalledTimes(1);
       expect(queryRunnerStub.release).toHaveBeenCalledTimes(1);
       expect(queryRunnerStub.rollbackTransaction).not.toHaveBeenCalled();
@@ -772,7 +831,9 @@ describe('AuthService', () => {
       expect(queryRunnerStub.release).toHaveBeenCalledTimes(1);
       // Settings seed must NOT have run because save() failed before
       // the transaction committed.
-      expect(userSettingsServiceMock.getOrCreateSettings).not.toHaveBeenCalled();
+      expect(
+        userSettingsServiceMock.getOrCreateSettings,
+      ).not.toHaveBeenCalled();
     });
   });
 });

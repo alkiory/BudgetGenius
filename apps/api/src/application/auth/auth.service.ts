@@ -27,6 +27,8 @@ import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { DataSource } from 'typeorm';
 import { ResendMailerService } from '@infrastructure/mail/resend-mailer.service';
 import { UserSettingsService } from '@application/user/user-settings.service';
+import { resolveOperatorEmail } from '@application/user/operator-email';
+import { TokenEpochService } from './token-epoch.service';
 import { blacklistKeyForToken } from '@infrastructure/config/strategy/jwt.strategy';
 
 /** Per-email brute-force protection. Anything tighter would block legitimate users
@@ -94,6 +96,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly mailer: ResendMailerService,
     private readonly userSettingsService: UserSettingsService,
+    private readonly tokenEpoch: TokenEpochService,
   ) {}
 
   findOne(email: string) {
@@ -161,7 +164,7 @@ export class AuthService {
         'email',
       );
 
-      const { accessToken, refreshToken } = this.issueSession({
+      const { accessToken, refreshToken } = await this.issueSession({
         id: existingUser.id,
         email: existingUser.email,
         role: existingUser.role,
@@ -205,7 +208,7 @@ export class AuthService {
       throw error;
     }
 
-    const { accessToken, refreshToken } = this.issueSession({
+    const { accessToken, refreshToken } = await this.issueSession({
       id: newUser.id,
       email: newUser.email,
       role: newUser.role,
@@ -227,14 +230,138 @@ export class AuthService {
     };
   }
 
+  /**
+   * Grants the operator role to the one address in `SUPERADMIN_EMAIL`, and
+   * retires whoever held it before.
+   *
+   * Only the social sign-in calls this: the identity provider has just proved
+   * that the mailbox belongs to the person signing in. The email/password path
+   * deliberately does not — signup never verified the mailbox, so a password
+   * login cannot tell the operator from someone who registered the address
+   * first. Password-protected operators are promoted by the boot seeder, which
+   * requires `SUPERADMIN_PASSWORD`.
+   *
+   * The session is issued after this returns: the JWT carries the role and
+   * `JwtStrategy` does not re-read it from the database.
+   */
+  private async ensureOperatorRole(user: User): Promise<User> {
+    const configured = resolveOperatorEmail();
+    if (!configured) return user;
+    if (normalizeEmail(user.email) !== configured) return user;
+
+    // The provider just proved this mailbox belongs to the person signing in.
+    // A local password on the row is therefore a second owner — someone who
+    // registered the address before it was the operator's — and it must not
+    // survive the promotion. Clear it, then revoke the session it could have
+    // opened, so the earlier registrant loses the backoffice they were never
+    // granted.
+    if (user.password) {
+      try {
+        await this.userRepository.clearPassword(user.id);
+        this.logger.warn(
+          `🛡️ Removed a local password from the operator account (id=${user.id})`,
+        );
+      } catch (error) {
+        // Best effort, retried on the next sign-in. Denying this sign-in would
+        // not remove the squatter's access and would lock out the owner.
+        this.logger.error(
+          `🛡️ Could not clear the operator's local password (id=${user.id}): ${
+            (error as Error).message
+          }`,
+        );
+      }
+
+      try {
+        await this.invalidateRefreshToken(user.id);
+      } catch (error) {
+        this.logger.error(
+          `🛡️ Could not revoke the operator's refresh token (id=${user.id}): ${
+            (error as Error).message
+          }`,
+        );
+      }
+    }
+
+    if (user.role !== UserRole.SUPERADMIN) {
+      try {
+        await this.userRepository.setRole(user.id, UserRole.SUPERADMIN);
+      } catch (error) {
+        // Best effort: a failed role write must not turn the operator's sign-in
+        // into a 401. The next sign-in (or boot) retries.
+        this.logger.error(
+          `🛡️ Could not promote the operator account (id=${user.id}): ${
+            (error as Error).message
+          }`,
+        );
+        return user;
+      }
+
+      user.role = UserRole.SUPERADMIN;
+      this.logger.log(
+        `🛡️ Operator account promoted to superadmin (id=${user.id})`,
+      );
+    }
+
+    // Runs on every operator sign-in, not only on the promotion: a previous
+    // cleanup may have failed, and the old account must not keep the role
+    // until the next restart.
+    await this.demotePreviousOperators(user.id);
+    return user;
+  }
+
+  /**
+   * Handover: the boot seeder cannot demote for a social operator (it cannot
+   * verify a Google account at boot), so the confirmation that just happened
+   * is the moment to retire the previous one. Without this, a replacement
+   * operator would coexist with the old account until the next restart.
+   */
+  private async demotePreviousOperators(keepUserId: number): Promise<void> {
+    try {
+      const demoted = await this.userRepository.demoteSuperAdminsExcept(
+        keepUserId,
+      );
+
+      for (const id of demoted) {
+        // A demoted operator's refresh token is still in Redis, and the
+        // rotation path would keep renewing it. Revoke per account so one
+        // Redis hiccup does not leave the rest alive.
+        try {
+          await this.invalidateRefreshToken(id);
+        } catch (error) {
+          this.logger.error(
+            `🛡️ Could not revoke the refresh token of demoted operator ` +
+              `id=${id}: ${(error as Error).message}`,
+          );
+        }
+      }
+
+      if (demoted.length > 0) {
+        this.logger.warn(
+          `🛡️ Demoted ${demoted.length} previous operator account(s) — ` +
+            `id=${keepUserId} is the only one`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `🛡️ Could not demote the previous operator: ${
+          (error as Error).message
+        }`,
+      );
+    }
+  }
+
   /** Signs the access/refresh pair with an explicit, non-interchangeable type. */
-  private issueSession(user: SessionUser): {
+  private async issueSession(user: SessionUser): Promise<{
     accessToken: string;
     refreshToken: string;
-  } {
+  }> {
+    // Stamped at sign time; `JwtStrategy` compares it with the account's
+    // current epoch, so a password change can end this token early.
+    const epoch = await this.tokenEpoch.current(user.id);
+
     return {
       accessToken: this.jwtService.sign(
-        { ...user, typ: ACCESS_TOKEN_TYPE },
+        { ...user, epoch, typ: ACCESS_TOKEN_TYPE },
         { expiresIn: '7d' },
       ),
       refreshToken: this.jwtService.sign(
@@ -318,8 +445,12 @@ export class AuthService {
       // legítimos que tuvieron typos previos.
       await this.redisService.delete(attemptsKey);
 
-      // 5. Generar tokens (JWT)
-      const { accessToken, refreshToken } = this.issueSession({
+      // 5. Deliberately NOT `ensureOperatorRole` here: a password login only
+      // proves knowledge of a password, and signup never verified the mailbox,
+      // so granting the role by address would hand the backoffice to whoever
+      // registered that address first. Password operators are promoted by the
+      // boot seeder, which requires SUPERADMIN_PASSWORD.
+      const { accessToken, refreshToken } = await this.issueSession({
         id: user.id,
         email: user.email,
         role: user.role,
@@ -344,6 +475,14 @@ export class AuthService {
 
   async refreshToken(id: number, refreshToken: string) {
     try {
+      // Read the epoch BEFORE validating the stored credential. A password
+      // change racing this call either deletes that credential (the check
+      // below then fails) or bumps the epoch after this read, so the token we
+      // mint carries an epoch `JwtStrategy` already rejects. Reading it after
+      // the check would let a change that finished in between hand us its new
+      // epoch, and the minted token would survive the change that ended it.
+      const epoch = await this.tokenEpoch.current(Number(id));
+
       const storedToken = await this.redisService.get(`refreshToken:${id}`);
       if (!storedToken) {
         throw new UnauthorizedException('⛔ Token expired, login again.');
@@ -353,9 +492,15 @@ export class AuthService {
         throw new UnauthorizedException('⛔ Invalid refresh token');
       }
 
-      // The controller mints the new access token from the verified
-      // refresh claims; this method only enforces Redis-side revocation.
-      return { refreshed: true };
+      // The caller signs the new access token, and it must not copy the role
+      // out of the refresh claims: after a handover the old operator's token
+      // still says `superadmin` until it expires. The row is the only truth.
+      const account = await this.userRepository.findRoleById(Number(id));
+      if (!account) {
+        throw new UnauthorizedException('⛔ Invalid refresh token');
+      }
+
+      return { refreshed: true, role: account.role, epoch };
     } catch (error) {
       throw error;
     }
@@ -469,9 +614,11 @@ export class AuthService {
     }
 
     // Delegar toda la lógica a validateOAuthUser
-    const userEntity = await this.validateOAuthUser(profile);
+    const userEntity = await this.ensureOperatorRole(
+      await this.validateOAuthUser(profile),
+    );
 
-    const { accessToken, refreshToken } = this.issueSession({
+    const { accessToken, refreshToken } = await this.issueSession({
       id: userEntity.id,
       email: userEntity.email,
       role: userEntity.role,
@@ -655,14 +802,23 @@ export class AuthService {
       throw new NotFoundException('⚠️ User not found');
     }
 
-    // `userRepository.updateUser` runs `repo.preload + repo.save`, which
-    // fires the User entity's `@BeforeUpdate hashPassword` hook — the
-    // hook is the single source of truth for password hashing. Forward
-    // the plaintext: the @BeforeUpdate body will bcrypt-hash it before
-    // the SQL UPDATE runs.
+    // `updateUser` hashes a supplied plaintext password itself (it writes a
+    // targeted UPDATE, which bypasses the entity hooks). Forward the
+    // plaintext; it is never stored as-is.
     await this.userRepository.updateUser(user.id, {
       password: dto.newPassword,
     });
+
+    // A reset is the flow you reach for when the account may be compromised.
+    // The stored refresh token lives in Redis, so changing the row does not
+    // touch it: revoke it here too, or a stolen session keeps minting access
+    // tokens for up to seven days after the victim "recovered" the account.
+    await this.invalidateRefreshToken(user.id);
+
+    // The reset also has to end the access tokens already out there: a stolen
+    // seven-day JWT would otherwise outlive the recovery.
+    await this.tokenEpoch.bump(user.id);
+
     await this.passwordResetRepository.deleteToken(resetToken.id);
 
     this.logger.log(`🔑 Password reset successfully for user ${user.email}`);
