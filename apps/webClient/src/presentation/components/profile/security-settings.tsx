@@ -1,3 +1,4 @@
+import { clearAuthAndStateForLogout } from "@adapters/auth/clearAuthAndStateForLogout";
 import { changePassword } from "@application/user/user.service";
 import {
   isValidPassword,
@@ -5,7 +6,10 @@ import {
   UserPasswordNotValidError,
 } from "@domain/user/UserPassword";
 import { errorToast, successToast } from "@presentation/utils/toast";
-import { useMutation } from "@tanstack/react-query";
+import { RoutePaths } from "@presentation/utils/routes";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useDispatch } from "react-redux";
+import { useNavigate } from "react-router";
 import { Eye, EyeOff } from "@presentation/components/ui/animated-icons";
 import type React from "react";
 import { useState } from "react";
@@ -24,6 +28,9 @@ import { Label } from "../ui/label";
 
 export function SecuritySettings() {
   const { t } = useTranslation();
+  const dispatch = useDispatch();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     currentPassword: "",
     newPassword: "",
@@ -50,18 +57,34 @@ export function SecuritySettings() {
     mutationFn: changePassword,
     onMutate: () => setIsSaving(true),
     onSuccess: () => {
-      successToast(t("profile.passwordUpdateSuccess"), 3000, "password-update");
       setIsSaving(false);
       setFormData({
         currentPassword: "",
         newPassword: "",
         confirmPassword: "",
       });
+      successToast(t("profile.passwordUpdateSuccess"), 3000, "password-update");
+      // The API bumped the session epoch, so the access token this tab holds
+      // is already rejected. Staying here would 401 on the next request;
+      // reset the client state and let the user sign in with the new
+      // password.
+      clearAuthAndStateForLogout(dispatch, queryClient);
+      navigate(`${RoutePaths.Auth}/${RoutePaths.Login}`, { replace: true });
     },
-    onError: (error: unknown & { response: { data: { message: string } } }) => {
+    onError: (
+      error: unknown & {
+        response?: { status?: number; data?: { message?: string } };
+      },
+    ) => {
       console.error(error);
-      setError(error?.response?.data?.message);
-      errorToast(error?.response?.data?.message, 3000, "password-update");
+      // The 429 carries the API's Spanish message, which the English UI must
+      // not show; translate it by status instead of passing it through.
+      const message =
+        error?.response?.status === 429
+          ? t("profile.passwordRateLimited")
+          : error?.response?.data?.message ?? t("profile.passwordUpdateError");
+      setError(message);
+      errorToast(message, 3000, "password-update");
       setIsSaving(false);
     },
   });
