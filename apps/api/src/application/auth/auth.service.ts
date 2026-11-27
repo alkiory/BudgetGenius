@@ -228,16 +228,18 @@ export class AuthService {
   }
 
   /**
-   * Grants the operator role to the one address in `SUPERADMIN_EMAIL`.
+   * Grants the operator role to the one address in `SUPERADMIN_EMAIL`, and
+   * retires whoever held it before.
    *
-   * The boot seeder already does this, but it runs before the account may
-   * exist: a Google account is usually created by its first sign-in, after
-   * boot. Signing in proves the mailbox (verified by the provider, or by the
-   * password on the email path), so the role is granted here too — and the
-   * session is issued with it, because the JWT carries the role and the
-   * strategy does not re-read it from the database.
+   * Only the social sign-in calls this: the identity provider has just proved
+   * that the mailbox belongs to the person signing in. The email/password path
+   * deliberately does not — signup never verified the mailbox, so a password
+   * login cannot tell the operator from someone who registered the address
+   * first. Password-protected operators are promoted by the boot seeder, which
+   * requires `SUPERADMIN_PASSWORD`.
    *
-   * Idempotent: an account that is already the operator costs one comparison.
+   * The session is issued after this returns: the JWT carries the role and
+   * `JwtStrategy` does not re-read it from the database.
    */
   private async ensureOperatorRole(user: User): Promise<User> {
     const configured = (process.env.SUPERADMIN_EMAIL ?? '').trim();
@@ -262,7 +264,35 @@ export class AuthService {
     this.logger.log(
       `🛡️ Operator account promoted to superadmin (id=${user.id})`,
     );
+
+    await this.demotePreviousOperators(user.id);
     return user;
+  }
+
+  /**
+   * Handover: the boot seeder cannot demote for a social operator (it cannot
+   * verify a Google account at boot), so the confirmation that just happened
+   * is the moment to retire the previous one. Without this, a replacement
+   * operator would coexist with the old account until the next restart.
+   */
+  private async demotePreviousOperators(keepUserId: number): Promise<void> {
+    try {
+      const demoted = await this.userRepository.demoteSuperAdminsExcept(
+        keepUserId,
+      );
+      if (demoted > 0) {
+        this.logger.warn(
+          `🛡️ Demoted ${demoted} previous operator account(s) — ` +
+            `id=${keepUserId} is the only one`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `🛡️ Could not demote the previous operator: ${
+          (error as Error).message
+        }`,
+      );
+    }
   }
 
   /** Signs the access/refresh pair with an explicit, non-interchangeable type. */
@@ -356,10 +386,11 @@ export class AuthService {
       // legítimos que tuvieron typos previos.
       await this.redisService.delete(attemptsKey);
 
-      // 5. A successful password login proves the mailbox owns the account,
-      // so the single operator address is granted its role here as well.
-      await this.ensureOperatorRole(user);
-
+      // 5. Deliberately NOT `ensureOperatorRole` here: a password login only
+      // proves knowledge of a password, and signup never verified the mailbox,
+      // so granting the role by address would hand the backoffice to whoever
+      // registered that address first. Password operators are promoted by the
+      // boot seeder, which requires SUPERADMIN_PASSWORD.
       const { accessToken, refreshToken } = this.issueSession({
         id: user.id,
         email: user.email,

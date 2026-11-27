@@ -1539,8 +1539,7 @@ function FeatureAnnouncementModal({
   const [level, setLevel] = useState<AppNotificationRow["level"]>(
     module.status === "beta" ? "info" : "success",
   );
-  const [audience, setAudience] =
-    useState<AppNotificationRow["audience"]>("all");
+  const [audience] = useState<AppNotificationRow["audience"]>("all");
 
   const invalid = title.trim().length < 3 || body.trim().length < 3;
 

@@ -1,11 +1,12 @@
 /**
  * The JWT carries the role and `JwtStrategy` does not re-read it from the
  * database, so the operator role has to be granted *before* the session is
- * issued. Promoting only in the boot seeder is not enough either: a Google
- * account is usually created by its first sign-in, long after boot.
+ * issued.
  *
- * These tests pin the ordering, because getting it wrong is invisible — the
- * promotion lands in the database while the token keeps saying "user".
+ * It is granted only from the social sign-in, where the identity provider has
+ * just proved the mailbox. A password login proves a password, not ownership:
+ * signup never verified the address, so promoting there would hand the
+ * backoffice to whoever registered it first.
  */
 
 import * as bcrypt from 'bcryptjs';
@@ -24,6 +25,7 @@ const buildService = (options: { password?: string | null } = {}) => {
   };
   const userRepository = {
     setRole: jest.fn().mockResolvedValue(undefined),
+    demoteSuperAdminsExcept: jest.fn().mockResolvedValue(0),
     findByEmail: jest.fn().mockResolvedValue(user),
   };
   const redisService = {
@@ -84,6 +86,15 @@ describe('operator promotion at sign-in', () => {
     );
   });
 
+  it('retires the previous operator in the same sign-in (handover)', async () => {
+    const { service, user, userRepository } = buildService();
+    jest.spyOn(service as any, 'validateOAuthUser').mockResolvedValue(user);
+
+    await service.oauthLogin({ email: OPERATOR_EMAIL, name: 'Operator' });
+
+    expect(userRepository.demoteSuperAdminsExcept).toHaveBeenCalledWith(5);
+  });
+
   it('does not touch an account with a different address', async () => {
     const { service, user, userRepository } = buildService();
     user.email = 'someone-else@example.com';
@@ -95,6 +106,7 @@ describe('operator promotion at sign-in', () => {
     });
 
     expect(userRepository.setRole).not.toHaveBeenCalled();
+    expect(userRepository.demoteSuperAdminsExcept).not.toHaveBeenCalled();
     expect(session.userEntity.role).toBe('user');
   });
 
@@ -106,6 +118,7 @@ describe('operator promotion at sign-in', () => {
     await service.oauthLogin({ email: OPERATOR_EMAIL, name: 'Operator' });
 
     expect(userRepository.setRole).not.toHaveBeenCalled();
+    expect(userRepository.demoteSuperAdminsExcept).not.toHaveBeenCalled();
   });
 
   it('is idempotent for an account that is already the operator', async () => {
@@ -118,19 +131,19 @@ describe('operator promotion at sign-in', () => {
     expect(userRepository.setRole).not.toHaveBeenCalled();
   });
 
-  it('also promotes on a password login, before the token is signed', async () => {
+  it('never promotes from a password login — signup does not verify the mailbox', async () => {
     const { service, user, userRepository } = buildService({
       password: '$2a$04$stored-hash',
     });
     jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
     const issueSession = jest.spyOn(service as any, 'issueSession');
 
-    await service.login(OPERATOR_EMAIL, 'operator-password');
+    const session = await service.login(OPERATOR_EMAIL, 'attacker-chosen');
 
-    expect(userRepository.setRole).toHaveBeenCalledWith(5, 'superadmin');
-    expect(user).toHaveProperty('role', 'superadmin');
+    expect(userRepository.setRole).not.toHaveBeenCalled();
+    expect(session.user.role).toBe('user');
     expect(issueSession).toHaveBeenCalledWith(
-      expect.objectContaining({ role: 'superadmin' }),
+      expect.objectContaining({ role: 'user' }),
     );
   });
 });

@@ -1,16 +1,16 @@
 /**
- * `SUPERADMIN_EMAIL` names the single operator account.
+ * `SUPERADMIN_EMAIL` names the single operator.
  *
- * Email signup does not verify mailbox ownership, so matching the address
- * alone must not promote a password-protected account: whoever registered it
- * first would inherit the backoffice. Those still have to prove ownership with
- * `SUPERADMIN_PASSWORD`.
+ * Boot can prove ownership only with the account's local password: a matching
+ * `SUPERADMIN_PASSWORD` promotes it, anything else leaves the row alone. A
+ * passwordless (social) account is skipped — the profile endpoint lets its
+ * owner rewrite `email` and `authProvider`, so the stored provider label
+ * proves nothing — and receives the role on its next Google sign-in instead,
+ * where the provider verifies the mailbox.
  *
- * A social-only account has no local credential to compare — the identity
- * provider already verified the mailbox — so for those the configured email is
- * the ownership signal. Without that branch a Google operator could never be
- * promoted, which is how production ended up with a superadmin signing in as a
- * regular user.
+ * The demotion of every other superadmin runs only after a password-verified
+ * operator holds the role, so a refused promotion can never leave the product
+ * with no operator at all.
  */
 
 import * as bcrypt from 'bcryptjs';
@@ -64,7 +64,7 @@ describe('UserSeederService — superadmin promotion', () => {
     process.env = originalEnv;
   });
 
-  it('refuses to promote an account that does not own the configured password', async () => {
+  it('refuses an account that does not own the configured password', async () => {
     const attackerHash = await bcrypt.hash('attacker-password', 4);
     const { seeder, userRepository } = buildSeeder(attackerHash, {
       authProvider: 'email',
@@ -73,6 +73,7 @@ describe('UserSeederService — superadmin promotion', () => {
     await seeder.createDefaultUsers();
 
     expect(userRepository.setRole).not.toHaveBeenCalled();
+    expect(userRepository.demoteSuperAdminsExcept).not.toHaveBeenCalled();
   });
 
   it('promotes an existing account when the configured password matches', async () => {
@@ -86,32 +87,26 @@ describe('UserSeederService — superadmin promotion', () => {
     expect(userRepository.setRole).toHaveBeenCalledWith(3, 'superadmin');
   });
 
-  it('promotes a social-only account: the provider already verified the mailbox', async () => {
+  it('skips a social account: the role is granted on its next Google sign-in', async () => {
     const { seeder, userRepository } = buildSeeder(null);
-
-    await seeder.createDefaultUsers();
-
-    expect(userRepository.setRole).toHaveBeenCalledWith(3, 'superadmin');
-  });
-
-  it('promotes a social-only account even when SUPERADMIN_PASSWORD is unset', async () => {
-    delete process.env.SUPERADMIN_PASSWORD;
-    const { seeder, userRepository } = buildSeeder(null);
-
-    await seeder.createDefaultUsers();
-
-    expect(userRepository.setRole).toHaveBeenCalledWith(3, 'superadmin');
-  });
-
-  it('still refuses a passwordless account labelled as an email signup', async () => {
-    const { seeder, userRepository } = buildSeeder(null, {
-      authProvider: 'email',
-    });
 
     await seeder.createDefaultUsers();
 
     expect(userRepository.setRole).not.toHaveBeenCalled();
+    expect(userRepository.demoteSuperAdminsExcept).not.toHaveBeenCalled();
   });
+
+  it.each(['email', undefined])(
+    'skips a passwordless account labelled authProvider=%s — the label is client-editable',
+    async (authProvider) => {
+      const { seeder, userRepository } = buildSeeder(null, { authProvider });
+
+      await seeder.createDefaultUsers();
+
+      expect(userRepository.setRole).not.toHaveBeenCalled();
+      expect(userRepository.demoteSuperAdminsExcept).not.toHaveBeenCalled();
+    },
+  );
 
   it('leaves an account that is already the operator alone', async () => {
     const { seeder, userRepository } = buildSeeder(null, {
@@ -133,15 +128,18 @@ describe('UserSeederService — superadmin promotion', () => {
     expect(userRepository.demoteSuperAdminsExcept).toHaveBeenCalledWith(3);
   });
 
-  it('demotes after promoting a social account, keeping the operator', async () => {
-    const { seeder, userRepository } = buildSeeder(null);
+  it('demotes after promoting a password-verified operator', async () => {
+    const ownerHash = await bcrypt.hash('operator-password', 4);
+    const { seeder, userRepository } = buildSeeder(ownerHash, {
+      authProvider: 'email',
+    });
 
     await seeder.createDefaultUsers();
 
     expect(userRepository.demoteSuperAdminsExcept).toHaveBeenCalledWith(3);
   });
 
-  it('never demotes when the promotion was refused', async () => {
+  it('never demotes when promotion was refused', async () => {
     const attackerHash = await bcrypt.hash('attacker-password', 4);
     const { seeder, userRepository } = buildSeeder(attackerHash, {
       authProvider: 'email',

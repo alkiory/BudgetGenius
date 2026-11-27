@@ -113,11 +113,13 @@ export class UserSeederService {
    * requires the current password to match `SUPERADMIN_PASSWORD`; otherwise
    * the role is left untouched and the boot logs an actionable warning. A
    * social-only account has no local password (the provider already verified
-   * the mailbox), so there the configured address is the signal. New accounts
-   * are only created when the email is absent and a password is configured.
+   * the mailbox) it is skipped here and promoted on its next Google sign-in.
+   * New accounts are only created when the email is absent and a password is
+   * configured.
    *
-   * Once the operator holds the role, every other `superadmin` row is demoted
-   * to `user`, so the operator is unique by construction.
+   * Once a password-verified operator holds the role, every other
+   * `superadmin` row is demoted to `user`, so the operator is unique by
+   * construction.
    *
    * In development the local fallback (`superadmin@admin.com` / `#Password123`)
    * keeps the backoffice reachable with no extra setup.
@@ -141,16 +143,22 @@ export class UserSeederService {
     const existing = await this.userRepository.findByEmail(email);
     if (existing) {
       if (existing.role !== 'superadmin') {
-        // An email account proves ownership with its local password. A
-        // social-only account has no local credential at all — its mailbox
-        // was verified by the identity provider — so the configured email is
-        // the ownership signal. Refusing those left a Google operator stuck
-        // as a regular user forever.
-        const ownsAccount = existing.password
-          ? Boolean(
-              password && (await bcrypt.compare(password, existing.password)),
-            )
-          : !existing.authProvider || existing.authProvider !== 'email';
+        // A social-only account cannot be verified at boot: the profile
+        // endpoint lets its owner rewrite `email` and `authProvider`, so
+        // trusting the stored provider label would promote whoever pointed
+        // theirs at the operator address. The role is granted on the next
+        // Google sign-in instead, where the provider proves the mailbox.
+        if (!existing.password) {
+          this.logger.warn(
+            `🛡️ Account id=${existing.id} has no local password — the ` +
+              'operator role is granted on its next Google sign-in',
+          );
+          return;
+        }
+
+        const ownsAccount = Boolean(
+          password && (await bcrypt.compare(password, existing.password)),
+        );
         if (!ownsAccount) {
           this.logger.warn(
             `🛡️ Refusing to promote existing account id=${existing.id}: ` +

@@ -953,19 +953,19 @@ browsing accounts. It is gated by the `superadmin` role (`user` and `admin`
 are both rejected by the API).
 
 **Operator account.** Set `SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD`; on boot
-the seeder creates that account, or promotes an existing one with that email.
-An account created by Google has no local password, so for those the
-configured email is the ownership signal; a password-protected account still
-has to prove ownership with `SUPERADMIN_PASSWORD`. The role is granted again on
-every sign-in of that address, so an account created by its first Google login
-becomes the operator immediately and that same session is issued with the role
-(the JWT carries it). Public signup only ever creates `user` accounts — the
-operator role cannot be requested by a client. On boot, every other
-`superadmin` row is demoted to `user`, and the backoffice guard re-reads the
-role from the database, so a demoted account loses access immediately instead
-of keeping it until its token expires. In development a local fallback
-is used (`superadmin@admin.com` / `#Password123`). Nothing is seeded when
-`SUPERADMIN_EMAIL` is empty.
+the seeder creates that account, or promotes an existing one whose password
+matches `SUPERADMIN_PASSWORD` — the only proof of mailbox ownership available
+without a provider. A Google account has no local password, so boot leaves it
+alone and the role is granted on its next Google sign-in, where the provider
+verifies the mailbox; that same session is issued with the role (the JWT
+carries it), and every other superadmin is demoted in the same step, so a
+handover leaves exactly one operator. Password logins never grant the role:
+signup does not verify the address. The profile endpoint only edits name and
+surname, so `role`, `email` and `authProvider` are not client-controlled. The
+backoffice guard and the catalogue resolve the role from the database, so a
+demoted account loses access immediately instead of keeping it until its token
+expires. In development a local fallback is used (`superadmin@admin.com` /
+`#Password123`). Nothing is seeded when `SUPERADMIN_EMAIL` is empty.
 
 **Schema.** The backoffice tables (`app_modules`, `app_api_keys`,
 `app_notifications`) are created by migration `1800000000015`; migration

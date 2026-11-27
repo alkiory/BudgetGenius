@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppModule as AppModuleEntity } from '@domain/superadmin/app-module.entity';
+import { User } from '@domain/user/user.entity';
 import { AppCatalogService } from '@application/catalog/app-catalog.service';
 import { AppCatalogController } from '@adapters/catalog/http/app-catalog.controller';
 
@@ -9,7 +10,7 @@ import { AppCatalogController } from '@adapters/catalog/http/app-catalog.control
  * Authoring stays in `SuperAdminModule`.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([AppModuleEntity])],
+  imports: [TypeOrmModule.forFeature([AppModuleEntity, User])],
   controllers: [AppCatalogController],
   providers: [AppCatalogService],
 })
