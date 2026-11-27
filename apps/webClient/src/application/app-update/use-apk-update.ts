@@ -1,5 +1,3 @@
-import { App as CapacitorApp } from "@capacitor/app";
-import { Directory, Filesystem } from "@capacitor/filesystem";
 import {
   ApkUpdate,
   clearPendingRelease,
@@ -103,15 +101,26 @@ export function useApkUpdate() {
     let disposed = false;
     let removeListener: (() => void) | undefined;
 
-    void CapacitorApp.addListener("resume", () => {
-      void check();
-    }).then((handle) => {
-      if (disposed) {
-        void handle.remove();
-        return;
-      }
-      removeListener = () => void handle.remove();
-    });
+    // Capacitor plugins are `external` in web builds (vite.config.ts). A static
+    // import would leave a bare specifier in the entry chunk that the browser
+    // cannot resolve, blanking the whole SPA; the dynamic import only runs
+    // inside the native guard above.
+    void import("@capacitor/app")
+      .then(({ App: CapacitorApp }) =>
+        CapacitorApp.addListener("resume", () => {
+          void check();
+        }),
+      )
+      .then((handle) => {
+        if (disposed) {
+          void handle.remove();
+          return;
+        }
+        removeListener = () => void handle.remove();
+      })
+      .catch(() => {
+        /* Native bridge unavailable: the check above already ran. */
+      });
 
     return () => {
       disposed = true;
@@ -149,6 +158,9 @@ export function useApkUpdate() {
           : undefined;
 
       if (!path) {
+        // Same reason as the resume listener: keep the plugin out of the
+        // static graph so web builds never emit an unresolved specifier.
+        const { Directory, Filesystem } = await import("@capacitor/filesystem");
         const downloaded = await Filesystem.downloadFile({
           url: release.apkUrl,
           // Cache root only: the FileProvider already shares that directory and
