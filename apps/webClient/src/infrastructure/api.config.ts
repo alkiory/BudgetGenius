@@ -9,6 +9,7 @@ import { getDeviceId } from "./device-id";
 import { isNativePlatform } from "./native";
 import {
   carriesCredentials,
+  clearQueue,
   enqueueRequest,
   registerOnlineListener,
 } from "./offline-queue";
@@ -239,6 +240,9 @@ function endSession(): void {
   sessionExpired = true;
 
   clearPersistedTokens();
+  // Expiry is a session end too: the next person at this browser profile must
+  // not find the previous account's queued amounts and descriptions.
+  clearQueue();
   queryClient.clear();
   store.dispatch(logoutAction());
 

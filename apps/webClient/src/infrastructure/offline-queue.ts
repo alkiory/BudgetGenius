@@ -71,6 +71,21 @@ export function enqueueRequest(
 }
 
 /**
+ * Drops every queued request.
+ *
+ * Called when the session ends: queued bodies carry the previous account's
+ * amounts and descriptions in `localStorage`, and the next person to use this
+ * browser profile must not find them.
+ */
+export function clearQueue(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* storage unavailable — nothing was persisted either */
+  }
+}
+
+/**
  * Process queued requests sequentially with exponential backoff.
  */
 export async function flushQueue(apiInstance: {
