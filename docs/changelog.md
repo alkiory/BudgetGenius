@@ -2,6 +2,14 @@
 
 ---
 
+## [v1.13.2] — 2026-11-27
+
+### Fixed
+
+- announce the release version instead of the commit sha (`a30f1f6`)
+
+---
+
 ## [v1.13.1] — 2026-11-27
 
 ### Fixed
