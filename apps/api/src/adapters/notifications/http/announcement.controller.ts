@@ -1,4 +1,4 @@
-import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@infrastructure/auth/guards/jwt-auth.guard';
 import { AnnouncementService } from '@application/notifications/announcement.service';
@@ -17,7 +17,7 @@ export class AnnouncementController {
 
   @Get()
   @ApiOperation({ summary: 'Live announcements for the signed-in user' })
-  list(@Req() req) {
-    return this.announcements.findLiveForUser(req.user.userId);
+  list() {
+    return this.announcements.findLive();
   }
 }

@@ -178,7 +178,6 @@ export function normalizePageBlockProps(
   if (schema.items) {
     const incoming = Array.isArray(raw.items) ? raw.items : [];
     props.items = incoming
-      .slice(0, schema.items.max)
       .map((item) => {
         const source =
           item && typeof item === 'object'
@@ -190,7 +189,10 @@ export function normalizePageBlockProps(
         }
         return clean;
       })
-      .filter((item) => Object.values(item).some(Boolean));
+      // Drop the blank rows the editor leaves behind BEFORE applying the
+      // cap: an empty row must not take a slot the operator could fill.
+      .filter((item) => Object.values(item).some(Boolean))
+      .slice(0, schema.items.max);
   }
 
   return props;

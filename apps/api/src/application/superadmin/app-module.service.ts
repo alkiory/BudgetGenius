@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import {
   AppModule,
   AppModuleBlock,
@@ -45,6 +45,7 @@ export class AppModuleService {
   constructor(
     @InjectRepository(AppModule)
     private readonly repo: Repository<AppModule>,
+    private readonly dataSource: DataSource,
   ) {}
 
   findAll(): Promise<AppModule[]> {
@@ -72,81 +73,92 @@ export class AppModuleService {
     );
   }
 
+  /**
+   * Updates one entry.
+   *
+   * A rename is a multi-row change: children stop pointing at the old key and
+   * every page that placed the component keeps a dangling reference. All of it
+   * runs in one transaction, so a failure halfway cannot leave the catalogue
+   * half-renamed.
+   */
   async update(id: number, dto: UpdateAppModuleDto): Promise<AppModule> {
-    const module = await this.repo.findOne({ where: { id } });
-    if (!module) {
-      throw new NotFoundException(`Module ${id} not found`);
-    }
-    let renamedFrom: string | null = null;
-    if (dto.key && dto.key.trim().toLowerCase() !== module.key) {
-      const key = dto.key.trim().toLowerCase();
-      const clash = await this.repo.findOne({ where: { key } });
-      if (clash) {
-        throw new ConflictException(
-          `A module with key "${key}" already exists`,
-        );
+    return this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(AppModule);
+      const module = await repo.findOne({ where: { id } });
+      if (!module) {
+        throw new NotFoundException(`Module ${id} not found`);
       }
-      renamedFrom = module.key;
-      module.key = key;
-    }
-    const parentKey =
-      dto.parentKey === undefined
-        ? module.parentKey
-        : normalizeParentKey(dto.parentKey);
-    if (parentKey && parentKey === module.key) {
-      throw new BadRequestException('A module cannot belong to itself');
-    }
-    // A core module is always active: switching it off would break the app.
-    if (module.isCore && dto.status === 'disabled') {
-      throw new ConflictException('Core modules cannot be disabled');
-    }
-    Object.assign(module, {
-      ...dto,
-      key: module.key,
-      parentKey,
-      description:
-        dto.description === undefined
-          ? module.description
-          : dto.description?.trim() || null,
-    });
-    const saved = await this.repo.save(module);
-    // A rename would orphan every reference to the old key: children stop
-    // showing under the module, and pages keep a placement `updateContent`
-    // then rejects as unknown. Follow the rename everywhere in one request.
-    if (renamedFrom) {
-      await this.repo.update(
-        { parentKey: renamedFrom },
-        { parentKey: saved.key },
-      );
+      let renamedFrom: string | null = null;
+      if (dto.key && dto.key.trim().toLowerCase() !== module.key) {
+        const key = dto.key.trim().toLowerCase();
+        const clash = await repo.findOne({ where: { key } });
+        if (clash) {
+          throw new ConflictException(
+            `A module with key "${key}" already exists`,
+          );
+        }
+        renamedFrom = module.key;
+        module.key = key;
+      }
+      const parentKey =
+        dto.parentKey === undefined
+          ? module.parentKey
+          : normalizeParentKey(dto.parentKey);
+      if (parentKey && parentKey === module.key) {
+        throw new BadRequestException('A module cannot belong to itself');
+      }
+      // A core module is always active: switching it off would break the app.
+      if (module.isCore && dto.status === 'disabled') {
+        throw new ConflictException('Core modules cannot be disabled');
+      }
+      Object.assign(module, {
+        ...dto,
+        key: module.key,
+        parentKey,
+        description:
+          dto.description === undefined
+            ? module.description
+            : dto.description?.trim() || null,
+      });
+      const saved = await repo.save(module);
+      // A rename would orphan every reference to the old key: children stop
+      // showing under the module, and pages keep a placement `updateContent`
+      // then rejects as unknown. Follow the rename everywhere in one request.
+      if (renamedFrom) {
+        await repo.update(
+          { parentKey: renamedFrom },
+          { parentKey: saved.key },
+        );
 
-      const pages = await this.repo.find();
-      for (const page of pages) {
-        const sections = page.content?.sections;
-        if (!sections?.length) continue;
+        const pages = await repo.find();
+        for (const page of pages) {
+          const sections = page.content?.sections;
+          if (!sections?.length) continue;
 
-        let changed = false;
-        const migrated = sections.map((section) => {
-          if (!section.componentKeys?.includes(renamedFrom)) return section;
-          changed = true;
-          return {
-            ...section,
-            componentKeys: Array.from(
-              new Set(
-                section.componentKeys.map((key) =>
-                  key === renamedFrom ? saved.key : key,
+          let changed = false;
+          const migrated = sections.map((section) => {
+            if (!section.componentKeys?.includes(renamedFrom)) return section;
+            changed = true;
+            return {
+              ...section,
+              componentKeys: Array.from(
+                new Set(
+                  section.componentKeys.map((key) =>
+                    key === renamedFrom ? saved.key : key,
+                  ),
                 ),
               ),
-            ),
-          };
-        });
+            };
+          });
 
-        if (changed) {
-          page.content = { ...page.content!, sections: migrated };
-          await this.repo.save(page);
+          if (changed) {
+            page.content = { ...page.content!, sections: migrated };
+            await repo.save(page);
+          }
         }
       }
-    }
-    return saved;
+      return saved;
+    });
   }
 
   /**
@@ -263,7 +275,9 @@ export class AppModuleService {
    * Persists a new order for sibling entries (the tabs of one page).
    *
    * One request for the whole list: the app renders `sortOrder ASC`, so the
-   * order of `keys` becomes the order of the page.
+   * order of `keys` becomes the order of the page. The writes share one
+   * transaction — a failure halfway would otherwise leave two entries with the
+   * same position and an arbitrary order in the app.
    */
   async reorder(dto: ReorderAppModulesDto): Promise<AppModule[]> {
     const keys = Array.from(
@@ -284,9 +298,13 @@ export class AppModuleService {
       );
     }
 
-    for (const [index, key] of keys.entries()) {
-      await this.repo.update({ key }, { sortOrder: index });
-    }
+    await this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(AppModule);
+      for (const [index, key] of keys.entries()) {
+        await repo.update({ key }, { sortOrder: index });
+      }
+    });
+
     return this.repo.find({
       where: { key: In(keys) },
       order: { sortOrder: 'ASC', name: 'ASC' },

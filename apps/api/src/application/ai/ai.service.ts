@@ -255,8 +255,18 @@ export class AiService {
 
   // --- Lógica de Historial (Redis) ---
   private async getHistory(userId: number): Promise<any[]> {
-    const data = await this.redis.get(`${this.HISTORY_PREFIX}${userId}`);
-    return data ? JSON.parse(data) : [];
+    const key = `${this.HISTORY_PREFIX}${userId}`;
+    const data = await this.redis.get(key);
+    if (!data) return [];
+    try {
+      const parsed = JSON.parse(data);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      // A value from an older shape must not turn every prompt into a 500:
+      // drop it and start a fresh thread.
+      void this.redis.delete(key).catch(() => undefined);
+      return [];
+    }
   }
 
   private async saveToHistory(
