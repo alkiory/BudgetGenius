@@ -5,8 +5,10 @@ import { UserService } from '@application/user/user.service';
 import { User } from '@domain/user/user.entity';
 import { UserSeederService } from '@application/user/user-seeder.service';
 import { LoggingService } from '@infrastructure/log/logger.service';
+import { RedisService } from '@infrastructure/config/redis.service';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { UserSettingsService } from '@application/user/user-settings.service';
+import { TokenEpochService } from '@application/auth/token-epoch.service';
 
 const user: User = {
   id: 1,
@@ -88,6 +90,19 @@ describe('UserService', () => {
           useValue: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
         },
         {
+          // `changePassword` revokes the stored refresh token here.
+          provide: RedisService,
+          useValue: { delete: jest.fn(), get: jest.fn(), set: jest.fn() },
+        },
+        {
+          // ... and bumps the session epoch so access tokens die with it.
+          provide: TokenEpochService,
+          useValue: {
+            current: jest.fn().mockResolvedValue(0),
+            bump: jest.fn().mockResolvedValue(1),
+          },
+        },
+        {
           // Android APK audit, 2026-06: UserService.createUser now
           // eagerly calls getOrCreateSettings to seed a pre-onboarding
           // user_settings row for admin-created users. The mock below
@@ -152,7 +167,7 @@ describe('UserService', () => {
       email: user.email,
       password: user.password,
       authProvider: user.authProvider as 'email',
-      role: user.role,
+      role: 'user',
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -280,6 +295,11 @@ describe('UserSeederService - seeder', () => {
             createDefaultSettings: jest.fn().mockResolvedValue(undefined),
             updateSettings: jest.fn().mockResolvedValue(undefined),
           },
+        },
+        {
+          // The seeder revokes the refresh token of every account it demotes.
+          provide: RedisService,
+          useValue: { delete: jest.fn().mockResolvedValue(1) },
         },
       ],
     }).compile();

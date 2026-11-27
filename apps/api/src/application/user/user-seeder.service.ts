@@ -4,6 +4,8 @@ import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { UserDto } from './dto/user.dto';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { UserSettingsService } from './user-settings.service';
+import { resolveOperatorEmail } from './operator-email';
+import { RedisService } from '@infrastructure/config/redis.service';
 
 @Injectable()
 export class UserSeederService {
@@ -11,6 +13,7 @@ export class UserSeederService {
     private readonly userRepository: UserRepositoryImpl,
     private readonly userSettings: UserSettingsService,
     private readonly logger: LoggingService,
+    private readonly redisService: RedisService,
   ) {}
 
   async createDefaultUsers(): Promise<void> {
@@ -108,22 +111,25 @@ export class UserSeederService {
    * Ensures a super admin exists.
    *
    * `SUPERADMIN_EMAIL` selects the operator. Email signup does not verify
-   * mailbox ownership, so matching the address is not proof that the operator
-   * owns the row: an attacker could register it first. Promotion therefore
-   * also requires the account's current password to match
-   * `SUPERADMIN_PASSWORD`; otherwise the role is left untouched and the boot
-   * logs an actionable warning. New accounts are only created when the email
-   * is absent and a password is configured.
+   * mailbox ownership, so for a password-protected account the address alone
+   * is not proof — an attacker could register it first — and promotion also
+   * requires the current password to match `SUPERADMIN_PASSWORD`; otherwise
+   * the role is left untouched and the boot logs an actionable warning. A
+   * social-only account has no local password (the provider already verified
+   * the mailbox) it is skipped here and promoted on its next Google sign-in.
+   * New accounts are only created when the email is absent and a password is
+   * configured.
+   *
+   * Once a password-verified operator holds the role, every other
+   * `superadmin` row is demoted to `user`, so the operator is unique by
+   * construction.
    *
    * In development the local fallback (`superadmin@admin.com` / `#Password123`)
    * keeps the backoffice reachable with no extra setup.
    */
   private async ensureSuperAdmin(): Promise<void> {
     const isDev = process.env.NODE_ENV === 'development';
-    const email = (
-      process.env.SUPERADMIN_EMAIL?.trim() ||
-      (isDev ? 'superadmin@admin.com' : '')
-    ).toLowerCase();
+    const email = resolveOperatorEmail();
 
     if (!email) {
       this.logger.log(
@@ -137,10 +143,21 @@ export class UserSeederService {
     const existing = await this.userRepository.findByEmail(email);
     if (existing) {
       if (existing.role !== 'superadmin') {
+        // A social-only account cannot be verified at boot: the profile
+        // endpoint lets its owner rewrite `email` and `authProvider`, so
+        // trusting the stored provider label would promote whoever pointed
+        // theirs at the operator address. The role is granted on the next
+        // Google sign-in instead, where the provider proves the mailbox.
+        if (!existing.password) {
+          this.logger.warn(
+            `🛡️ Account id=${existing.id} has no local password — the ` +
+              'operator role is granted on its next Google sign-in',
+          );
+          return;
+        }
+
         const ownsAccount = Boolean(
-          password &&
-            existing.password &&
-            (await bcrypt.compare(password, existing.password)),
+          password && (await bcrypt.compare(password, existing.password)),
         );
         if (!ownsAccount) {
           this.logger.warn(
@@ -157,6 +174,7 @@ export class UserSeederService {
           `🛡️ Existing account id=${existing.id} promoted to superadmin`,
         );
       }
+      await this.demoteOtherSuperAdmins(existing.id);
       return;
     }
 
@@ -183,6 +201,47 @@ export class UserSeederService {
       locale: 'en-US',
     });
 
+    await this.demoteOtherSuperAdmins(created.id);
     this.logger.log('🛡️ Superadmin account ready');
+  }
+
+  /**
+   * Enforces the one-operator rule once the configured account holds the role.
+   *
+   * Ordering is deliberate: this runs only after the operator is confirmed, so
+   * a refused promotion (password mismatch) can never leave the product with
+   * no superadmin at all. Failures are logged, not thrown — a bad UPDATE must
+   * not take the boot down.
+   */
+  private async demoteOtherSuperAdmins(keepUserId: number): Promise<void> {
+    try {
+      const demoted = await this.userRepository.demoteSuperAdminsExcept(
+        keepUserId,
+      );
+
+      for (const id of demoted) {
+        // Same key `AuthService.invalidateRefreshToken` deletes; a revoked
+        // demotion that keeps its refresh token would rotate back in.
+        try {
+          await this.redisService.delete(`refreshToken:${id}`);
+        } catch (error) {
+          this.logger.error(
+            `🛡️ Could not revoke the refresh token of demoted operator ` +
+              `id=${id}: ${(error as Error).message}`,
+          );
+        }
+      }
+
+      if (demoted.length > 0) {
+        this.logger.warn(
+          `🛡️ Demoted ${demoted.length} extra superadmin account(s) — ` +
+            `id=${keepUserId} is the only operator`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `🛡️ Could not demote extra superadmins: ${(error as Error).message}`,
+      );
+    }
   }
 }

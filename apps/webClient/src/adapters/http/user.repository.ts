@@ -1,4 +1,5 @@
 import { User, UserRepository } from "@domain/index";
+import type { AxiosRequestConfig } from "axios";
 import { UserSettings } from "@domain/user/userSettings";
 import api from "@infrastructure/api.config";
 
@@ -40,4 +41,25 @@ export const userRepository: UserRepository = {
     const response = await api.patch(`/user-settings`, settings);
     return response.data;
   },
+};
+
+/**
+ * Credentials are not a profile field: the server rejects a `password` in
+ * `PUT /user/:id` and exposes a dedicated endpoint that re-authenticates
+ * first.
+ *
+ * Both passwords stay out of the offline queue (`skipOfflineQueue`): the queue
+ * writes bodies to `localStorage` for later replay, which is exactly wrong for
+ * a credential.
+ */
+const NO_OFFLINE_QUEUE: AxiosRequestConfig & { skipOfflineQueue?: boolean } = {
+  skipOfflineQueue: true,
+};
+
+export const changePassword = async (payload: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<{ message: string }> => {
+  const response = await api.put("/user/password", payload, NO_OFFLINE_QUEUE);
+  return response.data;
 };

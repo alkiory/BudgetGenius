@@ -1,13 +1,29 @@
 import {
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
+  NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
+import { RedisService } from '@infrastructure/config/redis.service';
+import { TokenEpochService } from '@application/auth/token-epoch.service';
 import { UserDto } from './dto/user.dto';
 import { CreateUserDto } from '@application/user/dto/create.dto';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { UserSettingsService } from '@application/user/user-settings.service';
+
+/**
+ * Per-user brute-force limit for the current-password check.
+ *
+ * Changing the password already requires a valid access token, so the caller
+ * may be a thief holding one. The global throttle keys on `X-Device-Id`, which
+ * the client chooses; this bucket keys on the account, which they cannot.
+ */
+const PASSWORD_CHANGE_MAX_ATTEMPTS = 5;
+const PASSWORD_CHANGE_WINDOW_SECONDS = 15 * 60;
 
 @Injectable()
 export class UserService {
@@ -15,7 +31,9 @@ export class UserService {
     private readonly userRepository: UserRepositoryImpl,
     private readonly logger: LoggingService,
     private readonly userSettingsService: UserSettingsService,
-  ) { }
+    private readonly redisService: RedisService,
+    private readonly tokenEpoch: TokenEpochService,
+  ) {}
 
   async getById(id: number) {
     return this.userRepository.findById(id);
@@ -58,7 +76,9 @@ export class UserService {
       surname: userDto.surname,
       email: userDto.email,
       password: userDto.password,
-      role: userDto.role,
+      // Signup only ever creates regular accounts; the DTO narrows the field
+      // to `user`, and this default covers callers that omit it.
+      role: userDto.role ?? 'user',
       authProvider: userDto.authProvider,
       refreshToken: null,
       createdAt: userDto.createdAt,
@@ -94,7 +114,10 @@ export class UserService {
       );
     } catch (settingsErr) {
       this.logger.warn(
-        `⚠️ Could not eagerly create user_settings for admin-created user ${userDto.email}: ${(settingsErr as Error).message
+        `⚠️ Could not eagerly create user_settings for admin-created user ${
+          userDto.email
+        }: ${
+          (settingsErr as Error).message
         }. Lazy fallback will still work on first GET /user-settings.`,
       );
     }
@@ -116,6 +139,80 @@ export class UserService {
 
     this.logger.log(`User ${updated.email} updated successfully`);
     return updated;
+  }
+
+  /**
+   * Changes the password of a password account after re-authentication.
+   *
+   * Replaces the old path, where the security form posted `password` to the
+   * profile endpoint: that endpoint now drops credentials, so the write has to
+   * happen here, with the current password verified and the new one hashed.
+   */
+  private passwordChangeAttemptsKey(userId: number): string {
+    return `passwordChange:attempts:${userId}`;
+  }
+
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    const attemptsKey = this.passwordChangeAttemptsKey(userId);
+    const attemptsRaw = await this.redisService.get(attemptsKey);
+    const attempts = attemptsRaw ? Number(attemptsRaw) : 0;
+
+    if (attempts >= PASSWORD_CHANGE_MAX_ATTEMPTS) {
+      this.logger.warn(
+        `🚫 Cambio de contraseña bloqueado por rate-limit ` +
+          `(${attempts}/${PASSWORD_CHANGE_MAX_ATTEMPTS}) para id=${userId}`,
+      );
+      throw new HttpException(
+        {
+          message:
+            '🚫 Demasiados intentos con la contraseña actual. Vuelve a intentarlo en unos minutos.',
+          error: 'Too Many Requests',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundException('⚠️ User not found');
+    }
+    if (!user.password) {
+      throw new BadRequestException(
+        '⚠️ This account signs in with Google and has no password to change',
+      );
+    }
+
+    const matches = await bcrypt.compare(currentPassword, user.password);
+    if (!matches) {
+      await this.redisService.incr(attemptsKey, PASSWORD_CHANGE_WINDOW_SECONDS);
+
+      // 400, not 401: the SPA's response interceptor treats every non-auth 401
+      // as "session expired" — it tries to refresh and then ends the session.
+      // A rejected current password is a validation error, not a dead token.
+      throw new BadRequestException('🔒 Current password is incorrect');
+    }
+
+    await this.userRepository.updateUser(userId, { password: newPassword });
+
+    // Revoke the stored refresh token: every other device's session is bound
+    // to it, so they have to sign in with the new password.
+    await this.redisService.delete(`refreshToken:${userId}`);
+
+    // And end the access tokens already issued, this device's included: a
+    // JWT stays valid until it expires, so the epoch is what actually evicts
+    // whoever was holding the old password.
+    await this.tokenEpoch.bump(userId);
+
+    // A correct current password clears the bucket, so a legitimate user who
+    // mistyped a few times is not left near the limit.
+    await this.redisService.delete(attemptsKey);
+
+    this.logger.log(`🔑 Password changed for user id=${userId}`);
+    return { message: '🔑 Password updated successfully' };
   }
 
   async deleteUser(id: number) {

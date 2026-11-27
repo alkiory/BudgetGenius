@@ -10,10 +10,33 @@ export interface QueuedRequest {
 const STORAGE_KEY = "offline_queue";
 const MAX_RETRIES = 5;
 
+/** Body fields that make a request a credential, never queueable. */
+const CREDENTIAL_FIELDS = ["password", "currentPassword", "newPassword"];
+
+/**
+ * Whether a request body carries a credential.
+ *
+ * The queue persists bodies in `localStorage` so they survive a reload, which
+ * is right for a transaction and wrong for a password: any other profile that
+ * uses the same browser could read it after logout. Credential requests are
+ * rejected instead of queued, so the caller sees the network error.
+ */
+export function carriesCredentials(data: unknown): boolean {
+  if (!data || typeof data !== "object") return false;
+  const record = data as Record<string, unknown>;
+  return CREDENTIAL_FIELDS.some((field) => field in record);
+}
+
 function getQueue(): QueuedRequest[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
+    const parsed: unknown = stored ? JSON.parse(stored) : [];
+    if (!Array.isArray(parsed)) return [];
+    // Drop credential rows left by older builds: they must never be replayed
+    // nor read back out of storage.
+    return (parsed as QueuedRequest[]).filter(
+      (request) => !carriesCredentials(request.data),
+    );
   } catch {
     return [];
   }
@@ -26,6 +49,23 @@ function saveQueue(queue: QueuedRequest[]): void {
 let flushInProgress = false;
 
 /**
+ * Bumped by `clearQueue`, and read by an in-flight flush. A flush that started
+ * before logout must not write the previous account's rows back afterwards.
+ */
+let queueVersion = 0;
+
+/**
+ * Set when the session ends. Nothing is queued until the next successful auth
+ * round-trip (`resumeQueue`), so a request that was already in flight cannot
+ * repopulate the queue after logout.
+ */
+let queueBlocked = false;
+
+export function resumeQueue(): void {
+  queueBlocked = false;
+}
+
+/**
  * Add a failed request to the offline queue.
  */
 export function enqueueRequest(
@@ -33,6 +73,8 @@ export function enqueueRequest(
   url: string,
   data?: unknown,
 ): void {
+  if (queueBlocked || carriesCredentials(data)) return;
+
   const queue = getQueue();
   queue.push({
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
@@ -43,6 +85,23 @@ export function enqueueRequest(
     retryCount: 0,
   });
   saveQueue(queue);
+}
+
+/**
+ * Drops every queued request.
+ *
+ * Called when the session ends: queued bodies carry the previous account's
+ * amounts and descriptions in `localStorage`, and the next person to use this
+ * browser profile must not find them.
+ */
+export function clearQueue(): void {
+  queueVersion += 1;
+  queueBlocked = true;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* storage unavailable — nothing was persisted either */
+  }
 }
 
 /**
@@ -57,6 +116,7 @@ export async function flushQueue(apiInstance: {
   if (flushInProgress) return;
   flushInProgress = true;
 
+  const startedAtVersion = queueVersion;
   const queue = getQueue();
   if (queue.length === 0) {
     flushInProgress = false;
@@ -88,6 +148,13 @@ export async function flushQueue(apiInstance: {
       }
       // If max retries exceeded, drop the request silently
     }
+  }
+
+  // The session ended while this flush was running: drop the rows instead of
+  // writing the previous account's data back to storage.
+  if (queueVersion !== startedAtVersion) {
+    flushInProgress = false;
+    return;
   }
 
   saveQueue(remaining);

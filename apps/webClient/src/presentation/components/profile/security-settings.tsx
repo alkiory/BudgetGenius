@@ -1,17 +1,19 @@
-import { RootState } from "@adapters/store/rootStore";
-import { updateUser } from "@application/user/user.service";
+import { clearAuthAndStateForLogout } from "@adapters/auth/clearAuthAndStateForLogout";
+import { changePassword } from "@application/user/user.service";
 import {
   isValidPassword,
   UserPasswordNotMatchError,
   UserPasswordNotValidError,
 } from "@domain/user/UserPassword";
 import { errorToast, successToast } from "@presentation/utils/toast";
-import { useMutation } from "@tanstack/react-query";
+import { RoutePaths } from "@presentation/utils/routes";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useDispatch } from "react-redux";
+import { useNavigate } from "react-router";
 import { Eye, EyeOff } from "@presentation/components/ui/animated-icons";
 import type React from "react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useSelector } from "react-redux";
 import { Button } from "../ui/button";
 import {
   Card,
@@ -26,8 +28,11 @@ import { Label } from "../ui/label";
 
 export function SecuritySettings() {
   const { t } = useTranslation();
-  const user = useSelector((state: RootState) => state.auth.user);
+  const dispatch = useDispatch();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
+    currentPassword: "",
     newPassword: "",
     confirmPassword: "",
   });
@@ -48,22 +53,38 @@ export function SecuritySettings() {
   };
 
   const { mutate: updatePasswordMutation } = useMutation({
-    mutationKey: ["updateUser"],
-    mutationFn: updateUser,
-    onSuccess: (data) => {
-      console.debug(data);
-      setIsSaving(true);
-      successToast(t("profile.passwordUpdateSuccess"), 3000, "password-update");
+    mutationKey: ["changePassword"],
+    mutationFn: changePassword,
+    onMutate: () => setIsSaving(true),
+    onSuccess: () => {
       setIsSaving(false);
       setFormData({
+        currentPassword: "",
         newPassword: "",
         confirmPassword: "",
       });
+      successToast(t("profile.passwordUpdateSuccess"), 3000, "password-update");
+      // The API bumped the session epoch, so the access token this tab holds
+      // is already rejected. Staying here would 401 on the next request;
+      // reset the client state and let the user sign in with the new
+      // password.
+      clearAuthAndStateForLogout(dispatch, queryClient);
+      navigate(`${RoutePaths.Auth}/${RoutePaths.Login}`, { replace: true });
     },
-    onError: (error: unknown & { response: { data: { message: string } } }) => {
+    onError: (
+      error: unknown & {
+        response?: { status?: number; data?: { message?: string } };
+      },
+    ) => {
       console.error(error);
-      setError(error?.response?.data?.message);
-      errorToast(error?.response?.data?.message, 3000, "password-update");
+      // The 429 carries the API's Spanish message, which the English UI must
+      // not show; translate it by status instead of passing it through.
+      const message =
+        error?.response?.status === 429
+          ? t("profile.passwordRateLimited")
+          : error?.response?.data?.message ?? t("profile.passwordUpdateError");
+      setError(message);
+      errorToast(message, 3000, "password-update");
       setIsSaving(false);
     },
   });
@@ -75,6 +96,10 @@ export function SecuritySettings() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!formData.currentPassword.trim()) {
+      setError(t("profile.currentPasswordRequired"));
+      return;
+    }
     if (!isValidPassword(formData.newPassword)) {
       setError(UserPasswordNotValidError().message);
       return;
@@ -85,10 +110,8 @@ export function SecuritySettings() {
     }
 
     updatePasswordMutation({
-      id: Number(user?.id),
-      user: {
-        password: formData.newPassword,
-      },
+      currentPassword: formData.currentPassword,
+      newPassword: formData.newPassword,
     });
   };
 
@@ -111,6 +134,33 @@ export function SecuritySettings() {
               {success}
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="currentPassword">
+              {t("profile.currentPassword")}
+            </Label>
+            <div className="relative">
+              <Input
+                id="currentPassword"
+                name="currentPassword"
+                type={showPasswords.current ? "text" : "password"}
+                value={formData.currentPassword}
+                onChange={handleChange}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                onClick={() => togglePasswordVisibility("current")}
+              >
+                {showPasswords.current ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="newPassword">{t("profile.newPassword")}</Label>

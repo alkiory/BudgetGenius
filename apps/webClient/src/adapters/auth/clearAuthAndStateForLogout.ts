@@ -1,5 +1,6 @@
 import { logoutAction } from "@adapters/slices/auth/authSlice";
 import { clearPersistedTokens } from "@infrastructure/api.config";
+import { clearQueue } from "@infrastructure/offline-queue";
 import type { QueryClient } from "@tanstack/react-query";
 
 /**
@@ -112,7 +113,12 @@ export function clearAuthAndStateForLogout(
   // would otherwise serve stale `hasCompletedOnboarding: true`.
   queryClient.clear();
 
-  // Side-effect 4: dispatch LAST. This flips authSlice.isAuthenticated
+  // Side-effect 4: drop the offline queue. It holds the previous account's
+  // pending mutations — amounts and descriptions — in `localStorage`, and the
+  // next session on this browser profile must not inherit them.
+  clearQueue();
+
+  // Side-effect 5: dispatch LAST. This flips authSlice.isAuthenticated
   // to false and clears authSlice.user, so AuthGuard's next render's
   // `if (!isAuthenticated && !user) return Navigate(/auth/login)`
   // fires the redirect cleanly. We dispatch AFTER the synchronous

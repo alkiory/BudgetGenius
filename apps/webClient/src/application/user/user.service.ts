@@ -1,4 +1,7 @@
-import { userRepository } from "@adapters/http/user.repository";
+import {
+  changePassword as changePasswordRequest,
+  userRepository,
+} from "@adapters/http/user.repository";
 import { User } from "@domain/index";
 import { ensureUserIsValid } from "@domain/user/user.entity";
 import { UserSettings } from "@domain/user/userSettings";
@@ -28,6 +31,11 @@ export const updateUser = async ({
 export const deleteUser = async (id: number): Promise<void> => {
   return await userRepository.deleteUser(id);
 };
+
+export const changePassword = (credentials: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<{ message: string }> => changePasswordRequest(credentials);
 
 export const getUserSettings = async (): Promise<UserSettings | null> => {
   return await userRepository.getUserSettings();

@@ -165,7 +165,9 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
         user: mockUserEntity,
         isNewUser: true,
       }),
-      refreshToken: jest.fn().mockResolvedValue(undefined),
+      refreshToken: jest
+        .fn()
+        .mockResolvedValue({ refreshed: true, role: 'user', epoch: 0 }),
       addTokenToBlacklist: jest.fn().mockResolvedValue(undefined),
       invalidateRefreshToken: jest.fn().mockResolvedValue(undefined),
     };
@@ -400,6 +402,40 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
   // ─── /auth/refresh (verification of body channel post-fix) ───────
 
   describe('refreshToken', () => {
+    it('signs the role from the database, not from the refresh claim', async () => {
+      // The token was minted before a handover, so its claim is stale.
+      (jwtService.verify as jest.Mock).mockReturnValueOnce({
+        id: mockUserEntity.id,
+        email: mockUserEntity.email,
+        role: 'superadmin',
+        typ: 'refresh',
+      });
+      authService.refreshToken.mockResolvedValueOnce({
+        refreshed: true,
+        role: 'user',
+        epoch: 5,
+      });
+
+      await controller.refreshToken(
+        { cookies: { refreshToken: 'stale-operator-refresh' } } as never,
+        {} as never,
+      );
+
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: mockUserEntity.id,
+          role: 'user',
+          // The rotated token is stamped with the epoch we are at now.
+          epoch: 5,
+        }),
+        expect.anything(),
+      );
+      expect(jwtService.sign).not.toHaveBeenCalledWith(
+        expect.objectContaining({ role: 'superadmin' }),
+        expect.anything(),
+      );
+    });
+
     it('emits BOTH res.cookie calls AND a new accessToken in the body', async () => {
       // refreshToken reads `req.cookies?.refreshToken`. Build a
       // fake req with the cookie attached.
@@ -558,8 +594,14 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
       expect(body).toMatchObject({ success: true });
       expect(authService.addTokenToBlacklist).not.toHaveBeenCalled();
       expect(authService.invalidateRefreshToken).not.toHaveBeenCalled();
-      expect(cookieService.clearCookie).toHaveBeenCalledWith(res, 'accessToken');
-      expect(cookieService.clearCookie).toHaveBeenCalledWith(res, 'refreshToken');
+      expect(cookieService.clearCookie).toHaveBeenCalledWith(
+        res,
+        'accessToken',
+      );
+      expect(cookieService.clearCookie).toHaveBeenCalledWith(
+        res,
+        'refreshToken',
+      );
     });
 
     it('revokes both blacklist and refresh session for a verified access token', async () => {
