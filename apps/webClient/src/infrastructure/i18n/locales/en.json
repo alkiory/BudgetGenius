@@ -637,6 +637,17 @@
     "settings": "Settings",
     "logout": "Logout"
   },
+  "appUpdate": {
+    "title": "New version available",
+    "description": "Version {{version}} is ready. The app will download the package and open Android's installer; you only need to confirm the installation.",
+    "notificationTitle": "BudgetGenius update",
+    "notificationBody": "Version {{version}} is available. Tap to update.",
+    "updateNow": "Update now",
+    "downloading": "Downloading…",
+    "permissionHint": "Android needs your permission to install the update: enable \"Install unknown apps\" for BudgetGenius and try again.",
+    "openSettings": "Open settings",
+    "downloadError": "The update could not be downloaded. Check your connection and try again."
+  },
   "profile": {
     "title": "Profile Settings",
     "description": "Manage your account settings and preferences.",

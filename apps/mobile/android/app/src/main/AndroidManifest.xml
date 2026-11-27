@@ -38,4 +38,10 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- In-app APK updates: hand a downloaded package to the system installer
+         (the user still confirms in Android's dialog, and must allow
+         "install unknown apps" for this app first). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Android 13+ runtime permission for the "update available" notice. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

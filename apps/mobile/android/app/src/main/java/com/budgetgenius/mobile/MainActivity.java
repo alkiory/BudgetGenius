@@ -1,6 +1,7 @@
 package com.budgetgenius.mobile;
 
 import android.content.Intent;
+import android.os.Bundle;
 import android.util.Log;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.Plugin;
@@ -30,6 +31,15 @@ import ee.forgr.capacitor.social.login.SocialLoginPlugin;
  */
 public class MainActivity extends BridgeActivity
     implements ModifiedMainActivityForSocialLoginPlugin {
+
+  @Override
+  public void onCreate(Bundle savedInstanceState) {
+    // Local plugin: the in-app APK update flow (notification + installer).
+    // `registerPlugin` must run before `super.onCreate` so the bridge exposes
+    // `ApkUpdate` to the WebView from the first load.
+    registerPlugin(ApkUpdatePlugin.class);
+    super.onCreate(savedInstanceState);
+  }
 
   @Override
   public void onActivityResult(int requestCode, int resultCode, Intent data) {

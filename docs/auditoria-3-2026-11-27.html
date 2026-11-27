@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Auditoría 3 · BudgetGenius · 2026-11-27</title>
+<style>
+  :root{
+    --bg:#04070f; --panel:rgba(255,255,255,.035); --line:rgba(148,163,184,.18);
+    --ink:#e8eefc; --muted:#93a1bd; --teal:#2dd4bf; --amber:#fbbf24; --rose:#fb7185; --violet:#a78bfa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:
+      radial-gradient(1100px 600px at 12% -10%, rgba(45,212,191,.14), transparent 60%),
+      radial-gradient(900px 500px at 92% 0%, rgba(167,139,250,.12), transparent 60%),
+      var(--bg);
+    color:var(--ink);font:15px/1.65 "Manrope",-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:56px 26px 90px}
+  h1{font-size:clamp(30px,4.6vw,46px);line-height:1.08;letter-spacing:-.03em;margin:0 0 10px;text-wrap:balance}
+  h1 span{color:var(--teal)}
+  .lead{color:var(--muted);max-width:68ch;margin:0 0 26px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:34px}
+  .chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:5px 12px;font-size:12px;color:var(--muted)}
+  .chip b{color:var(--ink);font-weight:600}
+  h2{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:46px 0 14px;font-weight:700}
+  .grid{display:grid;gap:14px}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:760px){.g3,.g2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 20px}
+  .stat b{display:block;font-size:26px;letter-spacing:-.02em;line-height:1.2}
+  .stat span{font-size:12px;color:var(--muted)}
+  .ok{color:var(--teal)} .warn{color:var(--amber)} .bad{color:var(--rose)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  code{font:12.5px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;background:rgba(255,255,255,.05);
+       border:1px solid var(--line);border-radius:6px;padding:1px 5px;color:#c9d7f2}
+  .candidate{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
+    border:1px solid var(--line);border-radius:18px;padding:22px 24px;margin:16px 0}
+  .chead{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;margin-bottom:6px}
+  .num{width:30px;height:30px;flex:none;border-radius:9px;display:grid;place-items:center;
+    background:rgba(45,212,191,.14);border:1px solid rgba(45,212,191,.35);color:var(--teal);font-weight:700;font-size:14px}
+  .candidate h3{margin:2px 0 0;font-size:19px;letter-spacing:-.02em;flex:1;min-width:240px}
+  .badge{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    border-radius:999px;padding:4px 10px;border:1px solid}
+  .b-strong{color:var(--teal);border-color:rgba(45,212,191,.45);background:rgba(45,212,191,.1)}
+  .b-worth{color:var(--amber);border-color:rgba(251,191,36,.4);background:rgba(251,191,36,.08)}
+  .b-spec{color:var(--violet);border-color:rgba(167,139,250,.4);background:rgba(167,139,250,.08)}
+  .files{font-size:12px;color:var(--muted);margin:6px 0 14px}
+  .files code{margin-right:4px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0 6px}
+  @media(max-width:760px){.cols{grid-template-columns:1fr}}
+  .panel{background:rgba(2,6,16,.55);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .panel h4{margin:0 0 10px;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .box{border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:12px;background:rgba(255,255,255,.03);margin:6px 0}
+  .box.hot{border-color:rgba(251,113,133,.4);background:rgba(251,113,133,.07)}
+  .box.cool{border-color:rgba(45,212,191,.35);background:rgba(45,212,191,.06)}
+  .tall{height:96px;display:grid;place-items:center;text-align:center}
+  .stack{display:grid;gap:6px}
+  .row{display:flex;gap:6px;flex-wrap:wrap}
+  .row .box{flex:1;min-width:80px;margin:0}
+  ul.tight{margin:8px 0 0;padding-left:18px;color:var(--muted);font-size:13.5px}
+  ul.tight li{margin:3px 0}
+  .bd{color:var(--muted);font-size:13px;margin:10px 0 0}
+  .bd b{color:var(--ink);font-weight:600}
+  .final{border:1px solid rgba(45,212,191,.35);background:rgba(45,212,191,.06);border-radius:18px;padding:22px 24px;margin-top:18px}
+  .final h3{margin:0 0 8px;font-size:17px}
+  .foot{margin-top:44px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:16px}
+  .flag{display:inline-block;font-size:11px;color:var(--rose);border:1px dashed rgba(251,113,133,.45);border-radius:6px;padding:1px 6px;margin-left:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Auditoría 3 — mirada fresca sobre <span>BudgetGenius</span></h1>
+  <p class="lead">Segunda pasada sobre el árbol ya fusionado en <code>main</code> (PR&nbsp;#20 incluido). No re-litigo lo que la auditoría del 24/11 cerró: busco dónde el código nuevo concentra fricción, qué números no coinciden entre sí y qué se rompería en un despliegue distinto al de GCE.</p>
+  <div class="meta">
+    <span class="chip"><b>main</b> · limpio</span>
+    <span class="chip"><b>v1.12.0</b></span>
+    <span class="chip">30 specs API · 15 Playwright · 4 unit web</span>
+    <span class="chip">21 migraciones</span>
+    <span class="chip">26.396 líneas SPA · 14.447 API</span>
+  </div>
+
+  <h2>Veredicto en una tabla</h2>
+  <table>
+    <tr><th>Área</th><th>Estado</th><th>Qué cambió respecto al 24/11</th></tr>
+    <tr><td>Gate de tipos</td><td class="ok">Cerrado</td><td><code>check-types</code> es <code>tsc -b</code> y CI lo ejecuta. El falso verde desapareció.</td></tr>
+    <tr><td>Superficie pública</td><td class="ok">Cerrado</td><td>Swagger solo fuera de producción; CSP/helmet activos; import idempotente; índices de lectura.</td></tr>
+    <tr><td>Secretos</td><td class="ok">Bien</td><td>Claves de Finny cifradas AES-256-GCM, solo el superadmin las revela, failover por prioridad.</td></tr>
+    <tr><td>Avisos</td><td class="bad">Tres verdades</td><td>Lectura, sync y resumen definen «vivo» de forma distinta: el backoffice miente sobre lo que ve el usuario.</td></tr>
+    <tr><td>Sincronización</td><td class="warn">Funciona, no escala</td><td>11 subconsultas por dispositivo cada 15 s; dos de ellas escanean <code>app_notifications</code> sin índice.</td></tr>
+    <tr><td>Backoffice (SPA)</td><td class="warn">Monolito</td><td>Un archivo de 2.644 líneas con 16 componentes: cada cambio recorre el archivo entero.</td></tr>
+    <tr><td>Tests de lo nuevo</td><td class="bad">Sin red</td><td>Ni un E2E del backoffice; failover de claves y editor de páginas solo probados a mano.</td></tr>
+  </table>
+
+  <h2>Seis candidatos</h2>
+
+  <section class="candidate">
+    <div class="chead"><div class="num">1</div><h3>El backoffice es un archivo, no un módulo</h3><span class="badge b-strong">Strong</span></div>
+    <p class="files"><code>presentation/pages/superadmin/backoffice.tsx</code> · 2.644 líneas · 16 componentes top-level</p>
+    <p class="bd">Cuatro pestañas, el editor de páginas (640 líneas), el modal de módulo (253), el formulario de bloques generado por esquema y <code>ProviderKeysSection</code> conviven en un único archivo con 11 <code>useState</code> en la página raíz. Un cambio de una columna en Claves de Finny obliga a atravesar el editor de páginas; nada de esto se puede renderizar en un test sin montar la página completa. Es <b>divergent change</b> puro: el archivo cambia por cuatro razones no relacionadas.</p>
+    <div class="cols">
+      <div class="panel"><h4>Antes</h4>
+        <div class="box hot tall">backoffice.tsx <b>2.644</b><br><span style="color:var(--muted)">overview + módulos + editor + claves + avisos</span></div>
+        <ul class="tight"><li>16 componentes con estado compartido</li><li>cambiar un tab toca el archivo entero</li><li>sin superficie de test</li></ul>
+      </div>
+      <div class="panel"><h4>Después</h4>
+        <div class="stack">
+          <div class="row"><div class="box cool">overview/</div><div class="box cool">modules/</div></div>
+          <div class="row"><div class="box cool">page-editor/</div><div class="box cool">api-keys/</div></div>
+          <div class="row"><div class="box cool">notifications/</div><div class="box cool" style="opacity:.7">shared/forms</div></div>
+        </div>
+        <ul class="tight"><li>cada carpeta = un tab + su query</li><li><code>PageContentEditor</code> con interfaz propia</li><li>se testea un tab aislado</li></ul>
+      </div>
+    </div>
+    <p class="bd"><b>Ganancia:</b> localidad real. El editor de páginas pasa de «código dentro de una página» a módulo con interfaz <code>{ module, modules, blockTypes, onSave }</code>, que es exactamente lo que un test necesita para existir.</p>
+  </section>
+
+  <section class="candidate">
+    <div class="chead"><div class="num">2</div><h3>«Aviso vivo» tiene tres definiciones distintas</h3><span class="badge b-strong">Strong</span></div>
+    <p class="files"><code>application/notifications/announcement.service.ts</code> · <code>application/sync/sync.service.ts</code> · <code>application/superadmin/superadmin-overview.service.ts</code></p>
+    <p class="bd">La lectura exige <code>published</code> + <code>publishedAt &lt;= now()</code> + <code>expiresAt &gt; now()</code>. El resumen cuenta <code>where: { published: true }</code> y el poll de sync igual. Consecuencia: un aviso caducado o programado para el mes que viene <b>aparece como vivo en el backoffice</b> y <b>despierta a todos los dispositivos</b> al editarlo, porque <code>MAX(updatedAt)</code> no filtra nada.</p>
+    <div class="cols">
+      <div class="panel"><h4>Antes</h4>
+        <div class="stack">
+          <div class="box hot">AnnouncementService → ventana completa</div>
+          <div class="box hot">overview → solo <code>published</code></div>
+          <div class="box hot">sync → solo <code>published</code></div>
+        </div>
+        <ul class="tight"><li>tres criterios, un solo concepto</li><li>el contador del panel no cuadra con la app</li><li>editar un borrador invalida la caché de todos</li></ul>
+      </div>
+      <div class="panel"><h4>Después</h4>
+        <div class="stack">
+          <div class="box cool">announcements/live.ts → <b>una</b> condición</div>
+          <div class="row"><div class="box">lectura</div><div class="box">conteo</div><div class="box">revisión</div></div>
+        </div>
+        <ul class="tight"><li>un único predicado SQL compartido</li><li>el panel dice lo mismo que la app</li><li>+ índice <code>(publishedAt, expiresAt)</code></li></ul>
+      </div>
+    </div>
+    <p class="bd"><b>Ganancia:</b> corrige un dato mostrado al operador y, de paso, quita ruido al poll: el cambio de un borrador deja de invalidar la caché de cada usuario.</p>
+  </section>
+
+  <section class="candidate">
+    <div class="chead"><div class="num">3</div><h3>El poll de sync hace 11 subconsultas por dispositivo cada 15 s</h3><span class="badge b-strong">Strong</span></div>
+    <p class="files"><code>application/sync/sync.service.ts</code> · <code>infrastructure/use-cross-device-sync.ts</code> · migración <code>1800000000015</code></p>
+    <p class="bd">Cada llamada son 11 <em>scalar subqueries</em> en una sola sentencia: 4 dispositivos = ~1.056 subconsultas por hora solo para saber si algo cambió. Dos de ellas son globales (<code>app_notifications</code>): <code>MAX("updatedAt")</code> no tiene índice —solo existe <code>(published, publishedAt)</code>— así que es un <em>sequential scan</em> en cada tick, para todos los usuarios.</p>
+    <div class="cols">
+      <div class="panel"><h4>Antes</h4>
+        <div class="box hot tall">11 subqueries · todas las tablas<br><span style="color:var(--muted)">2 sin <code>userId</code>, 1 sin índice</span></div>
+        <ul class="tight"><li>coste lineal con dispositivos</li><li>una edición de borrador despierta a todos</li></ul>
+      </div>
+      <div class="panel"><h4>Después</h4>
+        <div class="stack">
+          <div class="box cool">1 CTE userId-scoped</div>
+          <div class="box cool">caché Redis 5 s por usuario</div>
+          <div class="box">índice <code>app_notifications(updatedAt)</code></div>
+        </div>
+        <ul class="tight"><li>mismo contrato, coste acotado</li><li>N dispositivos del mismo usuario cuestan 1</li></ul>
+      </div>
+    </div>
+    <p class="bd"><b>Ganancia:</b> el contrato no cambia (una cadena de revisión); cambia lo que cuesta sostenerlo. El <em>deepening</em> es mover la definición de «revisión» a un módulo que también es dueño de la caché, en vez de un SQL suelto en el servicio.</p>
+  </section>
+
+  <section class="candidate">
+    <div class="chead"><div class="num">4</div><h3>Las imágenes del catálogo viven en el disco del contenedor</h3><span class="badge b-worth">Worth exploring</span></div>
+    <p class="files"><code>application/superadmin/media.service.ts</code> · <code>docker-compose.gce.yml</code> · <code>apps/api/.env.example</code></p>
+    <p class="bd"><code>MediaService</code> escribe en <code>process.cwd()/uploads</code>. <code>UPLOAD_DIR=/data</code> y su volumen solo existen en <code>docker-compose.gce.yml</code>: en cualquier otro despliegue (prod compose, Docker local, una segunda réplica) las imágenes caen en la capa del contenedor y desaparecen al recrearlo, dejando bloques apuntando a un <code>404</code>. Tampoco hay limpieza de huérfanos al borrar un bloque.</p>
+    <div class="cols">
+      <div class="panel"><h4>Antes</h4>
+        <div class="stack">
+          <div class="box hot">GCE: /data + volumen ✓</div>
+          <div class="box hot">otro host: /app/uploads → efímero</div>
+          <div class="box hot">dos réplicas: dos catálogos de imágenes</div>
+        </div>
+      </div>
+      <div class="panel"><h4>Después</h4>
+        <div class="stack">
+          <div class="box cool">UPLOAD_DIR en <code>.env.example</code> + todos los compose</div>
+          <div class="box cool">o almacén de objetos con URL firmada</div>
+          <div class="box">barrido semanal de huérfanos</div>
+        </div>
+      </div>
+    </div>
+    <p class="bd"><b>Ganancia:</b> el catálogo deja de depender de dónde se despliegue. Es la diferencia entre «funciona en mi VM» y «funciona».</p>
+  </section>
+
+  <section class="candidate">
+    <div class="chead"><div class="num">5</div><h3>El resumen carga el catálogo entero para contar</h3><span class="badge b-worth">Worth exploring</span></div>
+    <p class="files"><code>application/superadmin/superadmin-overview.service.ts</code> · 14 consultas en paralelo</p>
+    <p class="bd"><code>modules.find()</code> trae <b>todas</b> las filas, incluido el <code>jsonb content</code> con secciones, bloques e imágenes de cada página, solo para incrementar cinco contadores. Lo mismo con <code>apiKeys.find()</code>. El resumen escala con el tamaño del contenido, no con el número de módulos.</p>
+    <div class="cols">
+      <div class="panel"><h4>Antes</h4>
+        <div class="box hot tall">14 queries · 2 <code>find()</code> completos<br><span style="color:var(--muted)">jsonb de páginas en memoria</span></div>
+      </div>
+      <div class="panel"><h4>Después</h4>
+        <div class="stack">
+          <div class="box cool"><code>GROUP BY kind, status</code></div>
+          <div class="box cool"><code>count()</code> de claves activas</div>
+          <div class="box">sin leer <code>content</code></div>
+        </div>
+      </div>
+    </div>
+    <p class="bd"><b>Ganancia:</b> el panel se abre igual de rápido con 5 módulos que con 500 páginas escritas.</p>
+  </section>
+
+  <section class="candidate">
+    <div class="chead"><div class="num">6</div><h3>La superficie nueva no tiene red de seguridad</h3><span class="badge b-strong">Strong</span></div>
+    <p class="files"><code>apps/api/test/</code> (30 specs) · <code>apps/webClient/tests/</code> (15 specs)</p>
+    <p class="bd">Hay <code>app-module-rename</code>, <code>announcement-audience</code> y <code>user-seeder-superadmin</code>, pero <b>ningún</b> test cubre failover de claves, <code>updateContent</code> (normalización de bloques y re-slug de ids), subida de imágenes, sync ni el backoffice. Es justo la lógica que se validó a mano y la que más fácil se rompe en silencio.</p>
+    <div class="cols">
+      <div class="panel"><h4>Antes</h4>
+        <div class="box hot tall">validación manual<br><span style="color:var(--muted)">rotar una clave, publicar un aviso, reordenar tabs</span></div>
+      </div>
+      <div class="panel"><h4>Después</h4>
+        <div class="stack">
+          <div class="box cool">unit: 401 → siguiente clave → <code>FINNY_INVALID_KEY</code></div>
+          <div class="box cool">unit: bloque desconocido / componente inexistente</div>
+          <div class="box cool">E2E: crear módulo → aparece en <code>/app/modules</code></div>
+        </div>
+      </div>
+    </div>
+    <p class="bd"><b>Ganancia:</b> tres tests baratos cubren el 80 % del riesgo nuevo. Ninguno necesita proveedor real ni navegador para los dos primeros.</p>
+  </section>
+
+  <h2>Deuda pequeña, una línea cada una</h2>
+  <div class="card">
+    <ul class="tight" style="color:var(--ink)">
+      <li><code>AiService.getHistory</code> hace <code>JSON.parse</code> sin guardia: un valor viejo o corrupto en Redis convierte cada prompt en un 500.</li>
+      <li><code>AppModuleService.update</code> y <code>.reorder</code> escriben fila por fila sin transacción: un fallo a mitad deja tabs con orden parcial.</li>
+      <li><code>.env.example</code> no lista <code>SUPERADMIN_EMAIL</code>, <code>SUPERADMIN_PASSWORD</code> ni <code>UPLOAD_DIR</code>, aunque el README los exija para producción.</li>
+      <li><code>AnnouncementService.findLiveForUser(userId)</code> recibe un <code>userId</code> que no usa: la firma promete un filtro que ya no existe.</li>
+      <li>i18n sigue en dos JSON de 1.487 líneas sin claves tipadas: el compilador no puede avisar de una clave que falta.</li>
+    </ul>
+  </div>
+
+  <h2>Lo que conviene no romper</h2>
+  <div class="grid g3">
+    <div class="card stat"><b class="ok">tsc -b</b><span>Gate real en CI, no el falso verde anterior</span></div>
+    <div class="card stat"><b class="ok">AES-256-GCM</b><span>Claves de Finny cifradas y revelables solo por rol</span></div>
+    <div class="card stat"><b class="ok">0</b><span>XSS: los bloques se normalizan por esquema y se renderizan como React</span></div>
+  </div>
+
+  <h2>Recomendación</h2>
+  <div class="final">
+    <h3>Empezar por el candidato 2, con el 3 detrás</h3>
+    <p class="bd" style="margin-top:0">Comparten la misma costura —qué significa «algo cambió para este usuario»— y se arreglan en una tarde: un predicado de aviso vivo compartido por lectura, resumen y sync; el conteo del panel alineado con la app; el poll con una sola consulta, caché corta e índice. Después el 6 (tres tests) para que el 1 se pueda partir sin miedo. El 1 es el que más paga a futuro, pero es refactor puro: sin tests primero, se rompe en silencio.</p>
+    <table style="margin-top:10px">
+      <tr><th>Paso</th><th>Qué</th><th>Esfuerzo</th><th>Riesgo si no se hace</th></tr>
+      <tr><td>0</td><td>Predicado único de aviso vivo + conteo correcto</td><td>~1 h</td><td>El panel miente; el poll despierta a todos</td></tr>
+      <tr><td>1</td><td>Sync en una consulta + caché 5 s + índice <code>updatedAt</code></td><td>~2 h</td><td>Coste lineal con dispositivos</td></tr>
+      <tr><td>2</td><td>3 tests: failover, <code>updateContent</code>, módulo→catálogo</td><td>~3 h</td><td>Regresiones invisibles en lo nuevo</td></tr>
+      <tr><td>3</td><td>Partir <code>backoffice.tsx</code> en <code>features/superadmin/*</code></td><td>1 día</td><td>Fricción creciente en cada cambio</td></tr>
+      <tr><td>4</td><td><code>UPLOAD_DIR</code> en todos los compose + <code>.env.example</code></td><td>~1 h</td><td>Imágenes perdidas fuera de GCE</td></tr>
+      <tr><td>5</td><td>Resumen por <code>GROUP BY</code>; guardias y transacciones menores</td><td>~2 h</td><td>Deuda que se paga sola</td></tr>
+    </table>
+  </div>
+
+  <p class="foot">Auditoría estática sobre <code>main</code> (5418bad) con el árbol limpio. No se ejecutó la API ni la base de datos —el stack local estaba apagado y <code>curl</code> agotó el tiempo—, así que el throttle y los costes de consulta se razonan desde el código, no se midieron en caliente. No se revisó visualmente ninguna pantalla en navegador.</p>
+</div>
+</body>
+</html>
