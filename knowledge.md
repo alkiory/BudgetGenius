@@ -105,7 +105,7 @@ Both apps follow a **Clean Architecture / Hexagonal** pattern with strict layer 
 |----------|-----------|
 | CI/CD | GitHub Actions |
 | Containerization | Docker + Docker Compose |
-| Hosting (Frontend) | Vercel + Firebase Hosting |
+| Hosting (Frontend) | Firebase Hosting |
 | Hosting (Backend) | Docker on self-hosted server (`docker-compose.prod.yml`) |
 | DB Hosting | PostgreSQL container on the same server (`bg-db-prod`) |
 | Monorepo Orchestration | Turbo |
@@ -1184,7 +1184,7 @@ VITE_FIREBASE_MEASUREMENT_ID=
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
 | `ci.yml` | Push to main, PR to main/dev | Backend migrations + tests + build; frontend typecheck + unit tests + assembled build |
-| `deploy.yml` | Push to main, manual | Re-runs the checks and publishes the web build (landing + SPA) to Firebase Hosting. Its `API → GCE` job is unused and fails for lack of secrets |
+| `deploy.yml` | Push to main, manual | Re-runs the checks and publishes the web build (landing + SPA) to Firebase Hosting. The API is deployed separately on the self-hosted server |
 | `build-apk.yml` | Push/PR to main/dev | Debug APK artifact |
 | `release-android.yml` | Push to main (auto-bump) / tag | Bumps the version, commits it, tags it and publishes the signed APK |
 
@@ -1212,9 +1212,11 @@ target and must not be mixed in. DB queries go through
 | Service | Container Name (dev) | Port Mapping | Purpose |
 |---------|---------------------|-------------|---------|
 | backend | bg-backend-dev | 3000:5000 | NestJS API |
-| frontend | bg-frontend-dev | 3001:80 | React SPA (nginx) |
 | database | bg-db-dev | 5432:5432 | PostgreSQL 15 |
 | redis | bg-redis-dev | 6379:6379 | Redis 7.2 |
+
+The dev stack has no frontend container: the SPA runs on the Vite dev server
+(`pnpm dev`).
 
 ---
 
@@ -1225,7 +1227,7 @@ target and must not be mixed in. DB queries go through
 - **Location:** `apps/api/test/`
 - **Types:** Unit tests for services, E2E tests for API endpoints
 - **Config:** `jest.config.ts` (unit), `test/jest-e2e.json` (e2e)
-- **Status:** ✅ **15 tests passing** — all service tests pass, including `auth-service.spec.ts`, `user-service.spec.ts`, and `transaction.service.spec.ts`
+- **Status:** Jest unit and integration specs live under `apps/api/test/` and run with `pnpm --filter api test`; the e2e suite uses `pnpm --filter api test:e2e`. CI runs them on every push
 - **Key test files:**
   - `user-service.spec.ts`
   - `auth-service.spec.ts`
@@ -1238,7 +1240,7 @@ target and must not be mixed in. DB queries go through
 - **Location:** `apps/webClient/tests/`
 - **Types:** E2E browser tests
 - **Config:** `playwright.config.ts` (baseURL: `http://localhost:5173` — Vite dev server)
-- **Status:** ✅ **15 tests passing** — all `home.spec.ts` and `auth.spec.ts` tests pass in ~11s
+- **Status:** Playwright specs under `apps/webClient/tests/` run with `pnpm --filter frontend-web test` against the Vite dev server (baseURL `http://localhost:5173`)
 - **Key test files:**
   - `home.spec.ts` — Landing page, theme toggle, and how-it-works navigation
   - `auth.spec.ts` — Login validation, successful authentication flow
@@ -1482,7 +1484,7 @@ build, web typecheck + unit tests + assembled build). `.github/workflows/deploy.
 runs on `main` or manually: it re-runs the checks and publishes the web build to
 Firebase Hosting. The API is not deployed by CI — it is rebuilt on the
 self-hosted server with `docker-compose.prod.yml` (`bg-backend-prod`), which is
-why the `API → GCE` job in that workflow is dead weight. The web build takes its
+why the workflow no longer contains an `API → GCE` job. The web build takes its
 version from the root `package.json` (`vite.config.ts` falls back to it whenever
 `VITE_APP_VERSION` is unset, so the deployed bundle shows `1.13.x` instead of a
 commit SHA), and `release-android.yml` derives `versionName`/`versionCode` from

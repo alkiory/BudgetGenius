@@ -180,8 +180,7 @@ BudgetGenius/
 | **GitHub Actions** | CI/CD pipeline (test, build, deploy) |
 | **Turbo** | Monorepo task orchestration |
 | **pnpm** | Fast, disk-efficient package manager |
-| **Vercel** | Frontend hosting |
-| **Firebase Hosting** | Static asset hosting |
+| **Firebase Hosting** | Landing + SPA hosting (production) |
 | **Docker PostgreSQL** | PostgreSQL 15 container on the production server |
 | **Playwright** | End-to-end browser testing |
 | **Jest** | Backend unit and e2e testing |
@@ -745,11 +744,9 @@ publish the web build only — the API credentials live on the server.
 | Web build | GitHub repository secrets | `VITE_API_URL`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MEASUREMENT_ID`, `FIREBASE_SERVICE_ACCOUNT_BUDGETGENIUSIA` |
 | Variables | GitHub repository variables | `PUBLIC_APP_URL`, `PUBLIC_APK_URL` (optional) |
 
-> `deploy.yml` still carries an `API → GCE` job that reads `DOCKER_USERNAME`,
-> `DOCKER_PASSWORD`, `GCE_HOST`, `GCE_USER` and `GCE_SSH_KEY`. Those secrets are
-> not configured and that target is unused, so the job fails on every run while
-> the web deploy succeeds. Replacing it with an SSH step to the real server (or
-> deleting it) is pending.
+> `deploy.yml` no longer builds or ships the API image: the `API → GCE` job was
+> removed, so the workflow only verifies the code and publishes the web build.
+> No DockerHub or GCE secrets are needed anymore.
 
 Push to `main` publishes the web build automatically. To deploy the current
 branch without merging, run **Actions → Deploy → Run workflow** and pick the ref.
@@ -805,11 +802,11 @@ docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod \
 
 # Grant the backoffice (Catálogos): only `superadmin` sees it
 docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod \
-  -c "UPDATE \"bg_public\".\"users\" SET role='superadmin' WHERE lower(email)='info.sergiocampbell@gmail.com';"
+  -c "UPDATE \"bg_public\".\"users\" SET role='superadmin' WHERE lower(email)='superadmin@example.com';"
 
 # Revoke it from everybody else
 docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod \
-  -c "UPDATE \"bg_public\".\"users\" SET role='user' WHERE role='superadmin' AND lower(email)<>'info.sergiocampbell@gmail.com';"
+  -c "UPDATE \"bg_public\".\"users\" SET role='user' WHERE role='superadmin' AND lower(email)<>'superadmin@example.com';"
 ```
 
 Use `-it` instead of `-i` for an interactive `psql` session. The SPA caches the
