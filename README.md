@@ -954,8 +954,18 @@ are both rejected by the API).
 
 **Operator account.** Set `SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD`; on boot
 the seeder creates that account, or promotes an existing one with that email.
-In development a local fallback is used (`superadmin@admin.com` /
-`#Password123`). Nothing is seeded when both variables are empty.
+An account created by Google has no local password, so for those the
+configured email is the ownership signal; a password-protected account still
+has to prove ownership with `SUPERADMIN_PASSWORD`. The role is granted again on
+every sign-in of that address, so an account created by its first Google login
+becomes the operator immediately and that same session is issued with the role
+(the JWT carries it). Public signup only ever creates `user` accounts — the
+operator role cannot be requested by a client. On boot, every other
+`superadmin` row is demoted to `user`, and the backoffice guard re-reads the
+role from the database, so a demoted account loses access immediately instead
+of keeping it until its token expires. In development a local fallback
+is used (`superadmin@admin.com` / `#Password123`). Nothing is seeded when
+`SUPERADMIN_EMAIL` is empty.
 
 **Schema.** The backoffice tables (`app_modules`, `app_api_keys`,
 `app_notifications`) are created by migration `1800000000015`; migration

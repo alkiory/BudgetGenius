@@ -96,6 +96,27 @@ export class UserRepositoryImpl implements UserRepositoryPort {
     await this.repo.update(id, { role });
   }
 
+  /**
+   * Demotes every superadmin except `keepUserId`, returning how many rows
+   * changed.
+   *
+   * `SUPERADMIN_EMAIL` names the one operator, so a second row with the role
+   * is always a leftover — an old address, a manual UPDATE, or the signup
+   * role hole — and it would keep full backoffice access. `update()` bypasses
+   * the entity hooks on purpose (see `setRole`).
+   */
+  async demoteSuperAdminsExcept(keepUserId: number): Promise<number> {
+    const result = await this.repo
+      .createQueryBuilder()
+      .update(User)
+      .set({ role: 'user' })
+      .where('role = :role', { role: 'superadmin' })
+      .andWhere('id != :id', { id: keepUserId })
+      .execute();
+
+    return result.affected ?? 0;
+  }
+
   async updateUser(id: number, updateUserDto: Partial<UserDto>): Promise<User> {
     // `repo.preload({ id, ...partial })` reads the row, builds a User
     // entity instance with the partial MERGED on top of the loaded

@@ -227,6 +227,44 @@ export class AuthService {
     };
   }
 
+  /**
+   * Grants the operator role to the one address in `SUPERADMIN_EMAIL`.
+   *
+   * The boot seeder already does this, but it runs before the account may
+   * exist: a Google account is usually created by its first sign-in, after
+   * boot. Signing in proves the mailbox (verified by the provider, or by the
+   * password on the email path), so the role is granted here too — and the
+   * session is issued with it, because the JWT carries the role and the
+   * strategy does not re-read it from the database.
+   *
+   * Idempotent: an account that is already the operator costs one comparison.
+   */
+  private async ensureOperatorRole(user: User): Promise<User> {
+    const configured = (process.env.SUPERADMIN_EMAIL ?? '').trim();
+    if (!configured) return user;
+    if (user.email !== normalizeEmail(configured)) return user;
+    if (user.role === UserRole.SUPERADMIN) return user;
+
+    try {
+      await this.userRepository.setRole(user.id, UserRole.SUPERADMIN);
+    } catch (error) {
+      // Best effort: a failed role write must not turn the operator's sign-in
+      // into a 401. The next sign-in (or boot) retries.
+      this.logger.error(
+        `🛡️ Could not promote the operator account (id=${user.id}): ${
+          (error as Error).message
+        }`,
+      );
+      return user;
+    }
+
+    user.role = UserRole.SUPERADMIN;
+    this.logger.log(
+      `🛡️ Operator account promoted to superadmin (id=${user.id})`,
+    );
+    return user;
+  }
+
   /** Signs the access/refresh pair with an explicit, non-interchangeable type. */
   private issueSession(user: SessionUser): {
     accessToken: string;
@@ -318,7 +356,10 @@ export class AuthService {
       // legítimos que tuvieron typos previos.
       await this.redisService.delete(attemptsKey);
 
-      // 5. Generar tokens (JWT)
+      // 5. A successful password login proves the mailbox owns the account,
+      // so the single operator address is granted its role here as well.
+      await this.ensureOperatorRole(user);
+
       const { accessToken, refreshToken } = this.issueSession({
         id: user.id,
         email: user.email,
@@ -469,7 +510,9 @@ export class AuthService {
     }
 
     // Delegar toda la lógica a validateOAuthUser
-    const userEntity = await this.validateOAuthUser(profile);
+    const userEntity = await this.ensureOperatorRole(
+      await this.validateOAuthUser(profile),
+    );
 
     const { accessToken, refreshToken } = this.issueSession({
       id: userEntity.id,

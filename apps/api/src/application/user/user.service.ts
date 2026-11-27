@@ -15,7 +15,7 @@ export class UserService {
     private readonly userRepository: UserRepositoryImpl,
     private readonly logger: LoggingService,
     private readonly userSettingsService: UserSettingsService,
-  ) { }
+  ) {}
 
   async getById(id: number) {
     return this.userRepository.findById(id);
@@ -58,7 +58,9 @@ export class UserService {
       surname: userDto.surname,
       email: userDto.email,
       password: userDto.password,
-      role: userDto.role,
+      // Signup only ever creates regular accounts; the DTO narrows the field
+      // to `user`, and this default covers callers that omit it.
+      role: userDto.role ?? 'user',
       authProvider: userDto.authProvider,
       refreshToken: null,
       createdAt: userDto.createdAt,
@@ -94,7 +96,10 @@ export class UserService {
       );
     } catch (settingsErr) {
       this.logger.warn(
-        `⚠️ Could not eagerly create user_settings for admin-created user ${userDto.email}: ${(settingsErr as Error).message
+        `⚠️ Could not eagerly create user_settings for admin-created user ${
+          userDto.email
+        }: ${
+          (settingsErr as Error).message
         }. Lazy fallback will still work on first GET /user-settings.`,
       );
     }

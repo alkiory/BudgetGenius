@@ -108,12 +108,16 @@ export class UserSeederService {
    * Ensures a super admin exists.
    *
    * `SUPERADMIN_EMAIL` selects the operator. Email signup does not verify
-   * mailbox ownership, so matching the address is not proof that the operator
-   * owns the row: an attacker could register it first. Promotion therefore
-   * also requires the account's current password to match
-   * `SUPERADMIN_PASSWORD`; otherwise the role is left untouched and the boot
-   * logs an actionable warning. New accounts are only created when the email
-   * is absent and a password is configured.
+   * mailbox ownership, so for a password-protected account the address alone
+   * is not proof — an attacker could register it first — and promotion also
+   * requires the current password to match `SUPERADMIN_PASSWORD`; otherwise
+   * the role is left untouched and the boot logs an actionable warning. A
+   * social-only account has no local password (the provider already verified
+   * the mailbox), so there the configured address is the signal. New accounts
+   * are only created when the email is absent and a password is configured.
+   *
+   * Once the operator holds the role, every other `superadmin` row is demoted
+   * to `user`, so the operator is unique by construction.
    *
    * In development the local fallback (`superadmin@admin.com` / `#Password123`)
    * keeps the backoffice reachable with no extra setup.
@@ -137,11 +141,16 @@ export class UserSeederService {
     const existing = await this.userRepository.findByEmail(email);
     if (existing) {
       if (existing.role !== 'superadmin') {
-        const ownsAccount = Boolean(
-          password &&
-            existing.password &&
-            (await bcrypt.compare(password, existing.password)),
-        );
+        // An email account proves ownership with its local password. A
+        // social-only account has no local credential at all — its mailbox
+        // was verified by the identity provider — so the configured email is
+        // the ownership signal. Refusing those left a Google operator stuck
+        // as a regular user forever.
+        const ownsAccount = existing.password
+          ? Boolean(
+              password && (await bcrypt.compare(password, existing.password)),
+            )
+          : !existing.authProvider || existing.authProvider !== 'email';
         if (!ownsAccount) {
           this.logger.warn(
             `🛡️ Refusing to promote existing account id=${existing.id}: ` +
@@ -157,6 +166,7 @@ export class UserSeederService {
           `🛡️ Existing account id=${existing.id} promoted to superadmin`,
         );
       }
+      await this.demoteOtherSuperAdmins(existing.id);
       return;
     }
 
@@ -183,6 +193,33 @@ export class UserSeederService {
       locale: 'en-US',
     });
 
+    await this.demoteOtherSuperAdmins(created.id);
     this.logger.log('🛡️ Superadmin account ready');
+  }
+
+  /**
+   * Enforces the one-operator rule once the configured account holds the role.
+   *
+   * Ordering is deliberate: this runs only after the operator is confirmed, so
+   * a refused promotion (password mismatch) can never leave the product with
+   * no superadmin at all. Failures are logged, not thrown — a bad UPDATE must
+   * not take the boot down.
+   */
+  private async demoteOtherSuperAdmins(keepUserId: number): Promise<void> {
+    try {
+      const demoted = await this.userRepository.demoteSuperAdminsExcept(
+        keepUserId,
+      );
+      if (demoted > 0) {
+        this.logger.warn(
+          `🛡️ Demoted ${demoted} extra superadmin account(s) — ` +
+            `id=${keepUserId} is the only operator`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `🛡️ Could not demote extra superadmins: ${(error as Error).message}`,
+      );
+    }
   }
 }

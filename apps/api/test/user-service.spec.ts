@@ -152,7 +152,7 @@ describe('UserService', () => {
       email: user.email,
       password: user.password,
       authProvider: user.authProvider as 'email',
-      role: user.role,
+      role: 'user',
       createdAt: new Date(),
       updatedAt: new Date(),
     });
