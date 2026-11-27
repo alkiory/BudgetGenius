@@ -47,6 +47,7 @@ const buildService = (options: { password?: string | null } = {}) => {
     {} as any,
     {} as any,
     {} as any,
+    { current: jest.fn().mockResolvedValue(0) } as any,
   );
 
   return { service, user, userRepository };

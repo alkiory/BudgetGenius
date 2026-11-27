@@ -167,7 +167,7 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
       }),
       refreshToken: jest
         .fn()
-        .mockResolvedValue({ refreshed: true, role: 'user' }),
+        .mockResolvedValue({ refreshed: true, role: 'user', epoch: 0 }),
       addTokenToBlacklist: jest.fn().mockResolvedValue(undefined),
       invalidateRefreshToken: jest.fn().mockResolvedValue(undefined),
     };
@@ -413,6 +413,7 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
       authService.refreshToken.mockResolvedValueOnce({
         refreshed: true,
         role: 'user',
+        epoch: 5,
       });
 
       await controller.refreshToken(
@@ -421,7 +422,12 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
       );
 
       expect(jwtService.sign).toHaveBeenCalledWith(
-        expect.objectContaining({ id: mockUserEntity.id, role: 'user' }),
+        expect.objectContaining({
+          id: mockUserEntity.id,
+          role: 'user',
+          // The rotated token is stamped with the epoch we are at now.
+          epoch: 5,
+        }),
         expect.anything(),
       );
       expect(jwtService.sign).not.toHaveBeenCalledWith(
@@ -588,8 +594,14 @@ describe('AuthController — cookie + body token bridge (v1.3.0)', () => {
       expect(body).toMatchObject({ success: true });
       expect(authService.addTokenToBlacklist).not.toHaveBeenCalled();
       expect(authService.invalidateRefreshToken).not.toHaveBeenCalled();
-      expect(cookieService.clearCookie).toHaveBeenCalledWith(res, 'accessToken');
-      expect(cookieService.clearCookie).toHaveBeenCalledWith(res, 'refreshToken');
+      expect(cookieService.clearCookie).toHaveBeenCalledWith(
+        res,
+        'accessToken',
+      );
+      expect(cookieService.clearCookie).toHaveBeenCalledWith(
+        res,
+        'refreshToken',
+      );
     });
 
     it('revokes both blacklist and refresh session for a verified access token', async () => {

@@ -20,6 +20,7 @@ const buildService = (user: any) => {
   };
   const redisService = { delete: jest.fn().mockResolvedValue(1) };
   const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
+  const tokenEpoch = { bump: jest.fn().mockResolvedValue(1) };
 
   return {
     service: new UserService(
@@ -27,9 +28,11 @@ const buildService = (user: any) => {
       logger as any,
       {} as any,
       redisService as any,
+      tokenEpoch as any,
     ),
     userRepository,
     redisService,
+    tokenEpoch,
   };
 };
 
@@ -63,6 +66,18 @@ describe('UserService.changePassword', () => {
     await service.changePassword(9, 'current', '#NewPass123');
 
     expect(redisService.delete).toHaveBeenCalledWith('refreshToken:9');
+  });
+
+  it('bumps the session epoch so access tokens already issued die too', async () => {
+    const { service, tokenEpoch } = buildService({
+      id: 9,
+      password: '$2a$04$stored-hash',
+    });
+    jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
+
+    await service.changePassword(9, 'current', '#NewPass123');
+
+    expect(tokenEpoch.bump).toHaveBeenCalledWith(9);
   });
 
   it('rejects a wrong current password with 400 and changes nothing', async () => {

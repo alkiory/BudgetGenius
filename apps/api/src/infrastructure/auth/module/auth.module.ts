@@ -8,6 +8,7 @@ import { UserModule } from '@infrastructure/user/user.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '@domain/user/user.entity';
 import { RedisService } from '@infrastructure/config/redis.service';
+import { TokenEpochService } from '@application/auth/token-epoch.service';
 import { GoogleStrategy } from '../google.strategy';
 import { JwtStrategy } from '../../config/strategy/jwt.strategy';
 import { LoggingService } from '@infrastructure/log/logger.service';
@@ -38,6 +39,7 @@ import { UserSettingsModule } from '@infrastructure/user/user-settings.module';
     AuthService,
     JwtStrategy,
     RedisService,
+    TokenEpochService,
     GoogleStrategy,
     LoggingService,
     CookieService,

@@ -651,7 +651,10 @@ export class AuthController {
       // The role for the new access token comes from the row, not from the
       // refresh claim: that claim is a snapshot from sign-in time and a
       // demoted operator's token still carries `superadmin`.
-      const { role } = await this.authService.refreshToken(userId, token);
+      const { role, epoch } = await this.authService.refreshToken(
+        userId,
+        token,
+      );
 
       // ... generar nuevo accessToken y setearlo en cookie
       //
@@ -666,6 +669,7 @@ export class AuthController {
           id: payload['id'],
           email: payload['email'],
           role,
+          epoch,
           typ: 'access',
         },
         { expiresIn: '7d' },

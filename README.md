@@ -973,9 +973,12 @@ failed. `/auth/refresh` re-reads the role too (the claim is only a snapshot
 from sign-in time), and a demotion revokes the demoted account's refresh token,
 so rotation cannot mint a `superadmin` access token for an account the row no
 longer backs. Passwords are changed through `PUT /user/password` with the current
-password, which also revokes the stored refresh token so every other device
-has to sign in again — the emailed reset revokes it too, since a reset is what
-you use when the account may be compromised; a wrong current password answers
+password, which revokes the stored refresh token **and** bumps the account's
+session epoch: access tokens carry the epoch they were signed with,
+`JwtStrategy` compares it with the stored counter, so every token already
+issued — this device's included — stops working and each device signs in again
+with the new password. The emailed reset revokes and bumps the same way, since
+a reset is what you use when the account may be compromised; a wrong current password answers
 400 (a 401 would be read by the SPA as an expired session). `PUT /user/:id` only accepts name and
 surname. In development a local fallback is used (`superadmin@admin.com` /
 `#Password123`). Nothing is seeded when `SUPERADMIN_EMAIL` is empty.

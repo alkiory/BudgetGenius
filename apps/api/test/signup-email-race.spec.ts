@@ -22,6 +22,7 @@ import { PasswordResetRepository } from '@adapters/auth/persistence/password-res
 import { ResendMailerService } from '@infrastructure/mail/resend-mailer.service';
 import { UserSettingsService } from '@application/user/user-settings.service';
 import { User } from '@domain/user/user.entity';
+import { TokenEpochService } from '@application/auth/token-epoch.service';
 
 const uniqueViolation = () =>
   Object.assign(
@@ -88,6 +89,13 @@ describe('AuthService — concurrent same-email account creation', () => {
         {
           provide: LoggingService,
           useValue: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
+        },
+        {
+          provide: TokenEpochService,
+          useValue: {
+            current: jest.fn().mockResolvedValue(0),
+            bump: jest.fn().mockResolvedValue(1),
+          },
         },
         {
           provide: PasswordResetRepository,

@@ -28,6 +28,7 @@ import { DataSource } from 'typeorm';
 import { ResendMailerService } from '@infrastructure/mail/resend-mailer.service';
 import { UserSettingsService } from '@application/user/user-settings.service';
 import { resolveOperatorEmail } from '@application/user/operator-email';
+import { TokenEpochService } from './token-epoch.service';
 import { blacklistKeyForToken } from '@infrastructure/config/strategy/jwt.strategy';
 
 /** Per-email brute-force protection. Anything tighter would block legitimate users
@@ -95,6 +96,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly mailer: ResendMailerService,
     private readonly userSettingsService: UserSettingsService,
+    private readonly tokenEpoch: TokenEpochService,
   ) {}
 
   findOne(email: string) {
@@ -162,7 +164,7 @@ export class AuthService {
         'email',
       );
 
-      const { accessToken, refreshToken } = this.issueSession({
+      const { accessToken, refreshToken } = await this.issueSession({
         id: existingUser.id,
         email: existingUser.email,
         role: existingUser.role,
@@ -206,7 +208,7 @@ export class AuthService {
       throw error;
     }
 
-    const { accessToken, refreshToken } = this.issueSession({
+    const { accessToken, refreshToken } = await this.issueSession({
       id: newUser.id,
       email: newUser.email,
       role: newUser.role,
@@ -349,13 +351,17 @@ export class AuthService {
   }
 
   /** Signs the access/refresh pair with an explicit, non-interchangeable type. */
-  private issueSession(user: SessionUser): {
+  private async issueSession(user: SessionUser): Promise<{
     accessToken: string;
     refreshToken: string;
-  } {
+  }> {
+    // Stamped at sign time; `JwtStrategy` compares it with the account's
+    // current epoch, so a password change can end this token early.
+    const epoch = await this.tokenEpoch.current(user.id);
+
     return {
       accessToken: this.jwtService.sign(
-        { ...user, typ: ACCESS_TOKEN_TYPE },
+        { ...user, epoch, typ: ACCESS_TOKEN_TYPE },
         { expiresIn: '7d' },
       ),
       refreshToken: this.jwtService.sign(
@@ -444,7 +450,7 @@ export class AuthService {
       // so granting the role by address would hand the backoffice to whoever
       // registered that address first. Password operators are promoted by the
       // boot seeder, which requires SUPERADMIN_PASSWORD.
-      const { accessToken, refreshToken } = this.issueSession({
+      const { accessToken, refreshToken } = await this.issueSession({
         id: user.id,
         email: user.email,
         role: user.role,
@@ -486,7 +492,11 @@ export class AuthService {
         throw new UnauthorizedException('⛔ Invalid refresh token');
       }
 
-      return { refreshed: true, role: account.role };
+      // The rotated access token carries the epoch we are at right now, so it
+      // survives the check in `JwtStrategy` after a credential change.
+      const epoch = await this.tokenEpoch.current(Number(id));
+
+      return { refreshed: true, role: account.role, epoch };
     } catch (error) {
       throw error;
     }
@@ -604,7 +614,7 @@ export class AuthService {
       await this.validateOAuthUser(profile),
     );
 
-    const { accessToken, refreshToken } = this.issueSession({
+    const { accessToken, refreshToken } = await this.issueSession({
       id: userEntity.id,
       email: userEntity.email,
       role: userEntity.role,
@@ -800,6 +810,10 @@ export class AuthService {
     // touch it: revoke it here too, or a stolen session keeps minting access
     // tokens for up to seven days after the victim "recovered" the account.
     await this.invalidateRefreshToken(user.id);
+
+    // The reset also has to end the access tokens already out there: a stolen
+    // seven-day JWT would otherwise outlive the recovery.
+    await this.tokenEpoch.bump(user.id);
 
     await this.passwordResetRepository.deleteToken(resetToken.id);
 

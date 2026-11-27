@@ -8,6 +8,7 @@ import { LoggingService } from '@infrastructure/log/logger.service';
 import { RedisService } from '@infrastructure/config/redis.service';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { UserSettingsService } from '@application/user/user-settings.service';
+import { TokenEpochService } from '@application/auth/token-epoch.service';
 
 const user: User = {
   id: 1,
@@ -92,6 +93,14 @@ describe('UserService', () => {
           // `changePassword` revokes the stored refresh token here.
           provide: RedisService,
           useValue: { delete: jest.fn(), get: jest.fn(), set: jest.fn() },
+        },
+        {
+          // ... and bumps the session epoch so access tokens die with it.
+          provide: TokenEpochService,
+          useValue: {
+            current: jest.fn().mockResolvedValue(0),
+            bump: jest.fn().mockResolvedValue(1),
+          },
         },
         {
           // Android APK audit, 2026-06: UserService.createUser now

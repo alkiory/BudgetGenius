@@ -6,6 +6,7 @@ import { LoggingService } from '@infrastructure/log/logger.service';
 import { RedisService } from '@infrastructure/config/redis.service';
 import { PasswordResetRepository } from '@adapters/auth/persistence/password-reset.repository';
 import { User } from '@domain/user/user.entity';
+import { TokenEpochService } from '@application/auth/token-epoch.service';
 
 import * as bcrypt from 'bcryptjs';
 import { ForgotPasswordDto } from '@application/auth/dto/forgot-password.dto';
@@ -49,6 +50,8 @@ describe('AuthService', () => {
   // instance that the AuthService is using for its Redis interactions.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let redisServiceMock: any;
+  // Session epoch: bumped on password change/reset, read by JwtStrategy.
+  let tokenEpochMock: any;
 
   beforeEach(async () => {
     // Mock bcrypt.compare so we don't need a real bcrypt hash in the fixture.
@@ -57,6 +60,10 @@ describe('AuthService', () => {
       .spyOn(bcrypt, 'compare')
       .mockImplementation((() => Promise.resolve(true)) as never);
 
+    tokenEpochMock = {
+      current: jest.fn().mockResolvedValue(0),
+      bump: jest.fn().mockResolvedValue(1),
+    };
     const jwtServiceMock = {
       sign: jest.fn(() => 'mock-access-token'),
     };
@@ -132,6 +139,7 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: jwtServiceMock },
         { provide: UserRepositoryImpl, useValue: userRepositoryMock },
         { provide: RedisService, useValue: redisServiceMock },
+        { provide: TokenEpochService, useValue: tokenEpochMock },
         { provide: LoggingService, useValue: loggerMock },
         {
           provide: PasswordResetRepository,
@@ -404,6 +412,8 @@ describe('AuthService', () => {
     expect(redisServiceMock.delete).toHaveBeenCalledWith(
       `refreshToken:${user.id}`,
     );
+    // Access tokens already issued for the account are dead as well.
+    expect(tokenEpochMock.bump).toHaveBeenCalledWith(user.id);
 
     // Token must be deleted so it can't be reused.
     expect(passwordResetRepositoryMock.deleteToken).toHaveBeenCalledWith(
@@ -420,7 +430,7 @@ describe('AuthService', () => {
 
     await expect(
       authService.refreshToken(user.id, 'stored-refresh-token'),
-    ).resolves.toEqual({ refreshed: true, role: 'user' });
+    ).resolves.toEqual({ refreshed: true, role: 'user', epoch: 0 });
     expect((userRepository as any).findRoleById).toHaveBeenCalledWith(user.id);
   });
 
@@ -646,6 +656,13 @@ describe('AuthService', () => {
         providers: [
           AuthService,
           { provide: JwtService, useValue: { sign: jest.fn() } },
+          {
+            provide: TokenEpochService,
+            useValue: {
+              current: jest.fn().mockResolvedValue(0),
+              bump: jest.fn().mockResolvedValue(1),
+            },
+          },
           {
             provide: UserRepositoryImpl,
             useValue: { findByEmail: jest.fn(), createUser: jest.fn() },

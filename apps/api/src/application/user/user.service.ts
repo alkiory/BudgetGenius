@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { RedisService } from '@infrastructure/config/redis.service';
+import { TokenEpochService } from '@application/auth/token-epoch.service';
 import { UserDto } from './dto/user.dto';
 import { CreateUserDto } from '@application/user/dto/create.dto';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
@@ -19,6 +20,7 @@ export class UserService {
     private readonly logger: LoggingService,
     private readonly userSettingsService: UserSettingsService,
     private readonly redisService: RedisService,
+    private readonly tokenEpoch: TokenEpochService,
   ) {}
 
   async getById(id: number) {
@@ -160,9 +162,13 @@ export class UserService {
     await this.userRepository.updateUser(userId, { password: newPassword });
 
     // Revoke the stored refresh token: every other device's session is bound
-    // to it, so they have to sign in with the new password. The current
-    // access token keeps working until it expires (JWT, not revocable here).
+    // to it, so they have to sign in with the new password.
     await this.redisService.delete(`refreshToken:${userId}`);
+
+    // And end the access tokens already issued, this device's included: a
+    // JWT stays valid until it expires, so the epoch is what actually evicts
+    // whoever was holding the old password.
+    await this.tokenEpoch.bump(userId);
 
     this.logger.log(`🔑 Password changed for user id=${userId}`);
     return { message: '🔑 Password updated successfully' };
