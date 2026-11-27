@@ -1404,6 +1404,17 @@ Your first task is ONLY the Research phase. Analyze the codebase to clarify scop
 
 The version lives in the **root `package.json`** (`"version": "1.1.0"`). Update only that field — the individual workspace `package.json` files are not consumed by the build pipeline.
 
+**Automated since v1.13.0.** `scripts/version-bump.mjs` reads the commits since the last `v*` tag and derives the bump from the Conventional Commit type, so a push to `main` no longer needs a hand-written bump:
+
+| Commits since the last tag | Bump |
+|---------------------------|------|
+| `feat!:`, or a `BREAKING CHANGE:` footer | Major (`1.4.2` → `2.0.0`) |
+| `feat:` | Minor (`1.4.2` → `1.5.0`) |
+| `fix:`, `perf:`, `refactor:`, `style:`, `build:`, `revert:` | Patch (`1.4.2` → `1.4.3`) |
+| `docs:`, `chore:`, `ci:`, `test:` only | **None** — a docs-only push publishes nothing |
+
+A subject without a type counts as a patch (it is a change, just not a declared one); merge commits are ignored. The script also prepends the generated `## [vX.Y.Z]` entry to `docs/changelog.md`, so the release body is never empty. Preview it with `node scripts/version-bump.mjs --dry-run`; running it without the flag bumps locally, and the workflow leaves an already-bumped `package.json` alone so a manual bump still wins.
+
 ### 16.2 Update `docs/changelog.md`
 
 Every release must add a changelog entry **above** the previous entries (reverse chronological).
@@ -1464,10 +1475,8 @@ tag (`v1.12.0` → `1.12.0` / `11200`), so both surfaces show the release versio
 ### 16.5 Full release checklist
 
 ```markdown
-- [ ] Bump version in root `package.json`
-- [ ] Update `docs/changelog.md` with release notes
-- [ ] Commit: `chore: bump version to vX.Y.Z`
-- [ ] Push to `main` — `release-android.yml` creates the annotated tag and the GitHub Release with the APK
+- [ ] Push to `main` — `release-android.yml` bumps the version from the commit types (`scripts/version-bump.mjs`), commits `chore: bump version to vX.Y.Z`, updates `docs/changelog.md`, then creates the annotated tag and the GitHub Release with the APK
+- [ ] A manual bump still works: set the version + changelog, commit `chore: bump version to vX.Y.Z`, push (the script detects the version is already ahead of the last tag and does not bump again)
 - [ ] (Optional) `git tag -a vX.Y.Z -m "vX.Y.Z — ..."` + `git push origin main --tags` to release without a new commit
 - [ ] Verify CI/CD completes successfully
 - [ ] Confirm version badge in web UI shows the new version

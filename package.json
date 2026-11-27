@@ -13,6 +13,7 @@
     "test:e2e": "npx turbo test:e2e",
     "test:cov": "npx turbo test:cov",
     "bootstrap": "bash ./scripts/bootstrap.sh",
+    "version:bump": "node scripts/version-bump.mjs",
     "seed": "pnpm --filter api seed",
     "icons:regenerate": "python3 apps/mobile/scripts/resize-launcher-icons.py"
   },

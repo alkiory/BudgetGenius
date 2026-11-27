@@ -3,12 +3,14 @@ name: Release Android APK to GitHub Releases
 # ── Release pipeline ───────────────────────────────────────────────────────
 # Three entry points, all producing the same artefacts:
 #
-#   * push to `main`      → publishes ONLY when the version in the root
-#                           `package.json` has no GitHub Release yet, i.e. right
-#                           after the `chore: bump version to vX.Y.Z` commit
-#                           from `knowledge.md` §16 that also added the
-#                           `docs/changelog.md` entry. Every other main push
-#                           exits after the ~10 s resolve step.
+#   * push to `main`      → bumps the version automatically from the commits
+#                           since the last `v*` tag (`scripts/version-bump.mjs`:
+#                           breaking → major, `feat:` → minor, `fix:` → patch,
+#                           docs/chore/ci/test-only → no release), commits the
+#                           bump with its `docs/changelog.md` entry, and
+#                           publishes. A range that ships nothing exits after
+#                           the resolve step, as does a version whose release
+#                           already exists.
 #   * push of a `v*` tag  → always publishes that tag (a re-push refreshes the
 #                           release and replaces the APK asset).
 #   * manual dispatch     → force-publishes the checked-out revision's version
@@ -52,6 +54,31 @@ jobs:
       HAS_FIREBASE_SECRET: ${{ secrets.FIREBASE_SERVICES_BASE64 }}
     steps:
       - uses: actions/checkout@v4
+
+      # ── Automatic version bump ───────────────────────────────────────────
+      # Runs before the resolve step so the run publishes the version this push
+      # decided on. The commit is pushed with the workflow token, which does
+      # NOT re-trigger this workflow (no bump loop): this same run builds and
+      # publishes it. Serialised by the `concurrency` group above.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Bump version from the commits since the last tag
+        id: bump
+        if: github.event_name == 'push' && github.ref_type == 'branch'
+        run: node scripts/version-bump.mjs
+
+      - name: Commit and push the bump
+        if: steps.bump.outputs.bump == 'major' || steps.bump.outputs.bump == 'minor' || steps.bump.outputs.bump == 'patch'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json docs/changelog.md
+          git commit -m "chore: bump version to ${{ steps.bump.outputs.tag }}"
+          git push origin HEAD:main
 
       # ── Resolve what to publish ──────────────────────────────────────────
       # The tag source of truth is the root `package.json` (knowledge.md
@@ -169,12 +196,6 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
-
-      - name: Setup Node.js
-        if: steps.release.outputs.publish == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
 
       - name: Install pnpm
         if: steps.release.outputs.publish == 'true'
@@ -360,9 +381,13 @@ jobs:
             exit 0
           fi
 
+          # Tag what main points at. After an automatic bump, HEAD is the
+          # pre-bump checkout, so tagging it would leave the tag without the
+          # version the APK was built with.
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
           git config user.name "${GITHUB_ACTOR}"
           git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-          git tag -a "${tag}" -m "${tag} — BudgetGenius Android release"
+          git tag -a "${tag}" -m "${tag} — BudgetGenius Android release" origin/main
           git push origin "refs/tags/${tag}"
 
       - name: Publish GitHub Release
@@ -370,7 +395,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release.outputs.tag }}
-          target_commitish: ${{ github.sha }}
           name: BudgetGenius ${{ steps.release.outputs.tag }}
           body_path: release-notes.md
           files: |
