@@ -1,11 +1,12 @@
 import { useGetSettings } from "@adapters/query/userQuery";
-import { APP_PATHS, landingHref, RoutePaths } from "@presentation/utils/routes";
+import { changelog } from "@presentation/data/changelog";
 import {
   consumeOnboardingJustFinished,
   hasPendingOnboardingTour,
   markTourVersionSeen,
   readSeenTourVersion,
 } from "@presentation/utils/appTour";
+import { APP_PATHS, landingHref, RoutePaths } from "@presentation/utils/routes";
 import { driver, type DriveStep, type PopoverDOM } from "driver.js";
 import "driver.js/dist/driver.css";
 import { useEffect, useRef } from "react";
@@ -67,7 +68,7 @@ function withChangelogLink(step: DriveStep, label: string): DriveStep {
 }
 
 export function AppTour() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { data: settings, isLoading } = useGetSettings();
   const { pathname } = useLocation();
   const launched = useRef(false);
@@ -77,12 +78,17 @@ export function AppTour() {
   // once settings resolve. Reading `t` from a ref at launch time keeps the
   // tour in the same language as the dashboard it highlights.
   const tRef = useRef(t);
+  const langRef = useRef(i18n.language);
 
   const hasCompletedOnboarding = settings?.hasCompletedOnboarding === true;
 
   useEffect(() => {
     tRef.current = t;
   }, [t]);
+
+  useEffect(() => {
+    langRef.current = i18n.language;
+  }, [i18n.language]);
 
   // The effect below must schedule at most once per mount: consuming the
   // wizard flag early meant any re-render cleared the pending timer and the
@@ -134,6 +140,7 @@ export function AppTour() {
       launched.current = true;
       if (isNewUser) consumeOnboardingJustFinished();
       const tr = tRef.current;
+      const latestRelease = changelog[0];
 
       const steps: DriveStep[] = isNewUser
         ? [
@@ -207,7 +214,15 @@ export function AppTour() {
             {
               popover: {
                 title: tr("tour.whatsNew.title", { version: __APP_VERSION__ }),
-                description: tr("tour.whatsNew.body"),
+                // The newest entry of the public changelog, not a fixed string:
+                // the announcement used to advertise a release from months
+                // earlier, because its copy only changed when someone
+                // remembered to edit the locale files.
+                description: latestRelease
+                  ? langRef.current?.startsWith("es")
+                    ? latestRelease.description.es
+                    : latestRelease.description.en
+                  : tr("tour.whatsNew.body"),
               },
             },
             withChangelogLink(

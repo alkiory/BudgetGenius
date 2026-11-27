@@ -63,9 +63,21 @@ export interface ChangelogEntry {
  */
 export const changelog: ChangelogEntry[] = [
   {
+    version: "1.13",
+    date: "2026-11-27",
+    highlight: true,
+    title: {
+      en: "The Android app updates itself",
+      es: "La app de Android se actualiza sola",
+    },
+    description: {
+      en: "When we publish a version, BudgetGenius tells you inside the app and installs it with Android's own installer, so you no longer download it from the browser or look for it in your Downloads folder. Changing your password now also ends access on your other devices, and signing out clears whatever was left half finished.",
+      es: "Cuando publicamos una versión, BudgetGenius te lo dice dentro de la app y la instala con el instalador de Android, así que ya no tienes que descargarla desde el navegador ni buscarla en Descargas. Además, cambiar la contraseña ahora cierra el acceso en tus otros dispositivos y cerrar sesión borra lo que quedaba a medias.",
+    },
+  },
+  {
     version: "1.12",
     date: "2026-11-26",
-    highlight: true,
     title: {
       en: "A guide for every screen, and savings you can watch grow",
       es: "Una guía para cada pantalla y ahorros que ves crecer",

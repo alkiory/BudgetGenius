@@ -183,8 +183,12 @@ jobs:
     env:
       # Build-time config: Vite inlines every VITE_* value. Set here (not only
       # on the build step) because firebase.json's predeploy runs `build:web`
-      # again from the action and must see the same version/config.
-      VITE_APP_VERSION: ${{ github.sha }}
+      # again from the action and must see the same config.
+      #
+      # No VITE_APP_VERSION on purpose: vite.config.ts falls back to the root
+      # package.json version, which the release flow bumps. Pinning it to the
+      # commit SHA made the badge and the "what's new" tour announce
+      # `v<sha>` instead of the release the user is actually running.
       VITE_API_URL: ${{ secrets.VITE_API_URL }}
       VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
       VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
