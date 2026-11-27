@@ -24,6 +24,12 @@
 
         </activity>
 
+        <!-- Result sink for the Android 6 install session; explicit to this
+             app only, so it is not exported. -->
+        <receiver
+            android:name=".ApkInstallReceiver"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

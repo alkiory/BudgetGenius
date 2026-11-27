@@ -79,7 +79,11 @@ export function ApkUpdateGate() {
         <Button variant="outline" onClick={dismiss} disabled={installing}>
           {t("common.cancel")}
         </Button>
-        <Button onClick={() => void install()} disabled={installing}>
+        <Button
+          className="h-12"
+          onClick={() => void install()}
+          disabled={installing}
+        >
           {installing ? t("appUpdate.downloading") : t("appUpdate.updateNow")}
         </Button>
       </div>

@@ -1,13 +1,13 @@
 package com.budgetgenius.mobile;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
@@ -24,7 +24,12 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 /**
  * Native half of the in-app APK update flow.
@@ -36,9 +41,11 @@ import java.io.File;
  * it, and the install intent — plus a local notification so the update is
  * surfaced without opening the site.
  *
- * The downloaded APK must be under a path the FileProvider already shares
- * (`res/xml/file_paths.xml` includes the app cache dir): Android 7+ hands the
- * installer that content URI, while Android 6 only understands a file URI.
+ * The installer runs in another process and cannot open this app's private
+ * cache. Android 7+ therefore gets a content URI from the FileProvider
+ * (`res/xml/file_paths.xml` shares the cache dir); Android 6 has no URI grant
+ * that reaches a plain file, so the APK is streamed into a PackageInstaller
+ * session instead.
  */
 // The alias lets the bridge run `notificationsResult` once Android reports the
 // user's answer, instead of resolving the call before the dialog closes.
@@ -99,7 +106,6 @@ public class ApkUpdatePlugin extends Plugin {
    * Hands a downloaded APK to the system installer. The user still confirms in
    * Android's dialog; nothing here bypasses it.
    */
-  @SuppressLint("FileUriExposed")
   @PluginMethod
   public void installApk(PluginCall call) {
     String rawPath = call.getString("path");
@@ -132,19 +138,23 @@ public class ApkUpdatePlugin extends Plugin {
       return;
     }
 
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+      // Android 6's installer opens a file URI as a filesystem path from its
+      // own process, and FLAG_GRANT_READ_URI_PERMISSION only covers content
+      // URIs, so it cannot read the APK in this app's cache. A session copies
+      // the bytes into install storage the system owns.
+      installWithSession(file, call);
+      return;
+    }
+
     getActivity()
       .runOnUiThread(() -> {
         try {
-          Uri uri = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
-            ? FileProvider.getUriForFile(
-              getContext(),
-              getContext().getPackageName() + ".fileprovider",
-              file
-            )
-            // The stock installer only accepts content URIs from Nougat on;
-            // on Android 6 it rejects them and needs a file URI. The
-            // FileUriExposed restriction does not exist on those versions.
-            : Uri.fromFile(file);
+          Uri uri = FileProvider.getUriForFile(
+            getContext(),
+            getContext().getPackageName() + ".fileprovider",
+            file
+          );
 
           Intent intent = new Intent(Intent.ACTION_VIEW);
           intent.setDataAndType(uri, "application/vnd.android.package-archive");
@@ -179,6 +189,82 @@ public class ApkUpdatePlugin extends Plugin {
           );
         }
       });
+  }
+
+  /**
+   * Android 6 path: stream the APK into an install session and commit it. The
+   * system shows the same confirmation dialog it would for an install intent;
+   * nothing is installed without the user accepting.
+   */
+  private void installWithSession(File file, PluginCall call) {
+    PackageInstaller installer = getContext()
+      .getPackageManager()
+      .getPackageInstaller();
+    PackageInstaller.Session session = null;
+    int sessionId = -1;
+    boolean committed = false;
+
+    try {
+      PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
+        PackageInstaller.SessionParams.MODE_FULL_INSTALL
+      );
+      sessionId = installer.createSession(params);
+      session = installer.openSession(sessionId);
+
+      try (
+        InputStream in = new BufferedInputStream(new FileInputStream(file));
+        OutputStream out = new BufferedOutputStream(
+          session.openWrite("base.apk", 0, file.length())
+        )
+      ) {
+        byte[] buffer = new byte[64 * 1024];
+        int read;
+        while ((read = in.read(buffer)) != -1) {
+          out.write(buffer, 0, read);
+        }
+        out.flush();
+      }
+
+      session.commit(installResultIntent(sessionId).getIntentSender());
+      committed = true;
+      call.resolve();
+    } catch (Exception error) {
+      if (sessionId != -1 && !committed) {
+        try {
+          installer.abandonSession(sessionId);
+        } catch (Exception ignored) {
+          // Nothing left to clean up.
+        }
+      }
+      call.reject(
+        "Android refused to open the installer",
+        "INSTALL_FAILED",
+        error
+      );
+    } finally {
+      if (session != null) {
+        session.close();
+      }
+    }
+  }
+
+  /**
+   * The installer writes its status into this broadcast. It is explicit to our
+   * own non-exported receiver, so no other app can observe or answer for it.
+   */
+  private PendingIntent installResultIntent(int sessionId) {
+    Intent result = new Intent(getContext(), ApkInstallReceiver.class);
+    result.setAction(ApkInstallReceiver.ACTION_INSTALL_STATUS);
+    result.putExtra(PackageInstaller.EXTRA_SESSION_ID, sessionId);
+
+    int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      // Android 12+ requires an explicit mutability flag so the system can
+      // fill in the result extras; this path only runs on Android 6.
+      flags |= PendingIntent.FLAG_MUTABLE;
+    }
+
+    return PendingIntent.getBroadcast(getContext(), sessionId, result, flags);
   }
 
   @PluginMethod

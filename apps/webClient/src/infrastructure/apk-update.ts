@@ -46,6 +46,11 @@ export interface ApkRelease {
   apkUrl: string;
   sizeBytes?: number;
   notes?: string;
+  /**
+   * When GitHub last replaced the asset. A release tag can be republished, so
+   * the version alone does not identify the bytes behind it.
+   */
+  updatedAt?: string;
 }
 
 /** `v1.12.0-dev` → `1.12.0`, so a dev build is not seen as older. */
@@ -111,7 +116,9 @@ export function pickApkRelease(payload: unknown): ApkRelease | null {
       /\.apk$/i.test((candidate as { name: string }).name) &&
       typeof (candidate as { browser_download_url?: unknown })
         .browser_download_url === "string",
-  ) as { browser_download_url: string; size?: number } | undefined;
+  ) as
+    | { browser_download_url: string; size?: number; updated_at?: string }
+    | undefined;
 
   if (!asset) return null;
 
@@ -120,7 +127,19 @@ export function pickApkRelease(payload: unknown): ApkRelease | null {
     apkUrl: asset.browser_download_url,
     sizeBytes: typeof asset.size === "number" ? asset.size : undefined,
     notes: typeof release.body === "string" ? release.body : undefined,
+    updatedAt:
+      typeof asset.updated_at === "string" ? asset.updated_at : undefined,
   };
+}
+
+/**
+ * Identifies the exact APK behind a release. The workflow can replace the asset
+ * of an existing tag, and the download URL stays the same, so the asset's
+ * `updated_at` is what tells a replacement apart from an already downloaded
+ * copy.
+ */
+export function releaseAssetKey(release: ApkRelease): string {
+  return `${release.version}:${release.updatedAt ?? release.apkUrl}`;
 }
 
 export async function fetchLatestApkRelease(
@@ -196,6 +215,8 @@ export function readPendingRelease(): ApkRelease | null {
       sizeBytes:
         typeof parsed.sizeBytes === "number" ? parsed.sizeBytes : undefined,
       notes: typeof parsed.notes === "string" ? parsed.notes : undefined,
+      updatedAt:
+        typeof parsed.updatedAt === "string" ? parsed.updatedAt : undefined,
     };
   } catch {
     return null;

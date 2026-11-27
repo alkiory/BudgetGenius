@@ -8,6 +8,7 @@ import {
   markChecked,
   readBuildVersion,
   readPendingRelease,
+  releaseAssetKey,
   savePendingRelease,
   shouldCheckNow,
   supportsInAppUpdates,
@@ -47,9 +48,13 @@ export function useApkUpdate() {
   const [installing, setInstalling] = useState(false);
   const [failure, setFailure] = useState<ApkUpdateFailure>(null);
   const checking = useRef(false);
+  // Lets `check` tell a background rollback from a dialog the user is already
+  // acting on, without depending on the render that started the install.
+  const installingRef = useRef(false);
   // A download that already finished: retrying after the Settings detour must
-  // not transfer the APK again.
-  const downloadedApk = useRef<{ version: string; path: string } | null>(null);
+  // not transfer the APK again. Keyed by asset revision, so a release
+  // republished under the same tag downloads again.
+  const downloadedApk = useRef<{ key: string; path: string } | null>(null);
   // Bumped on dismissal so an in-flight install stops before it opens an
   // Android activity for a dialog the user already closed.
   const runId = useRef(0);
@@ -65,7 +70,19 @@ export function useApkUpdate() {
       markChecked();
 
       const latest = await fetchLatestApkRelease();
-      if (!latest || !isNewerVersion(latest.version, readBuildVersion())) {
+      if (!latest) return;
+
+      if (!isNewerVersion(latest.version, readBuildVersion())) {
+        // The published release moved back to (or behind) this build: a
+        // previously offered version is no longer promoted, so drop it instead
+        // of installing something maintainers withdrew. A dialog whose install
+        // is already running is left alone; dismiss is what cancels those.
+        if (installingRef.current) return;
+
+        clearPendingRelease();
+        downloadedApk.current = null;
+        setRelease(null);
+        setFailure(null);
         return;
       }
 
@@ -108,6 +125,7 @@ export function useApkUpdate() {
     const run = ++runId.current;
     const cancelled = () => runId.current !== run;
 
+    installingRef.current = true;
     setInstalling(true);
     setFailure(null);
 
@@ -124,8 +142,9 @@ export function useApkUpdate() {
         return;
       }
 
+      const downloadKey = releaseAssetKey(release);
       let path =
-        downloadedApk.current?.version === release.version
+        downloadedApk.current?.key === downloadKey
           ? downloadedApk.current.path
           : undefined;
 
@@ -145,7 +164,7 @@ export function useApkUpdate() {
         }
 
         path = downloaded.path;
-        downloadedApk.current = { version: release.version, path };
+        downloadedApk.current = { key: downloadKey, path };
       }
 
       if (cancelled()) return;
@@ -167,6 +186,7 @@ export function useApkUpdate() {
         code === "INSTALL_PERMISSION_REQUIRED" ? "permission" : "download",
       );
     } finally {
+      installingRef.current = false;
       setInstalling(false);
     }
   }, [release]);

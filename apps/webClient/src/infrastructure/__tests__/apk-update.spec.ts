@@ -8,6 +8,7 @@ import {
   normalizeVersion,
   pickApkRelease,
   readPendingRelease,
+  releaseAssetKey,
   savePendingRelease,
   shouldCheckNow,
   supportsInAppUpdates,
@@ -34,6 +35,7 @@ const release = (overrides: Record<string, unknown> = {}) => ({
       name: "BudgetGenius-v1.13.0.apk",
       browser_download_url: "https://example.test/app.apk",
       size: 12_345,
+      updated_at: "2026-01-02T03:04:05Z",
     },
   ],
   ...overrides,
@@ -79,6 +81,7 @@ describe("pickApkRelease", () => {
       apkUrl: "https://example.test/app.apk",
       sizeBytes: 12_345,
       notes: "Changelog",
+      updatedAt: "2026-01-02T03:04:05Z",
     });
   });
 
@@ -105,6 +108,28 @@ describe("pickApkRelease", () => {
   it("returns null for a malformed payload", () => {
     expect(pickApkRelease(null)).toBeNull();
     expect(pickApkRelease({ tag_name: "v1.13.0" })).toBeNull();
+  });
+});
+
+describe("releaseAssetKey", () => {
+  it("distinguishes a republished asset from the cached download", () => {
+    const base = { version: "1.13.0", apkUrl: "https://example.test/app.apk" };
+
+    expect(
+      releaseAssetKey({ ...base, updatedAt: "2026-01-02T03:04:05Z" }),
+    ).not.toBe(releaseAssetKey({ ...base, updatedAt: "2026-02-03T04:05:06Z" }));
+    expect(
+      releaseAssetKey({ ...base, updatedAt: "2026-01-02T03:04:05Z" }),
+    ).toBe(releaseAssetKey({ ...base, updatedAt: "2026-01-02T03:04:05Z" }));
+  });
+
+  it("falls back to the URL when GitHub reports no revision", () => {
+    expect(
+      releaseAssetKey({
+        version: "1.13.0",
+        apkUrl: "https://example.test/app.apk",
+      }),
+    ).toBe("1.13.0:https://example.test/app.apk");
   });
 });
 
