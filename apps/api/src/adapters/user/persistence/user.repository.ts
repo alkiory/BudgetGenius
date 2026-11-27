@@ -120,16 +120,30 @@ export class UserRepositoryImpl implements UserRepositoryPort {
    * role hole — and it would keep full backoffice access. `update()` bypasses
    * the entity hooks on purpose (see `setRole`).
    */
-  async demoteSuperAdminsExcept(keepUserId: number): Promise<number> {
+  /**
+   * Demotes every superadmin except `keepUserId` and returns the ids it
+   * demoted.
+   *
+   * The ids matter: a demoted operator's refresh token still lives in Redis,
+   * and `/auth/refresh` would keep renewing it. A bare count would leave the
+   * caller unable to revoke those sessions.
+   */
+  async demoteSuperAdminsExcept(keepUserId: number): Promise<number[]> {
     const result = await this.repo
       .createQueryBuilder()
       .update(User)
       .set({ role: 'user' })
       .where('role = :role', { role: 'superadmin' })
       .andWhere('id != :id', { id: keepUserId })
+      .returning(['id'])
       .execute();
 
-    return result.affected ?? 0;
+    return ((result.raw ?? []) as Array<{ id: number }>).map((row) => row.id);
+  }
+
+  /** Reads only the role, for flows that must not trust a token claim. */
+  async findRoleById(id: number): Promise<{ id: number; role: string } | null> {
+    return this.repo.findOne({ where: { id }, select: ['id', 'role'] });
   }
 
   /**

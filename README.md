@@ -969,7 +969,10 @@ backoffice guard and the catalogue resolve the role from the database, and the
 guard also requires the account address to be the configured one, so a demoted
 account loses access immediately instead of keeping it until its token expires
 — and a leftover `superadmin` row cannot use the backoffice even if the cleanup
-failed. Passwords are changed through `PUT /user/password` with the current
+failed. `/auth/refresh` re-reads the role too (the claim is only a snapshot
+from sign-in time), and a demotion revokes the demoted account's refresh token,
+so rotation cannot mint a `superadmin` access token for an account the row no
+longer backs. Passwords are changed through `PUT /user/password` with the current
 password, which also revokes the stored refresh token so every other device
 has to sign in again — the emailed reset revokes it too, since a reset is what
 you use when the account may be compromised; a wrong current password answers

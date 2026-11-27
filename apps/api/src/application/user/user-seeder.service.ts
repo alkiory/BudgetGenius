@@ -5,6 +5,7 @@ import { UserDto } from './dto/user.dto';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { UserSettingsService } from './user-settings.service';
 import { resolveOperatorEmail } from './operator-email';
+import { RedisService } from '@infrastructure/config/redis.service';
 
 @Injectable()
 export class UserSeederService {
@@ -12,6 +13,7 @@ export class UserSeederService {
     private readonly userRepository: UserRepositoryImpl,
     private readonly userSettings: UserSettingsService,
     private readonly logger: LoggingService,
+    private readonly redisService: RedisService,
   ) {}
 
   async createDefaultUsers(): Promise<void> {
@@ -216,9 +218,23 @@ export class UserSeederService {
       const demoted = await this.userRepository.demoteSuperAdminsExcept(
         keepUserId,
       );
-      if (demoted > 0) {
+
+      for (const id of demoted) {
+        // Same key `AuthService.invalidateRefreshToken` deletes; a revoked
+        // demotion that keeps its refresh token would rotate back in.
+        try {
+          await this.redisService.delete(`refreshToken:${id}`);
+        } catch (error) {
+          this.logger.error(
+            `🛡️ Could not revoke the refresh token of demoted operator ` +
+              `id=${id}: ${(error as Error).message}`,
+          );
+        }
+      }
+
+      if (demoted.length > 0) {
         this.logger.warn(
-          `🛡️ Demoted ${demoted} extra superadmin account(s) — ` +
+          `🛡️ Demoted ${demoted.length} extra superadmin account(s) — ` +
             `id=${keepUserId} is the only operator`,
         );
       }

@@ -318,9 +318,24 @@ export class AuthService {
       const demoted = await this.userRepository.demoteSuperAdminsExcept(
         keepUserId,
       );
-      if (demoted > 0) {
+
+      for (const id of demoted) {
+        // A demoted operator's refresh token is still in Redis, and the
+        // rotation path would keep renewing it. Revoke per account so one
+        // Redis hiccup does not leave the rest alive.
+        try {
+          await this.invalidateRefreshToken(id);
+        } catch (error) {
+          this.logger.error(
+            `🛡️ Could not revoke the refresh token of demoted operator ` +
+              `id=${id}: ${(error as Error).message}`,
+          );
+        }
+      }
+
+      if (demoted.length > 0) {
         this.logger.warn(
-          `🛡️ Demoted ${demoted} previous operator account(s) — ` +
+          `🛡️ Demoted ${demoted.length} previous operator account(s) — ` +
             `id=${keepUserId} is the only one`,
         );
       }
@@ -463,9 +478,15 @@ export class AuthService {
         throw new UnauthorizedException('⛔ Invalid refresh token');
       }
 
-      // The controller mints the new access token from the verified
-      // refresh claims; this method only enforces Redis-side revocation.
-      return { refreshed: true };
+      // The caller signs the new access token, and it must not copy the role
+      // out of the refresh claims: after a handover the old operator's token
+      // still says `superadmin` until it expires. The row is the only truth.
+      const account = await this.userRepository.findRoleById(Number(id));
+      if (!account) {
+        throw new UnauthorizedException('⛔ Invalid refresh token');
+      }
+
+      return { refreshed: true, role: account.role };
     } catch (error) {
       throw error;
     }

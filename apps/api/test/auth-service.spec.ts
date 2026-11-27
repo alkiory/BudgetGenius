@@ -69,6 +69,9 @@ describe('AuthService', () => {
     };
     const userRepositoryMock = {
       findByEmail: jest.fn().mockResolvedValue(user),
+      findRoleById: jest
+        .fn()
+        .mockResolvedValue({ id: user.id, role: user.role }),
       // Default implementation for `resetPassword` — mirrors the real one
       // (records the call) so per-test spies can inspect / override.
       updateUser: jest
@@ -408,6 +411,19 @@ describe('AuthService', () => {
     );
   });
 
+  it('returns the stored role on refresh instead of the token claim', async () => {
+    redisServiceMock.get.mockResolvedValueOnce('stored-refresh-token');
+    (userRepository as any).findRoleById.mockResolvedValueOnce({
+      id: user.id,
+      role: 'user',
+    });
+
+    await expect(
+      authService.refreshToken(user.id, 'stored-refresh-token'),
+    ).resolves.toEqual({ refreshed: true, role: 'user' });
+    expect((userRepository as any).findRoleById).toHaveBeenCalledWith(user.id);
+  });
+
   it('should reject reset-password when the token is unknown', async () => {
     const passwordResetRepositoryMock = (authService as any)
       .passwordResetRepository as any;
@@ -677,7 +693,9 @@ describe('AuthService', () => {
       expect(result.email).toBe('returning@user.com');
       // No new user → no save, no settings seed.
       expect(queryRunnerStub.manager.save).not.toHaveBeenCalled();
-      expect(userSettingsServiceMock.getOrCreateSettings).not.toHaveBeenCalled();
+      expect(
+        userSettingsServiceMock.getOrCreateSettings,
+      ).not.toHaveBeenCalled();
       expect(queryRunnerStub.commitTransaction).toHaveBeenCalledTimes(1);
       expect(queryRunnerStub.release).toHaveBeenCalledTimes(1);
       expect(queryRunnerStub.rollbackTransaction).not.toHaveBeenCalled();
@@ -778,7 +796,9 @@ describe('AuthService', () => {
       expect(queryRunnerStub.release).toHaveBeenCalledTimes(1);
       // Settings seed must NOT have run because save() failed before
       // the transaction committed.
-      expect(userSettingsServiceMock.getOrCreateSettings).not.toHaveBeenCalled();
+      expect(
+        userSettingsServiceMock.getOrCreateSettings,
+      ).not.toHaveBeenCalled();
     });
   });
 });

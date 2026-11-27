@@ -287,6 +287,11 @@ describe('UserSeederService - seeder', () => {
             updateSettings: jest.fn().mockResolvedValue(undefined),
           },
         },
+        {
+          // The seeder revokes the refresh token of every account it demotes.
+          provide: RedisService,
+          useValue: { delete: jest.fn().mockResolvedValue(1) },
+        },
       ],
     }).compile();
 

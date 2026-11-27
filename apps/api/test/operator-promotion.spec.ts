@@ -26,7 +26,7 @@ const buildService = (options: { password?: string | null } = {}) => {
   const userRepository = {
     setRole: jest.fn().mockResolvedValue(undefined),
     clearPassword: jest.fn().mockResolvedValue(undefined),
-    demoteSuperAdminsExcept: jest.fn().mockResolvedValue(0),
+    demoteSuperAdminsExcept: jest.fn().mockResolvedValue([]),
     findByEmail: jest.fn().mockResolvedValue(user),
   };
   const redisService = {
@@ -153,6 +153,20 @@ describe('operator promotion at sign-in', () => {
     await service.oauthLogin({ email: OPERATOR_EMAIL, name: 'Operator' });
 
     expect(userRepository.demoteSuperAdminsExcept).toHaveBeenCalledWith(5);
+  });
+
+  it('revokes the refresh token of every demoted operator', async () => {
+    const { service, user, userRepository } = buildService();
+    userRepository.demoteSuperAdminsExcept.mockResolvedValueOnce([9, 11]);
+    jest.spyOn(service as any, 'validateOAuthUser').mockResolvedValue(user);
+    const invalidate = jest.spyOn(service, 'invalidateRefreshToken');
+
+    await service.oauthLogin({ email: OPERATOR_EMAIL, name: 'Operator' });
+
+    // A demoted account that keeps its refresh token would rotate back into
+    // a `superadmin` access token on the next call.
+    expect(invalidate).toHaveBeenCalledWith(9);
+    expect(invalidate).toHaveBeenCalledWith(11);
   });
 
   it('does not touch an account with a different address', async () => {

@@ -32,18 +32,21 @@ const buildSeeder = (
       authProvider,
     }),
     setRole: jest.fn().mockResolvedValue(undefined),
-    demoteSuperAdminsExcept: jest.fn().mockResolvedValue(0),
+    demoteSuperAdminsExcept: jest.fn().mockResolvedValue([]),
     createUser: jest.fn(),
   };
   const settings = { updateSettings: jest.fn() };
   const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
+  const redis = { delete: jest.fn().mockResolvedValue(1) };
 
   return {
     userRepository,
+    redis,
     seeder: new UserSeederService(
       userRepository as any,
       settings as any,
       logger as any,
+      redis as any,
     ),
   };
 };
@@ -157,5 +160,16 @@ describe('UserSeederService — superadmin promotion', () => {
     await seeder.createDefaultUsers();
 
     expect(userRepository.demoteSuperAdminsExcept).not.toHaveBeenCalled();
+  });
+
+  it('revokes the refresh token of every account it demotes', async () => {
+    const { seeder, userRepository, redis } = buildSeeder(null, {
+      role: 'superadmin',
+    });
+    userRepository.demoteSuperAdminsExcept.mockResolvedValueOnce([9]);
+
+    await seeder.createDefaultUsers();
+
+    expect(redis.delete).toHaveBeenCalledWith('refreshToken:9');
   });
 });
