@@ -26,10 +26,10 @@ export function ApkUpdateGate() {
       try {
         const { enabled } = await ApkUpdate.notificationsEnabled();
         if (!enabled) {
-          // Android 13+ asks at runtime. If the user declines, skip the post
-          // without marking it as sent, so a later grant still notifies.
-          await ApkUpdate.requestNotificationPermission();
-          const afterPrompt = await ApkUpdate.notificationsEnabled();
+          // Android 13+ asks at runtime. The native call resolves only after
+          // the user answers; if they decline, skip the post without marking it
+          // as sent, so a later grant still notifies.
+          const afterPrompt = await ApkUpdate.requestNotificationPermission();
           if (!afterPrompt.enabled) return;
         }
 

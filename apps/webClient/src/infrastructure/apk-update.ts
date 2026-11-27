@@ -12,8 +12,9 @@ export interface ApkUpdateBridge {
   openInstallSettings(): Promise<void>;
   installApk(options: { path: string }): Promise<void>;
   notificationsEnabled(): Promise<{ enabled: boolean }>;
-  requestNotificationPermission(): Promise<void>;
+  requestNotificationPermission(): Promise<{ enabled: boolean }>;
   notifyUpdate(options: { title: string; body: string }): Promise<void>;
+  cancelUpdateNotification(): Promise<void>;
 }
 
 export const ApkUpdate = registerPlugin<ApkUpdateBridge>("ApkUpdate");

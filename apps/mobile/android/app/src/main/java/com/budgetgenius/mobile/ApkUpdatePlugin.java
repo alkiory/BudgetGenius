@@ -1,6 +1,7 @@
 package com.budgetgenius.mobile;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -8,19 +9,21 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
-import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
-import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import com.getcapacitor.JSObject;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 import java.io.File;
 
 /**
@@ -34,14 +37,24 @@ import java.io.File;
  * surfaced without opening the site.
  *
  * The downloaded APK must be under a path the FileProvider already shares
- * (`res/xml/file_paths.xml` includes the app cache dir).
+ * (`res/xml/file_paths.xml` includes the app cache dir): Android 7+ hands the
+ * installer that content URI, while Android 6 only understands a file URI.
  */
-@CapacitorPlugin(name = "ApkUpdate")
+// The alias lets the bridge run `notificationsResult` once Android reports the
+// user's answer, instead of resolving the call before the dialog closes.
+@CapacitorPlugin(
+  name = "ApkUpdate",
+  permissions = {
+    @Permission(
+      alias = "notifications",
+      strings = { Manifest.permission.POST_NOTIFICATIONS }
+    )
+  }
+)
 public class ApkUpdatePlugin extends Plugin {
 
   private static final String CHANNEL_ID = "app-updates";
   private static final int NOTIFICATION_ID = 4101;
-  private static final int REQUEST_POST_NOTIFICATIONS = 9101;
 
   /** Whether the OS will let this app hand an APK to the package installer. */
   @PluginMethod
@@ -86,6 +99,7 @@ public class ApkUpdatePlugin extends Plugin {
    * Hands a downloaded APK to the system installer. The user still confirms in
    * Android's dialog; nothing here bypasses it.
    */
+  @SuppressLint("FileUriExposed")
   @PluginMethod
   public void installApk(PluginCall call) {
     String rawPath = call.getString("path");
@@ -121,17 +135,40 @@ public class ApkUpdatePlugin extends Plugin {
     getActivity()
       .runOnUiThread(() -> {
         try {
-          Uri uri = FileProvider.getUriForFile(
-            getContext(),
-            getContext().getPackageName() + ".fileprovider",
-            file
-          );
+          Uri uri = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+            ? FileProvider.getUriForFile(
+              getContext(),
+              getContext().getPackageName() + ".fileprovider",
+              file
+            )
+            // The stock installer only accepts content URIs from Nougat on;
+            // on Android 6 it rejects them and needs a file URI. The
+            // FileUriExposed restriction does not exist on those versions.
+            : Uri.fromFile(file);
 
           Intent intent = new Intent(Intent.ACTION_VIEW);
           intent.setDataAndType(uri, "application/vnd.android.package-archive");
           intent.addFlags(
             Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK
           );
+
+          // Any app can claim the package-archive MIME type, so an implicit
+          // intent would hand a third party the read grant for this APK (and a
+          // fake installer UI). Pin it to a system installer.
+          ResolveInfo installer = getContext()
+            .getPackageManager()
+            .resolveActivity(intent, PackageManager.MATCH_SYSTEM_ONLY);
+          if (installer == null || installer.activityInfo == null) {
+            call.reject("No system installer is available", "INSTALL_FAILED");
+            return;
+          }
+          // An explicit component: the URI grant and the APK reach only the
+          // system installer, never an app that merely advertised the type.
+          intent.setClassName(
+            installer.activityInfo.packageName,
+            installer.activityInfo.name
+          );
+
           getContext().startActivity(intent);
           call.resolve();
         } catch (Exception error) {
@@ -154,28 +191,51 @@ public class ApkUpdatePlugin extends Plugin {
     call.resolve(result);
   }
 
-  /** Android 13+ requires the runtime permission before any notification shows. */
+  /**
+   * Android 13+ requires the runtime permission before any notification shows.
+   * The call stays open until the user answers the system dialog, so the caller
+   * learns the real outcome instead of checking before the answer arrives.
+   */
   @PluginMethod
   public void requestNotificationPermission(PluginCall call) {
-    if (
-      Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-      ContextCompat.checkSelfPermission(
-        getContext(),
-        Manifest.permission.POST_NOTIFICATIONS
-      ) !=
-      PackageManager.PERMISSION_GRANTED
-    ) {
-      getActivity()
-        .runOnUiThread(() ->
-          ActivityCompat.requestPermissions(
-            getActivity(),
-            new String[] { Manifest.permission.POST_NOTIFICATIONS },
-            REQUEST_POST_NOTIFICATIONS
-          )
-        );
+    // Below Android 13 there is no runtime permission to ask for: the user can
+    // only block notifications from the system settings.
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+      resolveNotificationState(call);
+      return;
     }
-    // The answer arrives through the system dialog; the caller re-checks
-    // `notificationsEnabled` before posting.
+
+    if (getPermissionState("notifications") == PermissionState.GRANTED) {
+      resolveNotificationState(call);
+      return;
+    }
+
+    requestPermissionForAlias("notifications", call, "notificationsResult");
+  }
+
+  /** Runs only after the user answers Android's permission dialog. */
+  @PermissionCallback
+  private void notificationsResult(PluginCall call) {
+    resolveNotificationState(call);
+  }
+
+  private void resolveNotificationState(PluginCall call) {
+    JSObject result = new JSObject();
+    result.put(
+      "enabled",
+      NotificationManagerCompat.from(getContext()).areNotificationsEnabled()
+    );
+    call.resolve(result);
+  }
+
+  /** Dismissing the update must not leave the tray notice behind. */
+  @PluginMethod
+  public void cancelUpdateNotification(PluginCall call) {
+    NotificationManager manager = (NotificationManager) getContext()
+      .getSystemService(Context.NOTIFICATION_SERVICE);
+    if (manager != null) {
+      manager.cancel(NOTIFICATION_ID);
+    }
     call.resolve();
   }
 
