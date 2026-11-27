@@ -7,7 +7,11 @@ import toast from "react-hot-toast";
 // project's `import/order` eslint rule.
 import { getDeviceId } from "./device-id";
 import { isNativePlatform } from "./native";
-import { enqueueRequest, registerOnlineListener } from "./offline-queue";
+import {
+  carriesCredentials,
+  enqueueRequest,
+  registerOnlineListener,
+} from "./offline-queue";
 import { queryClient } from "./queryClient";
 import { requestQueue } from "./request-queue";
 
@@ -18,6 +22,8 @@ interface ApiError {
     /** Set by this interceptor once the request has consumed a refresh. */
     _sessionRetry?: boolean;
     _retryCount?: number;
+    /** Caller opt-out: never queue this mutation for offline replay. */
+    skipOfflineQueue?: boolean;
   };
   response?: AxiosResponse;
 }
@@ -406,7 +412,15 @@ api.interceptors.response.use(
       const method = originalRequest.method?.toUpperCase() || "";
       const isMutation = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
 
-      if (isMutation) {
+      // Credentials never reach storage: a queued password change would sit
+      // in `localStorage` in plaintext and, worse, report success to a form
+      // whose value was never applied. Those requests fail loudly instead.
+      const queueable =
+        isMutation &&
+        !originalRequest.skipOfflineQueue &&
+        !carriesCredentials(originalRequest.data);
+
+      if (queueable) {
         // Strip the baseURL prefix so the URL is stored as a relative path.
         // When flushQueue replays through the same axios instance (which has baseURL),
         // it will correctly re-combine them without doubling.

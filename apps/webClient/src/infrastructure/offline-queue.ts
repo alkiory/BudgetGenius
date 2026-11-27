@@ -10,10 +10,33 @@ export interface QueuedRequest {
 const STORAGE_KEY = "offline_queue";
 const MAX_RETRIES = 5;
 
+/** Body fields that make a request a credential, never queueable. */
+const CREDENTIAL_FIELDS = ["password", "currentPassword", "newPassword"];
+
+/**
+ * Whether a request body carries a credential.
+ *
+ * The queue persists bodies in `localStorage` so they survive a reload, which
+ * is right for a transaction and wrong for a password: any other profile that
+ * uses the same browser could read it after logout. Credential requests are
+ * rejected instead of queued, so the caller sees the network error.
+ */
+export function carriesCredentials(data: unknown): boolean {
+  if (!data || typeof data !== "object") return false;
+  const record = data as Record<string, unknown>;
+  return CREDENTIAL_FIELDS.some((field) => field in record);
+}
+
 function getQueue(): QueuedRequest[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
+    const parsed: unknown = stored ? JSON.parse(stored) : [];
+    if (!Array.isArray(parsed)) return [];
+    // Drop credential rows left by older builds: they must never be replayed
+    // nor read back out of storage.
+    return (parsed as QueuedRequest[]).filter(
+      (request) => !carriesCredentials(request.data),
+    );
   } catch {
     return [];
   }
@@ -33,6 +56,8 @@ export function enqueueRequest(
   url: string,
   data?: unknown,
 ): void {
+  if (carriesCredentials(data)) return;
+
   const queue = getQueue();
   queue.push({
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
