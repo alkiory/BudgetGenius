@@ -3,23 +3,66 @@ package com.budgetgenius.mobile;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInstaller;
 
 /**
  * Result sink for the install session used on Android 6.
  *
- * The session's commit hands the system the APK and this intent; Android then
- * shows its own confirmation and installs only if the user accepts. There is
- * nothing to surface from the result — a cancelled install simply leaves this
- * build running, and the next tap opens a new session.
+ * Committing a session shows nothing by itself for an ordinary app: Android
+ * broadcasts {@code STATUS_PENDING_USER_ACTION} with the installer's
+ * confirmation activity in {@code EXTRA_INTENT} and waits for the user's
+ * answer. This receiver starts that activity, and forwards every status to the
+ * plugin so the bridge resolves only once the confirmation is really on screen.
  */
 public class ApkInstallReceiver extends BroadcastReceiver {
 
   public static final String ACTION_INSTALL_STATUS =
     "com.budgetgenius.mobile.INSTALL_STATUS";
 
+  /** Told about each session status the system reports for our commit. */
+  public interface SessionStatusListener {
+    void onSessionStatus(int sessionId, int status);
+  }
+
+  private static volatile SessionStatusListener listener;
+
+  static void setListener(SessionStatusListener value) {
+    listener = value;
+  }
+
   @Override
   public void onReceive(Context context, Intent intent) {
-    // The PackageInstaller status extras are intentionally ignored: the system
-    // installer already reports success or failure to the user.
+    if (intent == null) return;
+
+    int sessionId = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1);
+    int status = intent.getIntExtra(
+      PackageInstaller.EXTRA_STATUS,
+      PackageInstaller.STATUS_FAILURE
+    );
+    boolean confirmationOpened = true;
+
+    if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+      // The installer's own confirmation screen. Without starting it the
+      // session waits for an approval the user never sees.
+      Intent confirmation = intent.getParcelableExtra(Intent.EXTRA_INTENT);
+      if (confirmation == null) {
+        confirmationOpened = false;
+      } else {
+        confirmation.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+          context.startActivity(confirmation);
+        } catch (Exception ignored) {
+          confirmationOpened = false;
+        }
+      }
+    }
+
+    SessionStatusListener current = listener;
+    if (current != null) {
+      current.onSessionStatus(
+        sessionId,
+        confirmationOpened ? status : PackageInstaller.STATUS_FAILURE
+      );
+    }
   }
 }

@@ -12,6 +12,8 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
@@ -30,6 +32,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Native half of the in-app APK update flow.
@@ -191,10 +194,13 @@ public class ApkUpdatePlugin extends Plugin {
       });
   }
 
+  /** How long the system has to hand the confirmation back to us. */
+  private static final long SESSION_CONFIRMATION_TIMEOUT_MS = 30_000;
+
   /**
-   * Android 6 path: stream the APK into an install session and commit it. The
-   * system shows the same confirmation dialog it would for an install intent;
-   * nothing is installed without the user accepting.
+   * Android 6 path: stream the APK into an install session and commit it.
+   * Nothing is installed without the user accepting; the system hands the
+   * confirmation activity to {@link ApkInstallReceiver}, which starts it.
    */
   private void installWithSession(File file, PluginCall call) {
     PackageInstaller installer = getContext()
@@ -227,7 +233,9 @@ public class ApkUpdatePlugin extends Plugin {
 
       session.commit(installResultIntent(sessionId).getIntentSender());
       committed = true;
-      call.resolve();
+      // The commit alone does not put anything on screen: Android sends the
+      // confirmation back through the receiver, so the call resolves there.
+      awaitSessionConfirmation(sessionId, call);
     } catch (Exception error) {
       if (sessionId != -1 && !committed) {
         try {
@@ -246,6 +254,46 @@ public class ApkUpdatePlugin extends Plugin {
         session.close();
       }
     }
+  }
+
+  /**
+   * Keeps the bridge call open until the installer's confirmation is actually
+   * on screen. Resolving at commit time would tell the UI the handoff
+   * succeeded while the session still waits for an approval nobody can give.
+   */
+  private void awaitSessionConfirmation(int sessionId, PluginCall call) {
+    AtomicBoolean settled = new AtomicBoolean(false);
+    Handler handler = new Handler(Looper.getMainLooper());
+
+    Runnable timeout = () -> {
+      if (!settled.compareAndSet(false, true)) return;
+      ApkInstallReceiver.setListener(null);
+      call.reject(
+        "Android did not open the install confirmation",
+        "INSTALL_FAILED"
+      );
+    };
+
+    ApkInstallReceiver.setListener((id, status) -> {
+      if (id != sessionId) return;
+      if (!settled.compareAndSet(false, true)) return;
+
+      handler.removeCallbacks(timeout);
+      ApkInstallReceiver.setListener(null);
+
+      if (
+        status == PackageInstaller.STATUS_PENDING_USER_ACTION ||
+        status == PackageInstaller.STATUS_SUCCESS
+      ) {
+        // The installer has taken over from here.
+        call.resolve();
+        return;
+      }
+
+      call.reject("Android could not start the install", "INSTALL_FAILED");
+    });
+
+    handler.postDelayed(timeout, SESSION_CONFIRMATION_TIMEOUT_MS);
   }
 
   /**
