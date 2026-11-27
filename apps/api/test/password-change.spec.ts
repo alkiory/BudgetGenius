@@ -18,7 +18,11 @@ const buildService = (user: any) => {
     findById: jest.fn().mockResolvedValue(user),
     updateUser: jest.fn().mockResolvedValue(user),
   };
-  const redisService = { delete: jest.fn().mockResolvedValue(1) };
+  const redisService = {
+    delete: jest.fn().mockResolvedValue(1),
+    get: jest.fn().mockResolvedValue(null),
+    incr: jest.fn().mockResolvedValue(1),
+  };
   const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
   const tokenEpoch = { bump: jest.fn().mockResolvedValue(1) };
 
@@ -113,5 +117,52 @@ describe('UserService.changePassword', () => {
     await expect(
       service.changePassword(9, 'whatever', '#NewPass123'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('counts a wrong current password in the account bucket', async () => {
+    const { service, redisService } = buildService({
+      id: 9,
+      password: '$2a$04$stored-hash',
+    });
+    jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
+
+    await expect(
+      service.changePassword(9, 'wrong', '#NewPass123'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(redisService.incr).toHaveBeenCalledWith(
+      'passwordChange:attempts:9',
+      15 * 60,
+    );
+  });
+
+  it('answers 429 once the account bucket is exhausted, even with a valid token', async () => {
+    const { service, userRepository, redisService } = buildService({
+      id: 9,
+      password: '$2a$04$stored-hash',
+    });
+    redisService.get.mockResolvedValueOnce('5');
+
+    await expect(
+      service.changePassword(9, 'guess', '#NewPass123'),
+    ).rejects.toMatchObject({ status: 429 });
+
+    // Nothing is compared, written or revoked while the bucket is closed.
+    expect(userRepository.updateUser).not.toHaveBeenCalled();
+    expect(redisService.delete).not.toHaveBeenCalled();
+  });
+
+  it('clears the account bucket after a successful change', async () => {
+    const { service, redisService } = buildService({
+      id: 9,
+      password: '$2a$04$stored-hash',
+    });
+    jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
+
+    await service.changePassword(9, 'current', '#NewPass123');
+
+    expect(redisService.delete).toHaveBeenCalledWith(
+      'passwordChange:attempts:9',
+    );
   });
 });

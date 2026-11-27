@@ -434,6 +434,24 @@ describe('AuthService', () => {
     expect((userRepository as any).findRoleById).toHaveBeenCalledWith(user.id);
   });
 
+  it('reads the epoch before the stored refresh token so a racing change wins', async () => {
+    redisServiceMock.get.mockResolvedValueOnce('stored-refresh-token');
+    tokenEpochMock.current.mockResolvedValueOnce(0);
+
+    const result = await authService.refreshToken(
+      user.id,
+      'stored-refresh-token',
+    );
+
+    // The token is stamped with the epoch read BEFORE the credential was
+    // confirmed. A password change that lands in between bumps the epoch, so
+    // this token is already stale instead of inheriting the new value.
+    expect(result.epoch).toBe(0);
+    expect(tokenEpochMock.current.mock.invocationCallOrder[0]).toBeLessThan(
+      redisServiceMock.get.mock.invocationCallOrder[0],
+    );
+  });
+
   it('should reject reset-password when the token is unknown', async () => {
     const passwordResetRepositoryMock = (authService as any)
       .passwordResetRepository as any;

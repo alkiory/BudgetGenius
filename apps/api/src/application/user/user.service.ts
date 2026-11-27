@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -12,6 +14,16 @@ import { CreateUserDto } from '@application/user/dto/create.dto';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { UserSettingsService } from '@application/user/user-settings.service';
+
+/**
+ * Per-user brute-force limit for the current-password check.
+ *
+ * Changing the password already requires a valid access token, so the caller
+ * may be a thief holding one. The global throttle keys on `X-Device-Id`, which
+ * the client chooses; this bucket keys on the account, which they cannot.
+ */
+const PASSWORD_CHANGE_MAX_ATTEMPTS = 5;
+const PASSWORD_CHANGE_WINDOW_SECONDS = 15 * 60;
 
 @Injectable()
 export class UserService {
@@ -136,11 +148,34 @@ export class UserService {
    * profile endpoint: that endpoint now drops credentials, so the write has to
    * happen here, with the current password verified and the new one hashed.
    */
+  private passwordChangeAttemptsKey(userId: number): string {
+    return `passwordChange:attempts:${userId}`;
+  }
+
   async changePassword(
     userId: number,
     currentPassword: string,
     newPassword: string,
   ): Promise<{ message: string }> {
+    const attemptsKey = this.passwordChangeAttemptsKey(userId);
+    const attemptsRaw = await this.redisService.get(attemptsKey);
+    const attempts = attemptsRaw ? Number(attemptsRaw) : 0;
+
+    if (attempts >= PASSWORD_CHANGE_MAX_ATTEMPTS) {
+      this.logger.warn(
+        `🚫 Cambio de contraseña bloqueado por rate-limit ` +
+          `(${attempts}/${PASSWORD_CHANGE_MAX_ATTEMPTS}) para id=${userId}`,
+      );
+      throw new HttpException(
+        {
+          message:
+            '🚫 Demasiados intentos con la contraseña actual. Vuelve a intentarlo en unos minutos.',
+          error: 'Too Many Requests',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     const user = await this.userRepository.findById(userId);
     if (!user) {
       throw new NotFoundException('⚠️ User not found');
@@ -153,6 +188,8 @@ export class UserService {
 
     const matches = await bcrypt.compare(currentPassword, user.password);
     if (!matches) {
+      await this.redisService.incr(attemptsKey, PASSWORD_CHANGE_WINDOW_SECONDS);
+
       // 400, not 401: the SPA's response interceptor treats every non-auth 401
       // as "session expired" — it tries to refresh and then ends the session.
       // A rejected current password is a validation error, not a dead token.
@@ -169,6 +206,10 @@ export class UserService {
     // JWT stays valid until it expires, so the epoch is what actually evicts
     // whoever was holding the old password.
     await this.tokenEpoch.bump(userId);
+
+    // A correct current password clears the bucket, so a legitimate user who
+    // mistyped a few times is not left near the limit.
+    await this.redisService.delete(attemptsKey);
 
     this.logger.log(`🔑 Password changed for user id=${userId}`);
     return { message: '🔑 Password updated successfully' };

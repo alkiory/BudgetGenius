@@ -978,8 +978,12 @@ session epoch: access tokens carry the epoch they were signed with,
 `JwtStrategy` compares it with the stored counter, so every token already
 issued — this device's included — stops working and each device signs in again
 with the new password. The emailed reset revokes and bumps the same way, since
-a reset is what you use when the account may be compromised; a wrong current password answers
-400 (a 401 would be read by the SPA as an expired session). `PUT /user/:id` only accepts name and
+a reset is what you use when the account may be compromised; a wrong current
+password answers 400 (a 401 would be read by the SPA as an expired session)
+and counts against a per-account bucket of 5 attempts / 15 minutes, because the
+global throttle keys on the client-chosen `X-Device-Id`. Rotation reads the
+epoch *before* validating the stored refresh token, so a change racing a
+refresh cannot mint a token that outlives it. `PUT /user/:id` only accepts name and
 surname. In development a local fallback is used (`superadmin@admin.com` /
 `#Password123`). Nothing is seeded when `SUPERADMIN_EMAIL` is empty.
 

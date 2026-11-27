@@ -475,6 +475,14 @@ export class AuthService {
 
   async refreshToken(id: number, refreshToken: string) {
     try {
+      // Read the epoch BEFORE validating the stored credential. A password
+      // change racing this call either deletes that credential (the check
+      // below then fails) or bumps the epoch after this read, so the token we
+      // mint carries an epoch `JwtStrategy` already rejects. Reading it after
+      // the check would let a change that finished in between hand us its new
+      // epoch, and the minted token would survive the change that ended it.
+      const epoch = await this.tokenEpoch.current(Number(id));
+
       const storedToken = await this.redisService.get(`refreshToken:${id}`);
       if (!storedToken) {
         throw new UnauthorizedException('⛔ Token expired, login again.');
@@ -491,10 +499,6 @@ export class AuthService {
       if (!account) {
         throw new UnauthorizedException('⛔ Invalid refresh token');
       }
-
-      // The rotated access token carries the epoch we are at right now, so it
-      // survives the check in `JwtStrategy` after a credential change.
-      const epoch = await this.tokenEpoch.current(Number(id));
 
       return { refreshed: true, role: account.role, epoch };
     } catch (error) {
