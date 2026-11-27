@@ -70,15 +70,33 @@ function tryGit(argv) {
  * side branch must not become the anchor of the next release.
  */
 function lastTag() {
-  const raw = tryGit(["tag", "--list", "v[0-9]*", "--merged", "HEAD"]);
-  if (!raw) return null;
+  const read = () =>
+    (tryGit(["tag", "--list", "v[0-9]*", "--merged", "HEAD"]) ?? "")
+      .split("\n")
+      .map((tag) => tag.trim())
+      .filter((tag) => /^v\d+(\.\d+)*$/.test(tag));
 
-  const tags = raw
-    .split("\n")
-    .map((tag) => tag.trim())
-    .filter((tag) => /^v\d+(\.\d+)*$/.test(tag));
+  let tags = read();
 
-  if (!tags.length) return null;
+  // `actions/checkout@v4` fetches a single commit by default, and a shallow
+  // clone carries no tags. Without one the anchor is missing and every push
+  // would look like "already bumped", silently disabling the automation, so
+  // deepen once and read again.
+  if (
+    !tags.length &&
+    tryGit(["rev-parse", "--is-shallow-repository"]) === "true"
+  ) {
+    tryGit(["fetch", "--tags", "--unshallow", "--quiet", "origin"]);
+    tags = read();
+  }
+
+  if (!tags.length) {
+    console.warn(
+      "::warning::version-bump: no v* tag reachable from HEAD, so the bump cannot be derived. Give the checkout full history and tags (fetch-depth: 0).",
+    );
+    return null;
+  }
+
   return tags.sort(compareVersions).at(-1);
 }
 
