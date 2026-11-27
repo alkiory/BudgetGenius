@@ -2,6 +2,14 @@
 
 ---
 
+## [v1.13.1] — 2026-11-27
+
+### Fixed
+
+- keep the version bump anchored on a shallow checkout (`eda1120`)
+
+---
+
 ## [v1.13.0] — 2026-11-27
 
 > Session: the Android app finally updates itself. `releases/latest` is the single source of truth, the bundle compares it with the version baked in at build time, downloads the APK into the app cache and hands it to the system installer — including Android 6, where the installer cannot read a `file://` URI and the flow has to go through a `PackageInstaller` session with its own confirmation step. The same window hardens sessions: a password change or reset ends live access tokens and stored refresh tokens, a demoted operator cannot rotate back in, and the offline queue is dropped and sealed instead of keeping credentials after logout.
