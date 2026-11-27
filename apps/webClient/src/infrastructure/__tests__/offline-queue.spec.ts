@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { carriesCredentials, clearQueue } from "../offline-queue";
+import {
+  carriesCredentials,
+  clearQueue,
+  enqueueRequest,
+  resumeQueue,
+} from "../offline-queue";
 
 /**
  * The queue persists request bodies in `localStorage`, so a credential body
@@ -49,6 +54,7 @@ describe("carriesCredentials", () => {
  */
 describe("clearQueue", () => {
   afterEach(() => {
+    resumeQueue();
     vi.unstubAllGlobals();
   });
 
@@ -67,5 +73,22 @@ describe("clearQueue", () => {
 
   it("does not throw when storage is unavailable", () => {
     expect(() => clearQueue()).not.toThrow();
+  });
+
+  it("refuses to queue until the next sign-in", () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, value),
+      removeItem: (key: string) => store.delete(key),
+    });
+
+    clearQueue();
+    enqueueRequest("POST", "/transactions", { amount: 10 });
+    expect(store.get("offline_queue")).toBeUndefined();
+
+    resumeQueue();
+    enqueueRequest("POST", "/transactions", { amount: 10 });
+    expect(store.get("offline_queue")).toContain("10");
   });
 });

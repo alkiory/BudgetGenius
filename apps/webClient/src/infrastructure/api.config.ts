@@ -12,6 +12,7 @@ import {
   clearQueue,
   enqueueRequest,
   registerOnlineListener,
+  resumeQueue,
 } from "./offline-queue";
 import { queryClient } from "./queryClient";
 import { requestQueue } from "./request-queue";
@@ -47,6 +48,14 @@ registerOnlineListener(api);
 
 /** Status codes that indicate the backend is unreachable (e.g., Vite proxy returning 502). */
 const PROXY_UNAVAILABLE_CODES = [502, 503, 504];
+
+/**
+ * Auth responses that open (or restore) a session, so the offline queue may
+ * accept work again. `/auth/logout` is deliberately absent: it ends the
+ * session, and resuming there would undo the purge.
+ */
+const SESSION_STARTING_URL =
+  /\/auth\/(login|signup|firebase-login|refresh|verify)\b/;
 
 // ──────────────────────────────────────────────────────────────────────
 // v1.3.0 — body + Authorization fallback for Capacitor Android WebView.
@@ -350,8 +359,14 @@ api.interceptors.response.use(
     // local session is alive again: allow the next unrecoverable 401 to
     // notify the user. Without this reset, a re-login after an expiry
     // would leave the handler thinking the session had already ended.
-    if (response.config.url?.includes("/auth/")) {
+    const url = response.config.url ?? "";
+    if (url.includes("/auth/")) {
       sessionExpired = false;
+    }
+    // Only the endpoints that OPEN a session unseal the queue. `/auth/logout`
+    // also matches the prefix, and resuming there would undo the purge.
+    if (SESSION_STARTING_URL.test(url)) {
+      resumeQueue();
     }
 
     return response;

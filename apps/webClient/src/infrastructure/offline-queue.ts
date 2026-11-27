@@ -49,6 +49,23 @@ function saveQueue(queue: QueuedRequest[]): void {
 let flushInProgress = false;
 
 /**
+ * Bumped by `clearQueue`, and read by an in-flight flush. A flush that started
+ * before logout must not write the previous account's rows back afterwards.
+ */
+let queueVersion = 0;
+
+/**
+ * Set when the session ends. Nothing is queued until the next successful auth
+ * round-trip (`resumeQueue`), so a request that was already in flight cannot
+ * repopulate the queue after logout.
+ */
+let queueBlocked = false;
+
+export function resumeQueue(): void {
+  queueBlocked = false;
+}
+
+/**
  * Add a failed request to the offline queue.
  */
 export function enqueueRequest(
@@ -56,7 +73,7 @@ export function enqueueRequest(
   url: string,
   data?: unknown,
 ): void {
-  if (carriesCredentials(data)) return;
+  if (queueBlocked || carriesCredentials(data)) return;
 
   const queue = getQueue();
   queue.push({
@@ -78,6 +95,8 @@ export function enqueueRequest(
  * browser profile must not find them.
  */
 export function clearQueue(): void {
+  queueVersion += 1;
+  queueBlocked = true;
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch {
@@ -97,6 +116,7 @@ export async function flushQueue(apiInstance: {
   if (flushInProgress) return;
   flushInProgress = true;
 
+  const startedAtVersion = queueVersion;
   const queue = getQueue();
   if (queue.length === 0) {
     flushInProgress = false;
@@ -128,6 +148,13 @@ export async function flushQueue(apiInstance: {
       }
       // If max retries exceeded, drop the request silently
     }
+  }
+
+  // The session ended while this flush was running: drop the rows instead of
+  // writing the previous account's data back to storage.
+  if (queueVersion !== startedAtVersion) {
+    flushInProgress = false;
+    return;
   }
 
   saveQueue(remaining);
