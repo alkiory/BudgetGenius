@@ -48,7 +48,7 @@ BudgetGenius/
 │   └── bootstrap.sh       # One-command setup script
 ├── docker-compose.yml     # Base service definitions
 ├── docker-compose.dev.yml # Development overrides
-├── docker-compose.prod.yml# Production overrides
+├── docker-compose.prod.yml# Production stack (self-hosted)
 ├── turbo.json             # Turbo pipeline configuration
 ├── pnpm-workspace.yaml   # Workspace definition
 └── package.json           # Root workspace scripts
@@ -106,8 +106,8 @@ Both apps follow a **Clean Architecture / Hexagonal** pattern with strict layer 
 | CI/CD | GitHub Actions |
 | Containerization | Docker + Docker Compose |
 | Hosting (Frontend) | Vercel + Firebase Hosting |
-| Hosting (Backend) | Docker on VPS / AWS |
-| DB Hosting | AWS RDS (PostgreSQL) |
+| Hosting (Backend) | Docker on self-hosted server (`docker-compose.prod.yml`) |
+| DB Hosting | PostgreSQL container on the same server (`bg-db-prod`) |
 | Monorepo Orchestration | Turbo |
 
 ---
@@ -1183,17 +1183,29 @@ VITE_FIREBASE_MEASUREMENT_ID=
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `ci.yml` | Push to main, PR to main/dev | Backend tests + Docker build/push + SSH deploy; Frontend tests |
-| `playwright.yml` | Push to main/dev, PR | E2E Playwright tests |
-| `firebase-hosting-merge.yml` | Push to main | Deploy frontend to Firebase Hosting |
-| `firebase-hosting-pull-request.yml` | PR | Preview channel on Firebase Hosting |
+| `ci.yml` | Push to main, PR to main/dev | Backend migrations + tests + build; frontend typecheck + unit tests + assembled build |
+| `deploy.yml` | Push to main, manual | Re-runs the checks and publishes the web build (landing + SPA) to Firebase Hosting. Its `API → GCE` job is unused and fails for lack of secrets |
+| `build-apk.yml` | Push/PR to main/dev | Debug APK artifact |
+| `release-android.yml` | Push to main (auto-bump) / tag | Bumps the version, commits it, tags it and publishes the signed APK |
 
 ### 9.2 Deployment Targets
 
-- **Frontend:** Vercel (primary) + Firebase Hosting (static files)
-- **Backend:** Docker container on VPS (SSH deploy via GitHub Actions)
-- **Database:** AWS RDS PostgreSQL (production) / Docker PostgreSQL (dev)
-- **Cache:** Redis (Docker in dev, managed in prod)
+- **Frontend:** Firebase Hosting (primary) + Vercel (same `dist/`)
+- **Backend:** Docker container `bg-backend-prod` on the self-hosted Linux
+  server, built from `apps/api/Dockerfile` and started with
+  `docker-compose.prod.yml` (no image registry, no cloud VM)
+- **Database:** PostgreSQL 15 container `bg-db-prod` (volume `pgdata_prod`) /
+  Docker PostgreSQL (dev)
+- **Cache:** Redis 7.2 container `bg-redis-prod`, password-protected / Docker
+  Redis (dev)
+
+The API is deployed by pulling `main` on the server and running
+`source .env.secrets && DB_PASSWORD=$DB_PASSWORD REDIS_PASSWORD=$REDIS_PASSWORD docker compose -f docker-compose.prod.yml up -d --build`.
+`docker-compose.gce.yml` and `scripts/gce-setup.sh` belong to an unused GCE
+target and must not be mixed in. DB queries go through
+`docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod`
+(schema `bg_public`), because `docker compose exec` aborts when
+`REDIS_PASSWORD` is not in the shell.
 
 ### 9.3 Docker Services
 
@@ -1371,7 +1383,8 @@ Ambiguity → [Research] → [Plan] → [Implement] → Outcome
 | Change JWT behavior | `apps/api/src/infrastructure/config/strategy/jwt.strategy.ts` |
 | Add env vars | Backend: `app.module.ts` ConfigModule validation; Frontend: `vite.config.ts` |
 | Create a migration | `pnpm --filter api migration:create` |
-| Deploy | `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` |
+| Deploy | `docker compose -f docker-compose.prod.yml up -d --build` on the server, with `.env.secrets` sourced |
+| Query the production DB | `docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod` (schema `bg_public`) |
 
 ---
 
@@ -1466,11 +1479,15 @@ git push origin main --tags
 
 `.github/workflows/ci.yml` validates every push/PR (API migrations + tests +
 build, web typecheck + unit tests + assembled build). `.github/workflows/deploy.yml`
-runs on `main` or manually: it re-runs the checks, pushes the API image to
-DockerHub, pulls it on GCE and publishes the web build to Firebase Hosting.
-The web deploy sets `VITE_APP_VERSION` from the commit SHA, and
-`release-android.yml` derives `versionName`/`versionCode` from the published
-tag (`v1.12.0` → `1.12.0` / `11200`), so both surfaces show the release version.
+runs on `main` or manually: it re-runs the checks and publishes the web build to
+Firebase Hosting. The API is not deployed by CI — it is rebuilt on the
+self-hosted server with `docker-compose.prod.yml` (`bg-backend-prod`), which is
+why the `API → GCE` job in that workflow is dead weight. The web build takes its
+version from the root `package.json` (`vite.config.ts` falls back to it whenever
+`VITE_APP_VERSION` is unset, so the deployed bundle shows `1.13.x` instead of a
+commit SHA), and `release-android.yml` derives `versionName`/`versionCode` from
+the published tag (`v1.12.0` → `1.12.0` / `11200`), so both surfaces show the
+release version.
 
 ### 16.5 Full release checklist
 

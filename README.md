@@ -123,7 +123,7 @@ BudgetGenius/
 │   └── bootstrap.sh      # One-command setup
 ├── docker-compose.yml     # Base Docker services
 ├── docker-compose.dev.yml # Development overrides
-├── docker-compose.prod.yml# Production overrides
+├── docker-compose.prod.yml# Production stack (self-hosted)
 └── turbo.json             # Turbo pipeline config
 ```
 
@@ -182,7 +182,7 @@ BudgetGenius/
 | **pnpm** | Fast, disk-efficient package manager |
 | **Vercel** | Frontend hosting |
 | **Firebase Hosting** | Static asset hosting |
-| **AWS RDS** | Managed PostgreSQL (production) |
+| **Docker PostgreSQL** | PostgreSQL 15 container on the production server |
 | **Playwright** | End-to-end browser testing |
 | **Jest** | Backend unit and e2e testing |
 
@@ -713,30 +713,47 @@ If you see CORS errors in the emulator's WebView, make sure the backend's CORS a
 | Workflow | Trigger | Actions |
 |----------|---------|---------|
 | **CI** (`.github/workflows/ci.yml`) | Push to `main`/`dev`/`feature*`, PR to `main`/`dev`, manual | API: migrations → tests → build. Web: typecheck → unit tests → landing + SPA build |
-| **Deploy** (`.github/workflows/deploy.yml`) | Push to `main`, manual | Verify → API image to DockerHub → pull/restart on GCE; landing + SPA → Firebase Hosting |
+| **Deploy** (`.github/workflows/deploy.yml`) | Push to `main`, manual | Verify → landing + SPA → Firebase Hosting. The API is not deployed from CI: it is rebuilt on the self-hosted server (see *API deployment*) |
 | **Build Android APK** | Push/PR to `main`/`dev` | Debug APK artifact |
 | **Release Android** | Version tag | Signed APK on the GitHub Release |
 
 ### Deployment Architecture
 
 - **Frontend:** Firebase Hosting (primary); Vercel can serve the same `dist/`
-- **Backend:** Docker container on GCE, image pulled from DockerHub
-- **Database:** PostgreSQL on the VM (compose) / Docker PostgreSQL (development)
-- **Cache:** Redis on the VM (compose, password-protected) / Docker Redis (development)
+- **Backend:** Docker container `bg-backend-prod` on the self-hosted Linux
+  server. The server pulls `main`, builds `apps/api/Dockerfile` and starts the
+  stack with `docker-compose.prod.yml`; no cloud VM and no image registry.
+- **Database:** PostgreSQL 15 container `bg-db-prod` (volume `pgdata_prod`) /
+  Docker PostgreSQL (development)
+- **Cache:** Redis 7.2 container `bg-redis-prod`, password-protected /
+  Docker Redis (development)
 
-#### Required GitHub secrets and variables
+`docker-compose.gce.yml` and `scripts/gce-setup.sh` are leftovers from an
+earlier Google Cloud VM target that is not used anymore. Do not run them on the
+production server: they require `REDIS_PASSWORD` at parse time, create
+`bg-*-gce` containers and write to separate volumes.
 
-The **Deploy** workflow fails fast if a required secret is missing:
+#### Required secrets and variables
 
-| Scope | Secrets / variables |
-|-------|--------------------|
-| API + GCE | `DOCKER_USERNAME`, `DOCKER_PASSWORD`, `GCE_HOST`, `GCE_USER`, `GCE_SSH_KEY`, `DB_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET` |
-| API runtime | `OPENAI_API_KEY`, `FRONTEND_URL`, `COOKIE_DOMAIN`, `RESEND_API_KEY`, `MAIL_FROM`, `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`, `PROVIDER_KEYS_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` |
-| Web build | `VITE_API_URL`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MEASUREMENT_ID`, `FIREBASE_SERVICE_ACCOUNT_BUDGETGENIUSIA` |
-| Variables | `PUBLIC_APP_URL`, `PUBLIC_APK_URL` (optional) |
+The **Deploy** workflow fails fast if a required secret is missing. Its jobs
+publish the web build only — the API credentials live on the server.
 
-Push to `main` deploys automatically. To deploy the current branch without
-merging, run **Actions → Deploy → Run workflow** and pick the ref.
+| Scope | Where | Secrets / variables |
+|-------|-------|--------------------|
+| API (compose) | `.env.secrets` on the server | `DB_PASSWORD`, `REDIS_PASSWORD` |
+| API runtime | `apps/api/.env.production` on the server | `JWT_SECRET`, `OPENAI_API_KEY`, `RESEND_API_KEY`, `MAIL_FROM`, `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`, `PROVIDER_KEYS_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `FRONTEND_URL`, `COOKIE_DOMAIN` |
+| Web build | GitHub repository secrets | `VITE_API_URL`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MEASUREMENT_ID`, `FIREBASE_SERVICE_ACCOUNT_BUDGETGENIUSIA` |
+| Variables | GitHub repository variables | `PUBLIC_APP_URL`, `PUBLIC_APK_URL` (optional) |
+
+> `deploy.yml` still carries an `API → GCE` job that reads `DOCKER_USERNAME`,
+> `DOCKER_PASSWORD`, `GCE_HOST`, `GCE_USER` and `GCE_SSH_KEY`. Those secrets are
+> not configured and that target is unused, so the job fails on every run while
+> the web deploy succeeds. Replacing it with an SSH step to the real server (or
+> deleting it) is pending.
+
+Push to `main` publishes the web build automatically. To deploy the current
+branch without merging, run **Actions → Deploy → Run workflow** and pick the ref.
+The API is not part of that flow — redeploy it on the server (next section).
 
 ```bash
 # Local production build (same artifact the deploy publishes)
@@ -744,15 +761,61 @@ pnpm --filter api build   # apps/api/dist
 pnpm build:web             # dist/ → landing at /, SPA at /app/
 ```
 
-#### Production environment file
+#### API deployment (self-hosted server)
 
-`docker-compose.prod.yml` reads the secrets it interpolates (`DB_PASSWORD` and `REDIS_PASSWORD`) from the root `.env` on the server; the backend-specific settings still come from `apps/api/.env.production`. The stack refuses to start if `REDIS_PASSWORD` is missing, because Redis runs with `--requirepass`:
+Run this on the server, from a checkout of this repository:
 
 ```bash
-# Generate once, keep it: the same password must survive every redeploy.
-grep -q '^REDIS_PASSWORD=' .env || printf 'REDIS_PASSWORD=%s\n' "$(openssl rand -hex 24)" >> .env
-docker compose -f docker-compose.prod.yml up -d
+cd ~/projects/BudgetGenius
+source .env.secrets          # DB_PASSWORD, REDIS_PASSWORD, RESEND_API_KEY
+git pull origin main
+
+DB_PASSWORD=$DB_PASSWORD REDIS_PASSWORD=$REDIS_PASSWORD \
+  docker compose -f docker-compose.prod.yml up -d --build
+
+docker image prune -f
 ```
+
+- Use `docker-compose.prod.yml` alone: it declares the complete stack
+  (`bg-backend-prod`, `bg-db-prod`, `bg-redis-prod`) and interpolates
+  `DB_PASSWORD` / `REDIS_PASSWORD`. The stack refuses to start without
+  `REDIS_PASSWORD` because Redis runs with `--requirepass`.
+- The API listens on port 5000 inside `app-network`; NPM
+  (nginx-proxy-manager, external `npm_network`) is the only public entry point,
+  so no host port is published.
+- `UPLOAD_DIR=/data` plus the `api_uploads` volume keep catalogue images across
+  redeploys.
+- The web build is served by Firebase Hosting, so an API-only deploy changes no
+  frontend files; just reload the app after the container restarts.
+
+#### Database operations (production)
+
+Postgres is not published on the host, so query it inside the container:
+container `bg-db-prod`, superuser `postgres_admin_prod`, database
+`budgetgenius_prod`, schema `bg_public`. Use `docker exec` rather than
+`docker compose exec`: compose interpolates the whole file first and aborts with
+`required variable REDIS_PASSWORD is missing a value` when the shell has not
+sourced `.env.secrets`.
+
+```bash
+# Inspect
+# Login inside the container goes through the local socket, so no password.
+docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod \
+  -c "SELECT id, email, role FROM \"bg_public\".\"users\" ORDER BY id;"
+
+# Grant the backoffice (Catálogos): only `superadmin` sees it
+docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod \
+  -c "UPDATE \"bg_public\".\"users\" SET role='superadmin' WHERE lower(email)='info.sergiocampbell@gmail.com';"
+
+# Revoke it from everybody else
+docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod \
+  -c "UPDATE \"bg_public\".\"users\" SET role='user' WHERE role='superadmin' AND lower(email)<>'info.sergiocampbell@gmail.com';"
+```
+
+Use `-it` instead of `-i` for an interactive `psql` session. The SPA caches the
+role until the profile is refetched, so reload the page (or wait up to five
+minutes) after changing it. `pgdata_prod` is the only copy of production data:
+back up the volume before hand-written `UPDATE`/`DELETE` statements.
 
 ---
 
@@ -861,7 +924,7 @@ BudgetGenius/
 ├── .github/workflows/                # CI/CD pipelines
 ├── docker-compose.yml                # Base Docker services
 ├── docker-compose.dev.yml            # Development config
-├── docker-compose.prod.yml           # Production config
+├── docker-compose.prod.yml           # Production stack (self-hosted)
 ├── pnpm-workspace.yaml               # Workspace definition
 └── turbo.json                         # Turbo pipeline
 ```
