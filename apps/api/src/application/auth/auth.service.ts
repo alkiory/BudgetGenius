@@ -27,6 +27,7 @@ import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { DataSource } from 'typeorm';
 import { ResendMailerService } from '@infrastructure/mail/resend-mailer.service';
 import { UserSettingsService } from '@application/user/user-settings.service';
+import { resolveOperatorEmail } from '@application/user/operator-email';
 import { blacklistKeyForToken } from '@infrastructure/config/strategy/jwt.strategy';
 
 /** Per-email brute-force protection. Anything tighter would block legitimate users
@@ -242,29 +243,33 @@ export class AuthService {
    * `JwtStrategy` does not re-read it from the database.
    */
   private async ensureOperatorRole(user: User): Promise<User> {
-    const configured = (process.env.SUPERADMIN_EMAIL ?? '').trim();
+    const configured = resolveOperatorEmail();
     if (!configured) return user;
-    if (user.email !== normalizeEmail(configured)) return user;
-    if (user.role === UserRole.SUPERADMIN) return user;
+    if (normalizeEmail(user.email) !== configured) return user;
 
-    try {
-      await this.userRepository.setRole(user.id, UserRole.SUPERADMIN);
-    } catch (error) {
-      // Best effort: a failed role write must not turn the operator's sign-in
-      // into a 401. The next sign-in (or boot) retries.
-      this.logger.error(
-        `🛡️ Could not promote the operator account (id=${user.id}): ${
-          (error as Error).message
-        }`,
+    if (user.role !== UserRole.SUPERADMIN) {
+      try {
+        await this.userRepository.setRole(user.id, UserRole.SUPERADMIN);
+      } catch (error) {
+        // Best effort: a failed role write must not turn the operator's sign-in
+        // into a 401. The next sign-in (or boot) retries.
+        this.logger.error(
+          `🛡️ Could not promote the operator account (id=${user.id}): ${
+            (error as Error).message
+          }`,
+        );
+        return user;
+      }
+
+      user.role = UserRole.SUPERADMIN;
+      this.logger.log(
+        `🛡️ Operator account promoted to superadmin (id=${user.id})`,
       );
-      return user;
     }
 
-    user.role = UserRole.SUPERADMIN;
-    this.logger.log(
-      `🛡️ Operator account promoted to superadmin (id=${user.id})`,
-    );
-
+    // Runs on every operator sign-in, not only on the promotion: a previous
+    // cleanup may have failed, and the old account must not keep the role
+    // until the next restart.
     await this.demotePreviousOperators(user.id);
     return user;
   }
@@ -729,11 +734,9 @@ export class AuthService {
       throw new NotFoundException('⚠️ User not found');
     }
 
-    // `userRepository.updateUser` runs `repo.preload + repo.save`, which
-    // fires the User entity's `@BeforeUpdate hashPassword` hook — the
-    // hook is the single source of truth for password hashing. Forward
-    // the plaintext: the @BeforeUpdate body will bcrypt-hash it before
-    // the SQL UPDATE runs.
+    // `updateUser` hashes a supplied plaintext password itself (it writes a
+    // targeted UPDATE, which bypasses the entity hooks). Forward the
+    // plaintext; it is never stored as-is.
     await this.userRepository.updateUser(user.id, {
       password: dto.newPassword,
     });

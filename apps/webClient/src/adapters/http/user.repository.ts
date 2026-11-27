@@ -41,3 +41,16 @@ export const userRepository: UserRepository = {
     return response.data;
   },
 };
+
+/**
+ * Credentials are not a profile field: the server rejects a `password` in
+ * `PUT /user/:id` and exposes a dedicated endpoint that re-authenticates
+ * first.
+ */
+export const changePassword = async (payload: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<{ message: string }> => {
+  const response = await api.put("/user/password", payload);
+  return response.data;
+};

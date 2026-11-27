@@ -4,6 +4,7 @@ import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
 import { UserDto } from './dto/user.dto';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import { UserSettingsService } from './user-settings.service';
+import { resolveOperatorEmail } from './operator-email';
 
 @Injectable()
 export class UserSeederService {
@@ -126,10 +127,7 @@ export class UserSeederService {
    */
   private async ensureSuperAdmin(): Promise<void> {
     const isDev = process.env.NODE_ENV === 'development';
-    const email = (
-      process.env.SUPERADMIN_EMAIL?.trim() ||
-      (isDev ? 'superadmin@admin.com' : '')
-    ).toLowerCase();
+    const email = resolveOperatorEmail();
 
     if (!email) {
       this.logger.log(

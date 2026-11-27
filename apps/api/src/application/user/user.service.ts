@@ -1,8 +1,11 @@
 import {
   BadRequestException,
   Injectable,
+  NotFoundException,
+  UnauthorizedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { UserDto } from './dto/user.dto';
 import { CreateUserDto } from '@application/user/dto/create.dto';
 import { UserRepositoryImpl } from '@adapters/user/persistence/user.repository';
@@ -121,6 +124,38 @@ export class UserService {
 
     this.logger.log(`User ${updated.email} updated successfully`);
     return updated;
+  }
+
+  /**
+   * Changes the password of a password account after re-authentication.
+   *
+   * Replaces the old path, where the security form posted `password` to the
+   * profile endpoint: that endpoint now drops credentials, so the write has to
+   * happen here, with the current password verified and the new one hashed.
+   */
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new NotFoundException('⚠️ User not found');
+    }
+    if (!user.password) {
+      throw new BadRequestException(
+        '⚠️ This account signs in with Google and has no password to change',
+      );
+    }
+
+    const matches = await bcrypt.compare(currentPassword, user.password);
+    if (!matches) {
+      throw new UnauthorizedException('🔒 Current password is incorrect');
+    }
+
+    await this.userRepository.updateUser(userId, { password: newPassword });
+    this.logger.log(`🔑 Password changed for user id=${userId}`);
+    return { message: '🔑 Password updated successfully' };
   }
 
   async deleteUser(id: number) {

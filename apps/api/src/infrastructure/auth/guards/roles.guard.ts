@@ -1,4 +1,5 @@
-import { User, UserRole } from '@domain/user/user.entity';
+import { User, UserRole, normalizeEmail } from '@domain/user/user.entity';
+import { resolveOperatorEmail } from '@application/user/operator-email';
 import {
   Injectable,
   CanActivate,
@@ -40,10 +41,18 @@ export class RolesGuard implements CanActivate {
     if (requiredRoles.includes(UserRole.SUPERADMIN)) {
       const current = await this.users.findOne({
         where: { id: Number(user.userId) },
-        select: ['id', 'role'],
+        select: ['id', 'role', 'email'],
       });
 
-      if (current?.role !== UserRole.SUPERADMIN) {
+      // Two conditions, not one. The role alone is not enough: if a handover
+      // cleanup failed, the former operator's row may still say `superadmin`,
+      // and only the address configured in `SUPERADMIN_EMAIL` is the operator.
+      const operatorEmail = resolveOperatorEmail();
+      if (
+        current?.role !== UserRole.SUPERADMIN ||
+        !operatorEmail ||
+        normalizeEmail(current.email) !== operatorEmail
+      ) {
         throw new ForbiddenException('Insufficient permissions');
       }
     }

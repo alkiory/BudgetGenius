@@ -17,6 +17,7 @@ import {
   profilePatch,
   UpdateUserDto,
 } from '@application/user/dto/update-user.dto';
+import { ChangePasswordDto } from '@application/user/dto/change-password.dto';
 import { UserService } from '@application/user/user.service';
 import { User } from '@domain/user/user.entity';
 import { LoggingService } from '@infrastructure/log/logger.service';
@@ -38,6 +39,19 @@ export class UserController {
     // memory (and any devtools network log). Project through the
     // allow-list instead.
     return toPublicUser(user);
+  }
+
+  /**
+   * Declared before `PUT :id`: Nest matches routes in declaration order, and
+   * `password` would otherwise bind to the id parameter.
+   */
+  @Put('password')
+  async changePassword(@Body() dto: ChangePasswordDto, @Req() req) {
+    return this.userService.changePassword(
+      req.user.userId,
+      dto.currentPassword,
+      dto.newPassword,
+    );
   }
 
   @Put(':id')

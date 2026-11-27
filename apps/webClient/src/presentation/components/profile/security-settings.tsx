@@ -1,5 +1,4 @@
-import { RootState } from "@adapters/store/rootStore";
-import { updateUser } from "@application/user/user.service";
+import { changePassword } from "@application/user/user.service";
 import {
   isValidPassword,
   UserPasswordNotMatchError,
@@ -11,7 +10,6 @@ import { Eye, EyeOff } from "@presentation/components/ui/animated-icons";
 import type React from "react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useSelector } from "react-redux";
 import { Button } from "../ui/button";
 import {
   Card,
@@ -26,8 +24,8 @@ import { Label } from "../ui/label";
 
 export function SecuritySettings() {
   const { t } = useTranslation();
-  const user = useSelector((state: RootState) => state.auth.user);
   const [formData, setFormData] = useState({
+    currentPassword: "",
     newPassword: "",
     confirmPassword: "",
   });
@@ -48,14 +46,14 @@ export function SecuritySettings() {
   };
 
   const { mutate: updatePasswordMutation } = useMutation({
-    mutationKey: ["updateUser"],
-    mutationFn: updateUser,
-    onSuccess: (data) => {
-      console.debug(data);
-      setIsSaving(true);
+    mutationKey: ["changePassword"],
+    mutationFn: changePassword,
+    onMutate: () => setIsSaving(true),
+    onSuccess: () => {
       successToast(t("profile.passwordUpdateSuccess"), 3000, "password-update");
       setIsSaving(false);
       setFormData({
+        currentPassword: "",
         newPassword: "",
         confirmPassword: "",
       });
@@ -75,6 +73,10 @@ export function SecuritySettings() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!formData.currentPassword.trim()) {
+      setError(t("profile.currentPasswordRequired"));
+      return;
+    }
     if (!isValidPassword(formData.newPassword)) {
       setError(UserPasswordNotValidError().message);
       return;
@@ -85,10 +87,8 @@ export function SecuritySettings() {
     }
 
     updatePasswordMutation({
-      id: Number(user?.id),
-      user: {
-        password: formData.newPassword,
-      },
+      currentPassword: formData.currentPassword,
+      newPassword: formData.newPassword,
     });
   };
 
@@ -111,6 +111,33 @@ export function SecuritySettings() {
               {success}
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="currentPassword">
+              {t("profile.currentPassword")}
+            </Label>
+            <div className="relative">
+              <Input
+                id="currentPassword"
+                name="currentPassword"
+                type={showPasswords.current ? "text" : "password"}
+                value={formData.currentPassword}
+                onChange={handleChange}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                onClick={() => togglePasswordVisibility("current")}
+              >
+                {showPasswords.current ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="newPassword">{t("profile.newPassword")}</Label>
