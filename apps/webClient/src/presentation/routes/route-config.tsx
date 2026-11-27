@@ -195,16 +195,16 @@ const RouteConfig = () => {
             <Route path={RoutePaths.Income} element={<IncomePage />} />
             <Route path={RoutePaths.Budgets} element={<BudgetsPage />} />
             <Route path={RoutePaths.Reports} element={<ReportsPage />} />
-            {/* Catalogue screens authored in the backoffice. Modules list
-                their pages, pages render their tabs. */}
-            <Route path={RoutePaths.Catalog} element={<CatalogIndexPage />} />
-            <Route
-              path={`${RoutePaths.Catalog}/:key`}
-              element={<CatalogPage />}
-            />
-            {/* superadmin backoffice — role-gated; the API enforces the
-                same role on every /superadmin/* route */}
+            {/* Catalogue screens authored in the backoffice, and the
+                backoffice itself — both superadmin-only. The API enforces
+                the same role on every /superadmin/* route; these guards only
+                keep another role from opening a surface it does not own. */}
             <Route element={<SuperAdminGuard />}>
+              <Route path={RoutePaths.Catalog} element={<CatalogIndexPage />} />
+              <Route
+                path={`${RoutePaths.Catalog}/:key`}
+                element={<CatalogPage />}
+              />
               <Route
                 path={RoutePaths.Superadmin}
                 element={<SuperAdminPage />}

@@ -104,9 +104,11 @@ export function DashboardSidebar() {
 
   const pathname = useLocation().pathname;
 
+  const isSuperAdmin = user?.role === "superadmin";
+
   // Every module/page authored in the backoffice becomes a nav entry here.
-  // The API decides what each role gets: active entries for everyone, beta
-  // and disabled ones only for the superadmin.
+  // The catalogue is a superadmin surface, so another role never sees the
+  // entries (the route guard rejects them at `/app/catalog` too).
   const { data: catalogEntries } = useCatalogEntries();
 
   const navItemRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
@@ -151,8 +153,8 @@ export function DashboardSidebar() {
 
   const navigationItems: NavItem[] = [
     ...navigation,
-    ...catalogNavigation,
-    ...(user?.role === "superadmin" ? [superAdminNavigation] : []),
+    ...(isSuperAdmin ? catalogNavigation : []),
+    ...(isSuperAdmin ? [superAdminNavigation] : []),
   ];
 
   const activeNavKey = navigationItems.find((item) => pathname === item.href)
