@@ -5,7 +5,7 @@ import {
   enqueueRequest,
   flushQueue,
   resumeQueue,
-  type QueuedRequest,
+  type QueuedWrite,
 } from "../offline-queue";
 
 /**
@@ -105,8 +105,11 @@ const stubStorage = (): Map<string, string> => {
   return store;
 };
 
-const readQueue = (store: Map<string, string>): QueuedRequest[] =>
-  JSON.parse(store.get("offline_queue") ?? "[]") as QueuedRequest[];
+const readQueue = (store: Map<string, string>): QueuedWrite[] => {
+  const raw = store.get("offline_queue");
+  if (!raw) return [];
+  return (JSON.parse(raw) as { writes: QueuedWrite[] }).writes;
+};
 
 type MockPost = (
   url: string,
@@ -258,6 +261,45 @@ describe("flushQueue", () => {
     await flushQueue(makeClient(post));
 
     expect(written).toEqual([20, 25]);
+    expect(readQueue(store)).toHaveLength(0);
+  });
+
+  it("never writes a credential body to storage", () => {
+    const store = stubStorage();
+
+    enqueueRequest("POST", "/auth/login", {
+      email: "a@b.com",
+      password: "secret",
+    });
+
+    expect(store.get("offline_queue")).toBeUndefined();
+  });
+
+  it("persists the deadline as a waiting row and revives it once it passes", async () => {
+    const store = stubStorage();
+    enqueueRequest("POST", "/transactions", { amount: 1 });
+
+    await flushQueue(
+      makeClient(async () => {
+        throw throttled("60");
+      }),
+    );
+
+    const [row] = readQueue(store);
+    expect(row.state).toBe("waiting");
+    expect(row.nextAttemptAt).toBe(Date.now() + 60_000);
+
+    // A reload re-reads the stored deadline: the row is due again by then.
+    vi.setSystemTime(Date.now() + 61_000);
+    const sent: unknown[] = [];
+    await flushQueue(
+      makeClient(async (_url, data) => {
+        sent.push(data);
+        return { data: {} };
+      }),
+    );
+
+    expect(sent).toHaveLength(1);
     expect(readQueue(store)).toHaveLength(0);
   });
 
