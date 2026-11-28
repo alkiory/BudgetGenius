@@ -1,8 +1,9 @@
+import { RootState } from "@adapters/store/rootStore";
 import api from "@infrastructure/api.config";
+import { shouldRetryQuery } from "@infrastructure/queryClient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { useSelector } from "react-redux";
-import { RootState } from "@adapters/store/rootStore";
 
 /** Query roots that hold account data rendered by the dashboard and reports. */
 const SYNCED_QUERY_KEYS = [
@@ -44,7 +45,7 @@ export function useCrossDeviceSync() {
     staleTime: 0,
     refetchInterval: 15_000,
     refetchIntervalInBackground: false,
-    retry: 1,
+    retry: shouldRetryQuery,
   });
 
   useEffect(() => {

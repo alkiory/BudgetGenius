@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 
 /**
@@ -6,12 +7,15 @@ import type { NextFunction, Request, Response } from 'express';
  *
  * The API only logged application events, so during a hung page there was no
  * way to tell whether a request the browser showed as `pending` had reached
- * the backend at all. With this line:
+ * the backend at all. Each request now logs twice, under the same short id:
  *
- *   - a request that never appears here was stopped in front of us (tunnel,
- *     nginx, the browser);
- *   - a request that appears and never ends shows up as `499 (client closed)`
- *     when the connection drops, so a stall is visible while it is happening.
+ *   - `→` on arrival, so a request that hangs is visible while it hangs;
+ *   - `←` when it finishes, with the status and the duration;
+ *   - `499 (client closed)` when the connection drops before an answer, which
+ *     is what a stall looks like from the server side.
+ *
+ * A request the browser shows as pending and that never logs `→` was stopped
+ * in front of us (tunnel, nginx, the browser).
  *
  * It is registered on the Express instance before the Nest router (see
  * main.ts), so it also covers requests rejected by the throttler, the guards
@@ -36,8 +40,11 @@ export function accessLogMiddleware(
     return;
   }
 
+  const id = randomUUID().slice(0, 8);
   const startedAt = process.hrtime.bigint();
   let written = false;
+
+  logger.log(`→ ${id} ${req.method} ${path}`);
 
   const write = (status: number, note = ''): void => {
     if (written) {
@@ -45,7 +52,9 @@ export function accessLogMiddleware(
     }
     written = true;
     const ms = Number(process.hrtime.bigint() - startedAt) / 1e6;
-    logger.log(`${req.method} ${path} ${status} ${ms.toFixed(1)}ms${note}`);
+    logger.log(
+      `← ${id} ${req.method} ${path} ${status} ${ms.toFixed(1)}ms${note}`,
+    );
   };
 
   res.on('finish', () => write(res.statusCode));

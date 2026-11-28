@@ -361,6 +361,31 @@ const refreshToken = (): Promise<void> => {
   return inflightRefresh;
 };
 
+/**
+ * Reads a header from an axios config, whichever way it was declared
+ * (`AxiosHeaders` normalises keys, a plain object does not).
+ */
+function readHeader(
+  headers: AxiosRequestConfig["headers"],
+  name: string,
+): string | undefined {
+  if (!headers) return undefined;
+
+  const getter = (headers as { get?: (key: string) => unknown }).get;
+  if (typeof getter === "function") {
+    const value = getter.call(headers, name);
+    return typeof value === "string" ? value : undefined;
+  }
+
+  const record = headers as Record<string, unknown>;
+  const key = Object.keys(record).find(
+    (candidate) => candidate.toLowerCase() === name.toLowerCase(),
+  );
+  return key && typeof record[key] === "string"
+    ? (record[key] as string)
+    : undefined;
+}
+
 api.interceptors.response.use(
   (response) => {
     // Persist tokens from successful auth responses so the next
@@ -477,7 +502,19 @@ api.interceptors.response.use(
         if (!relativeUrl.startsWith("/")) {
           relativeUrl = "/" + relativeUrl;
         }
-        enqueueRequest(method, relativeUrl, originalRequest.data);
+        enqueueRequest(method, relativeUrl, originalRequest.data, {
+          // Replay-safe options. The import needs its 120 s deadline on the
+          // retry, and the key it was sent with, or a resend after a timeout
+          // duplicates every row.
+          timeout:
+            originalRequest.timeout === DEFAULT_REQUEST_TIMEOUT_MS
+              ? undefined
+              : originalRequest.timeout,
+          idempotencyKey: readHeader(
+            originalRequest.headers,
+            "Idempotency-Key",
+          ),
+        });
         // Return a resolved promise so the caller doesn't see an error and the
         // mutation's onSuccess fires, closing modals and providing feedback.
         return Promise.resolve({

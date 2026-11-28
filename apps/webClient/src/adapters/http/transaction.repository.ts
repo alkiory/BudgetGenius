@@ -25,10 +25,17 @@ export const HttpTransactionRepository: TransactionRepository = {
   },
 
   async importTransactions(transactions) {
+    // One key per import, carried through the offline queue and every replay:
+    // the API stores a receipt keyed by (userId, Idempotency-Key) inside the
+    // same transaction as the rows, so a retry that arrives after a timeout
+    // returns the stored outcome instead of inserting the rows twice.
     const response = await api.post(
       "/transactions/import",
       { transactions },
-      { timeout: LONG_REQUEST_TIMEOUT_MS },
+      {
+        timeout: LONG_REQUEST_TIMEOUT_MS,
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+      },
     );
     return response.data;
   },

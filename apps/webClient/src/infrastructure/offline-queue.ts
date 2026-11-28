@@ -3,6 +3,18 @@ export interface QueuedRequest {
   method: "POST" | "PUT" | "PATCH" | "DELETE";
   url: string;
   data?: unknown;
+  /**
+   * Deadline of the original request. A spreadsheet import allows 120 s, and
+   * replaying it with the 30 s default would abandon a request the server is
+   * still processing.
+   */
+  timeout?: number;
+  /**
+   * Sent as `Idempotency-Key` on every replay. Endpoints that store a receipt
+   * (the transaction import) then answer with the stored outcome instead of
+   * inserting the rows a second time.
+   */
+  idempotencyKey?: string;
   timestamp: number;
   retryCount: number;
 }
@@ -72,6 +84,7 @@ export function enqueueRequest(
   method: string,
   url: string,
   data?: unknown,
+  options?: { timeout?: number; idempotencyKey?: string },
 ): void {
   if (queueBlocked || carriesCredentials(data)) return;
 
@@ -83,8 +96,51 @@ export function enqueueRequest(
     data,
     timestamp: Date.now(),
     retryCount: 0,
+    timeout: options?.timeout,
+    idempotencyKey: options?.idempotencyKey,
   });
   saveQueue(queue);
+}
+
+/** Options that must survive a replay: deadline and idempotency key. */
+type ReplayConfig = {
+  timeout?: number;
+  headers?: Record<string, string>;
+};
+
+type ReplayClient = {
+  post: (
+    url: string,
+    data?: unknown,
+    config?: ReplayConfig,
+  ) => Promise<unknown>;
+  put: (url: string, data?: unknown, config?: ReplayConfig) => Promise<unknown>;
+  patch: (
+    url: string,
+    data?: unknown,
+    config?: ReplayConfig,
+  ) => Promise<unknown>;
+  delete: (url: string, config?: ReplayConfig) => Promise<unknown>;
+};
+
+/**
+ * Whether a rejected replay may be sent again.
+ *
+ * A 4xx answers the same way on every attempt, and a timeout on a write that
+ * carries no idempotency key has an unknown outcome: the server may have
+ * committed it, so resending is exactly how a spreadsheet import ends up in
+ * the account twice.
+ */
+function shouldReplay(error: unknown, request: QueuedRequest): boolean {
+  const status = (error as { response?: { status?: number } })?.response
+    ?.status;
+  if (status && status >= 400 && status < 500) return false;
+
+  const code = (error as { code?: string })?.code;
+  const timedOut = code === "ECONNABORTED" || code === "ETIMEDOUT";
+  if (timedOut && !request.idempotencyKey) return false;
+
+  return request.retryCount < MAX_RETRIES;
 }
 
 /**
@@ -107,12 +163,7 @@ export function clearQueue(): void {
 /**
  * Process queued requests sequentially with exponential backoff.
  */
-export async function flushQueue(apiInstance: {
-  post: (url: string, data?: unknown) => Promise<unknown>;
-  put: (url: string, data?: unknown) => Promise<unknown>;
-  patch: (url: string, data?: unknown) => Promise<unknown>;
-  delete: (url: string) => Promise<unknown>;
-}): Promise<void> {
+export async function flushQueue(apiInstance: ReplayClient): Promise<void> {
   if (flushInProgress) return;
   flushInProgress = true;
 
@@ -126,27 +177,36 @@ export async function flushQueue(apiInstance: {
   const remaining: QueuedRequest[] = [];
 
   for (const req of queue) {
+    const config: ReplayConfig = {};
+    if (req.timeout) {
+      config.timeout = req.timeout;
+    }
+    if (req.idempotencyKey) {
+      config.headers = { "Idempotency-Key": req.idempotencyKey };
+    }
+
     try {
       switch (req.method) {
         case "POST":
-          await apiInstance.post(req.url, req.data);
+          await apiInstance.post(req.url, req.data, config);
           break;
         case "PUT":
-          await apiInstance.put(req.url, req.data);
+          await apiInstance.put(req.url, req.data, config);
           break;
         case "PATCH":
-          await apiInstance.patch(req.url, req.data);
+          await apiInstance.patch(req.url, req.data, config);
           break;
         case "DELETE":
-          await apiInstance.delete(req.url);
+          await apiInstance.delete(req.url, config);
           break;
       }
       // Success — request is done, don't add it back
-    } catch {
-      if (req.retryCount < MAX_RETRIES) {
+    } catch (error) {
+      if (shouldReplay(error, req)) {
         remaining.push({ ...req, retryCount: req.retryCount + 1 });
       }
-      // If max retries exceeded, drop the request silently
+      // Otherwise drop it: retrying cannot change the answer, or the outcome of
+      // an unkeyed write is unknown and a resend could duplicate it.
     }
   }
 
@@ -180,12 +240,7 @@ export function hasQueuedRequests(): boolean {
  * when connectivity is restored. Call this once at app startup
  * with the axios api instance.
  */
-export function registerOnlineListener(apiInstance: {
-  post: (url: string, data?: unknown) => Promise<unknown>;
-  put: (url: string, data?: unknown) => Promise<unknown>;
-  patch: (url: string, data?: unknown) => Promise<unknown>;
-  delete: (url: string) => Promise<unknown>;
-}): void {
+export function registerOnlineListener(apiInstance: ReplayClient): void {
   window.addEventListener("online", () => {
     flushQueue(apiInstance);
   });
