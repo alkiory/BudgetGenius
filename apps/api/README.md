@@ -19,10 +19,13 @@ pnpm --filter api dev             # http://localhost:5000
 ```
 
 `pnpm dev` at the root starts the API and the web client together. For a run
-outside Docker, `DB_HOST` and `REDIS_HOST` must be `localhost`: the values
-shipped in `.env.example` are the compose service names (`database`, `redis`).
-`RESEND_API_KEY` is required even for a local boot — the mailer refuses to
-construct without it.
+outside Docker, set `DB_HOST` and `REDIS_HOST` to `localhost`: `apps/api/.env.example`
+ships them empty, and the root `.env.example` — the one for the containers —
+ships the compose service names (`database`, `redis`). `RESEND_API_KEY` is
+required even for a local boot: the mailer throws during dependency injection
+when it is unset, so the process exits instead of queueing mail it cannot send.
+`migration:run` is not optional against a fresh database: `bg_public` and every
+table come from the migrations, and Nest fails its first query without them.
 
 Swagger is served at `/docs` in development only — since v1.10.0 the module is
 not registered when `NODE_ENV=production`.

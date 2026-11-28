@@ -19,9 +19,6 @@
 .env.prod
 .env.development
 .env.production
-# Production secrets sourced by docker-compose.prod.yml on the server
-.env.secrets
-.env.*.local
 
 # Backup files
 .env.bak

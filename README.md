@@ -735,11 +735,26 @@ production deployment.
 #### Required secrets and variables
 
 The **Deploy** workflow publishes the web build only — the API credentials live
-on the server. Before building it runs **Check required build variables**, which
-fails when any required `VITE_*` is empty: Vite would otherwise inline an empty
-`VITE_API_URL`, ship the bundle, and send every request to the hosting origin.
-The API secrets are not validated anywhere, so re-check them after rotating,
-and confirm the deployed app loads data before announcing a release.
+on the server. It does not check the values it consumes: Vite inlines whatever
+it receives, so an empty `VITE_API_URL` still produces a bundle, and that bundle
+sends every request to the hosting origin. Re-check the repository secrets after
+rotating them and confirm the deployed app loads data before announcing a
+release.
+
+The API side fails earlier, but only on presence:
+
+- `docker compose -f docker-compose.prod.yml up` aborts before starting anything
+  when `REDIS_PASSWORD` is unset — the file interpolates it as
+  `${REDIS_PASSWORD:?…}`.
+- `DB_PASSWORD` has no such guard: it is passed straight into `POSTGRES_PASSWORD`,
+  so an empty value leaves `bg-db-prod` unable to initialize and the backend
+  never starts, because it waits for that healthcheck.
+- A missing `RESEND_API_KEY` makes `ResendMailerService` throw while the
+  container builds, so `bg-backend-prod` restart-loops instead of booting
+  without mail.
+
+None of that proves a rotated credential still works — only a real send, a real
+login and a real query do.
 
 | Scope | Where | Secrets / variables |
 |-------|-------|--------------------|
@@ -810,20 +825,32 @@ sourced `.env.secrets`.
 docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod \
   -c "SELECT id, email, role FROM \"bg_public\".\"users\" ORDER BY id;"
 
-# Grant the backoffice (Catálogos): only `superadmin` sees it
+# Grant the backoffice (Catálogos): only `superadmin` sees it.
+# Promote by id, not by email. Sign in with the operator account first, copy the
+# id it authenticated with, then run this: the email in the WHERE is a check,
+# not the key, so a wrong id fails instead of promoting somebody else. The
+# address must also be the one in SUPERADMIN_EMAIL, or RolesGuard returns 403.
 docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod \
-  -c "UPDATE \"bg_public\".\"users\" SET role='superadmin' WHERE lower(email)='superadmin@example.com';"
+  -c "UPDATE \"bg_public\".\"users\" SET role='superadmin' WHERE id=<id> AND lower(email)='superadmin@example.com';"
 
 # Revoke it from everybody else
 docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod \
   -c "UPDATE \"bg_public\".\"users\" SET role='user' WHERE role='superadmin' AND lower(email)<>'superadmin@example.com';"
 ```
 
-> ⚠️ **The email is the whole gate.** That `UPDATE` promotes whichever account
-> already holds the address. Register and verify the operator account yourself
-> **before** running it: anyone who signs up with that address first gets the
-> backoffice. Prefer seeding it with `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD`
-> (see `apps/api/.env.production`), which creates the account on boot.
+> ⚠️ **Promoting by email to an address nobody owns is a privilege hole.**
+> The `id` form above closes it: the id comes from a session you signed in to, and
+> the email is only cross-checked, so a wrong id fails instead of promoting
+> somebody else.
+>
+> The role row is also not the whole gate. `RolesGuard` re-reads the account on
+> every superadmin request and requires **both** `role='superadmin'` **and** an
+> address equal to `SUPERADMIN_EMAIL`; promoting any other mailbox leaves the
+> backoffice answering 403. So set `SUPERADMIN_EMAIL` to the account you control
+> **before** the first deploy — or seed it with `SUPERADMIN_EMAIL` /
+> `SUPERADMIN_PASSWORD` (see `apps/api/.env.production`), which creates that
+> account on boot — instead of promoting an address after someone else registered
+> it.
 
 Use `-it` instead of `-i` for an interactive `psql` session. The SPA caches the
 role until the profile is refetched, so reload the page (or wait up to five

@@ -1215,9 +1215,12 @@ VITE_FIREBASE_MEASUREMENT_ID=
   Redis (dev)
 
 The API is deployed by pulling `main` on the server and running
-`set -a; . ./.env.secrets; set +a; docker compose -f docker-compose.prod.yml up -d --build`
+`set -euo pipefail; set -a; . ./.env.secrets; set +a; docker compose -f docker-compose.prod.yml up -d --build`
 (`set -a` is load-bearing: a file of plain `VAR=value` lines does not export
-anything, and Compose aborts on the missing `REDIS_PASSWORD`).
+anything, and Compose aborts on the missing `REDIS_PASSWORD`. `set -euo` is the
+other half: without it an unreadable `.env.secrets` is just a failed `.` and the
+chain still reaches Compose, which then reuses whatever passwords happen to be
+exported in the shell).
 There is no second compose variant: the old GCE target was removed. DB queries
 go through
 `docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod`
