@@ -61,8 +61,13 @@ const api = axios.create({
   timeout: DEFAULT_REQUEST_TIMEOUT_MS,
 });
 
-// Register online listener to flush the offline queue when connectivity returns
-registerOnlineListener(api);
+// Register online listener to flush the offline queue when connectivity returns.
+// The getter is read lazily: the store is created after this module loads, and
+// only the account that queued a row may replay it.
+registerOnlineListener(api, () => {
+  const id = store.getState().auth?.user?.id;
+  return id === undefined || id === null ? undefined : String(id);
+});
 
 /** Status codes that indicate the backend is unreachable (e.g., Vite proxy returning 502). */
 const PROXY_UNAVAILABLE_CODES = [502, 503, 504];

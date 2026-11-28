@@ -7,7 +7,9 @@ import {
   firstPerResource,
   hydrateQueue,
   isDue,
+  needsOwnReplay,
   nextWakeDelayMs,
+  toStoredRow,
   transportBackoffMs,
   withDeadline,
 } from "../offline-queue.model";
@@ -227,18 +229,35 @@ describe("stored queue", () => {
     expect(rows[1].nextAttemptAt).toBe(NOW + 5_000);
   });
 
-  it("still reads the object shape an intermediate build produced", () => {
+  it("derives the key from the payload even when the row stored one", () => {
+    // The build that read serialised bodies as objects stored an ID-less key.
     const rows = hydrateQueue(
-      JSON.stringify({
-        version: 2,
-        nextSequence: 3,
-        writes: [{ id: "a", method: "POST", url: "/x", sequence: 9 }],
-      }),
+      JSON.stringify([
+        {
+          id: "a",
+          resourceKey: "PUT /transactions ",
+          method: "PUT",
+          url: "/transactions",
+          data: '{"id":42,"amount":20}',
+        },
+      ]),
       NOW,
     );
 
-    expect(rows.map((row) => row.id)).toEqual(["a"]);
-    expect(rows[0].sequence).toBe(9);
+    expect(rows[0].resourceKey).toBe("PUT /transactions 42");
+  });
+
+  it("puts rows without a sequence after the ones already counted", () => {
+    const rows = hydrateQueue(
+      JSON.stringify([
+        { id: "a", sequence: 9, method: "POST", url: "/x" },
+        { id: "b", method: "POST", url: "/y" },
+      ]),
+      NOW,
+      4,
+    );
+
+    expect(rows.map((row) => row.sequence)).toEqual([9, 10]);
   });
 
   it("drops credential bodies left by an older build", () => {
@@ -255,6 +274,23 @@ describe("stored queue", () => {
     );
 
     expect(rows).toEqual([]);
+  });
+
+  it("persists inputs only: key and state are derived", () => {
+    const stored = toStoredRow(
+      withDeadline(write({ idempotencyKey: "key-123456" }), NOW + 1_000, NOW),
+    );
+
+    expect(stored).not.toHaveProperty("state");
+    expect(stored).not.toHaveProperty("resourceKey");
+    expect(stored.nextAttemptAt).toBe(NOW + 1_000);
+    expect(stored.idempotencyKey).toBe("key-123456");
+  });
+
+  it("flags the rows only this bundle can replay", () => {
+    expect(needsOwnReplay(write())).toBe(false);
+    expect(needsOwnReplay(write({ idempotencyKey: "key-123456" }))).toBe(true);
+    expect(needsOwnReplay(write({ timeout: 120_000 }))).toBe(true);
   });
 
   it("sorts by sequence whatever order the JSON had", () => {

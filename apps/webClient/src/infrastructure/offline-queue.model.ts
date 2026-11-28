@@ -43,6 +43,24 @@ export interface QueuedWrite {
   nextAttemptAt?: number;
   /** Failed attempts that spent the budget (a 429 does not). */
   retryCount: number;
+  /** Account that queued the row, when the app knew it. */
+  owner?: string;
+}
+
+/**
+ * What is persisted: the inputs, never the derived values.
+ *
+ * `resourceKey` and `state` are computed from `method`/`url`/`data` and from
+ * `nextAttemptAt`, so storing them would only create a second version of the
+ * truth — the shape that let an old key split two edits of one transaction.
+ */
+export type StoredWrite = Omit<QueuedWrite, "state" | "resourceKey">;
+
+export function toStoredRow(write: QueuedWrite): StoredWrite {
+  const row: Partial<QueuedWrite> = { ...write };
+  delete row.state;
+  delete row.resourceKey;
+  return row as StoredWrite;
 }
 
 /** Base of the exponential backoff applied to transport failures. */
@@ -276,15 +294,35 @@ function now(): number {
 }
 
 /**
- * Reads whatever is stored and returns the current rows.
+ * Rows that only this bundle can replay faithfully.
  *
- * The value is kept as a JSON array on purpose: a tab still running the previous
- * bundle writes an array too, and its rows are read here with `sequence` from
- * the position and the resource key derived from the payload. Object-shaped
- * values from the build that introduced them are still accepted and rewritten as
- * an array on the next save. Credential rows left by an older build are dropped.
+ * An older bundle replays a row as method, URL and body. That is enough for a
+ * write it would have made itself, and not enough for one that carries replay
+ * metadata: dropping the `Idempotency-Key` turns a retried import that already
+ * committed into a second copy of the batch. Such rows are kept apart, in a
+ * place an older bundle does not read.
  */
-export function hydrateQueue(raw: string | null, at: number): QueuedWrite[] {
+export function needsOwnReplay(write: QueuedWrite): boolean {
+  return write.idempotencyKey !== undefined || write.timeout !== undefined;
+}
+
+/**
+ * Reads a stored array and returns the current rows.
+ *
+ * Only the inputs are trusted: `resourceKey` is derived here from method, URL
+ * and body — including for rows an older bundle wrote — so two edits of one
+ * transaction always land in the same group, and `state` comes from the stored
+ * deadline through `withDeadline`.
+ *
+ * Rows an older bundle appended have no `sequence`; they go after every
+ * explicit one, in array order, because that is the order they were made in.
+ * Credential rows left by an older build are dropped.
+ */
+export function hydrateQueue(
+  raw: string | null,
+  at: number,
+  startAt = 0,
+): QueuedWrite[] {
   if (!raw) return [];
 
   let parsed: unknown;
@@ -293,27 +331,28 @@ export function hydrateQueue(raw: string | null, at: number): QueuedWrite[] {
   } catch {
     return [];
   }
+  if (!Array.isArray(parsed)) return [];
 
-  const rows = Array.isArray(parsed)
-    ? parsed
-    : Array.isArray((parsed as { writes?: unknown } | null)?.writes)
-    ? (parsed as { writes: unknown[] }).writes
-    : null;
-  if (!rows) return [];
+  let next = parsed.reduce((highest: number, row: unknown) => {
+    const sequence = (row as Partial<QueuedWrite> | null)?.sequence;
+    return typeof sequence === "number" && Number.isFinite(sequence)
+      ? Math.max(highest, sequence)
+      : highest;
+  }, startAt);
 
   const writes: QueuedWrite[] = [];
 
-  rows.forEach((row, index) => {
-    if (!row || typeof row !== "object") return;
+  for (const row of parsed) {
+    if (!row || typeof row !== "object") continue;
 
     const candidate = row as Partial<QueuedWrite>;
-    if (carriesCredentials(candidate.data)) return;
+    if (carriesCredentials(candidate.data)) continue;
 
     const sequence =
       typeof candidate.sequence === "number" &&
       Number.isFinite(candidate.sequence)
         ? candidate.sequence
-        : index + 1;
+        : ++next;
     const method = (candidate.method ?? "POST") as QueuedMethod;
     const url = candidate.url ?? "";
 
@@ -323,10 +362,7 @@ export function hydrateQueue(raw: string | null, at: number): QueuedWrite[] {
           id:
             typeof candidate.id === "string" ? candidate.id : String(sequence),
           sequence,
-          resourceKey:
-            typeof candidate.resourceKey === "string" && candidate.resourceKey
-              ? candidate.resourceKey
-              : deriveResourceKey(method, url, candidate.data),
+          resourceKey: deriveResourceKey(method, url, candidate.data),
           method,
           url,
           data: candidate.data,
@@ -334,6 +370,8 @@ export function hydrateQueue(raw: string | null, at: number): QueuedWrite[] {
           timeout: candidate.timeout,
           retryCount:
             typeof candidate.retryCount === "number" ? candidate.retryCount : 0,
+          owner:
+            typeof candidate.owner === "string" ? candidate.owner : undefined,
           state: "ready",
         },
         typeof candidate.nextAttemptAt === "number"
@@ -342,7 +380,7 @@ export function hydrateQueue(raw: string | null, at: number): QueuedWrite[] {
         at,
       ),
     );
-  });
+  }
 
   return writes.sort((a, b) => a.sequence - b.sequence);
 }

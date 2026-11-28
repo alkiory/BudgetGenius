@@ -6,7 +6,9 @@ import {
   deriveResourceKey,
   hydrateQueue,
   isDue,
+  needsOwnReplay,
   nextWakeDelayMs,
+  toStoredRow,
   transportBackoffMs,
   withDeadline,
 } from "./offline-queue.model";
@@ -18,16 +20,25 @@ export type { QueuedWrite } from "./offline-queue.model";
  *
  * The rules — resource identity, order, idempotency, state and deadlines — live
  * in `offline-queue.model.ts`; this module persists rows, walks them in order
- * and talks to the API. Every decision it takes is delegated, so the invariants
- * stay testable without a browser.
+ * and talks to the API.
  *
- * The stored value is a JSON array, matching what a tab still running the
- * previous bundle reads and writes: if it were an object, that tab would read
- * nothing, treat the queue as empty and overwrite every pending write with its
- * own first row.
+ * Two keys, on purpose:
+ *
+ * - `offline_queue` is a plain JSON array of rows an older bundle can replay
+ *   faithfully (method, URL, body). A tab still running the previous bundle
+ *   reads that array, appends to it and drains it, exactly as it does today, so
+ *   an update in another tab cannot make it overwrite pending writes.
+ * - `offline_queue:replay` holds the rows that need this bundle: a request with
+ *   an idempotency key or a longer deadline. An older bundle sends neither, and
+ *   replaying a keyed import without its key inserts the batch twice, so those
+ *   rows live where no older bundle looks.
+ *
+ * Only inputs are persisted. `resourceKey` and `state` are derived on read, so
+ * they cannot go stale in storage (see `hydrateQueue`).
  */
 
-const STORAGE_KEY = "offline_queue";
+const QUEUE_KEY = "offline_queue";
+const REPLAY_KEY = "offline_queue:replay";
 
 /** Options that must survive a replay: deadline and idempotency key. */
 type ReplayConfig = {
@@ -68,9 +79,15 @@ let queueBlocked = false;
 /** Consecutive flushes that only produced writes the interceptor re-queued. */
 let transportFailures = 0;
 
-function readStore(at = Date.now()): QueuedWrite[] {
+/**
+ * Which account is signed in, as far as the queue is concerned. Rows carry the
+ * account that queued them and are never replayed into another one.
+ */
+let ownerOf: () => string | undefined = () => undefined;
+
+function readKey(key: string, at: number, startAt = 0): QueuedWrite[] {
   try {
-    return hydrateQueue(localStorage.getItem(STORAGE_KEY), at);
+    return hydrateQueue(localStorage.getItem(key), at, startAt);
   } catch {
     // Storage can be unavailable (incognito, sandboxed iframe); an empty queue
     // is the only safe answer.
@@ -78,14 +95,50 @@ function readStore(at = Date.now()): QueuedWrite[] {
   }
 }
 
-/** Persists the rows. Returns false when storage rejects the write. */
-function writeStore(writes: QueuedWrite[]): boolean {
+/** Every pending row, oldest first, across both keys. */
+function readAll(at = Date.now()): QueuedWrite[] {
+  const legacy = readKey(QUEUE_KEY, at);
+  const startAt = legacy.reduce(
+    (highest, write) => Math.max(highest, write.sequence),
+    0,
+  );
+  return [...legacy, ...readKey(REPLAY_KEY, at, startAt)].sort(
+    (a, b) => a.sequence - b.sequence,
+  );
+}
+
+/** Persists one key. Returns false when storage rejects the write. */
+function writeKey(key: string, writes: QueuedWrite[]): boolean {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(writes));
+    if (writes.length === 0) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, JSON.stringify(writes.map(toStoredRow)));
+    }
     return true;
   } catch {
     return false;
   }
+}
+
+/**
+ * Persists the rows, each in the store that can replay it. Returns whether both
+ * writes were accepted.
+ */
+function writeAll(writes: QueuedWrite[]): boolean {
+  const shared = writes.filter((write) => !needsOwnReplay(write));
+  const own = writes.filter(needsOwnReplay);
+  // Both calls run: a failed one must not prevent the other from being saved.
+  const sharedOk = writeKey(QUEUE_KEY, shared);
+  const ownOk = writeKey(REPLAY_KEY, own);
+  return sharedOk && ownOk;
+}
+
+/** Whether the signed-in account may replay this row. */
+function replayable(write: QueuedWrite, owner: string | undefined): boolean {
+  return (
+    write.owner === undefined || owner === undefined || write.owner === owner
+  );
 }
 
 export function resumeQueue(): void {
@@ -111,7 +164,7 @@ export function enqueueRequest(
   // not even for the moment between enqueue and the next read.
   if (queueBlocked || carriesCredentials(data)) return false;
 
-  const writes = readStore();
+  const writes = readAll();
   const sequence =
     writes.reduce((highest, write) => Math.max(highest, write.sequence), 0) + 1;
 
@@ -128,13 +181,14 @@ export function enqueueRequest(
         timeout: options?.timeout,
         state: "ready",
         retryCount: 0,
+        owner: ownerOf(),
       },
       undefined,
       Date.now(),
     ),
   );
 
-  return writeStore(writes);
+  return writeAll(writes);
 }
 
 /**
@@ -142,15 +196,18 @@ export function enqueueRequest(
  *
  * Called when the session ends: queued bodies carry the previous account's
  * amounts and descriptions, and the next person to use this browser profile
- * must not find them.
+ * must not find them. Both stores go, including rows an older bundle would not
+ * have cleaned up.
  */
 export function clearQueue(): void {
   queueVersion += 1;
   queueBlocked = true;
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    /* storage unavailable — nothing was persisted either */
+  for (const key of [QUEUE_KEY, REPLAY_KEY]) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* storage unavailable — nothing was persisted either */
+    }
   }
 }
 
@@ -206,8 +263,15 @@ export async function flushQueue(apiInstance: ReplayClient): Promise<void> {
 
 async function drain(apiInstance: ReplayClient): Promise<void> {
   const startedAtVersion = queueVersion;
-  const writes = readStore();
-  if (writes.length === 0) return;
+  const owner = ownerOf();
+  const stored = readAll();
+  // Rows queued by another account are dropped here rather than replayed into
+  // the current one.
+  const writes = stored.filter((write) => replayable(write, owner));
+  if (writes.length === 0) {
+    if (stored.length > 0) writeAll([]);
+    return;
+  }
 
   const snapshotIds = new Set(writes.map((write) => write.id));
   const blocked = new Set<string>();
@@ -253,7 +317,9 @@ async function drain(apiInstance: ReplayClient): Promise<void> {
 
   // The interceptor re-queues a write that hits the network again mid-flush and
   // resolves it, so that row is in neither `pending` nor the snapshot.
-  const added = readStore().filter((write) => !snapshotIds.has(write.id));
+  const added = readAll().filter(
+    (write) => !snapshotIds.has(write.id) && replayable(write, owner),
+  );
 
   // A row the interceptor had to queue again is proof the API was not reached,
   // even though the request itself resolved. A send with nothing added is proof
@@ -276,7 +342,7 @@ async function drain(apiInstance: ReplayClient): Promise<void> {
     ),
   ];
 
-  writeStore(merged);
+  writeAll(merged);
 
   const wait = nextWakeDelayMs(merged, Date.now());
   if (wait !== null) {
@@ -288,15 +354,21 @@ async function drain(apiInstance: ReplayClient): Promise<void> {
  * Check if there are queued requests.
  */
 export function hasQueuedRequests(): boolean {
-  return readStore().length > 0;
+  return readAll().length > 0;
 }
 
 /**
  * Register the online event listener to auto-flush the queue
  * when connectivity is restored. Call this once at app startup
- * with the axios api instance.
+ * with the axios api instance, and a getter for the signed-in account.
  */
-export function registerOnlineListener(apiInstance: ReplayClient): void {
+export function registerOnlineListener(
+  apiInstance: ReplayClient,
+  getOwner?: () => string | undefined,
+): void {
+  if (getOwner) {
+    ownerOf = getOwner;
+  }
   window.addEventListener("online", () => {
     void flushQueue(apiInstance);
   });

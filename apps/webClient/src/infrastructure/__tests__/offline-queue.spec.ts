@@ -1,11 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { hydrateQueue } from "../offline-queue.model";
 import {
   type QueuedWrite,
   clearQueue,
   enqueueRequest,
   flushQueue,
+  hasQueuedRequests,
+  registerOnlineListener,
   resumeQueue,
 } from "../offline-queue";
+
+const SHARED = "offline_queue";
+const OWN = "offline_queue:replay";
 
 const stubStorage = (): Map<string, string> => {
   const store = new Map<string, string>();
@@ -17,11 +23,9 @@ const stubStorage = (): Map<string, string> => {
   return store;
 };
 
-const readQueue = (store: Map<string, string>): QueuedWrite[] => {
-  const raw = store.get("offline_queue");
-  if (!raw) return [];
-  return JSON.parse(raw) as QueuedWrite[];
-};
+/** The rows a reader of one key sees, derived exactly as the app derives them. */
+const readQueue = (store: Map<string, string>, key = SHARED): QueuedWrite[] =>
+  hydrateQueue(store.get(key) ?? null, Date.now());
 
 type MockPost = (
   url: string,
@@ -53,12 +57,26 @@ describe("clearQueue", () => {
     vi.unstubAllGlobals();
   });
 
-  it("removes the persisted queue", () => {
+  it("removes pending writes from every store", () => {
     const store = stubStorage();
+    enqueueRequest("POST", "/transactions", { amount: 10 });
+    enqueueRequest(
+      "POST",
+      "/transactions/import",
+      { rows: [] },
+      {
+        timeout: 120_000,
+        idempotencyKey: "key-123456",
+      },
+    );
+    expect(hasQueuedRequests()).toBe(true);
 
     clearQueue();
 
-    expect(store.get("offline_queue")).toBeUndefined();
+    expect(store.get(SHARED)).toBeUndefined();
+    expect(store.get(OWN)).toBeUndefined();
+    // The assertion that fails if logout stops deleting pending writes.
+    expect(hasQueuedRequests()).toBe(false);
   });
 
   it("refuses to queue until the next sign-in", () => {
@@ -66,11 +84,11 @@ describe("clearQueue", () => {
 
     clearQueue();
     expect(enqueueRequest("POST", "/transactions", { amount: 10 })).toBe(false);
-    expect(store.get("offline_queue")).toBeUndefined();
+    expect(store.get(SHARED)).toBeUndefined();
 
     resumeQueue();
     expect(enqueueRequest("POST", "/transactions", { amount: 10 })).toBe(true);
-    expect(store.get("offline_queue")).toContain("10");
+    expect(store.get(SHARED)).toContain("10");
   });
 });
 
@@ -86,6 +104,13 @@ describe("flushQueue", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
     resumeQueue();
+    vi.stubGlobal("window", { addEventListener: () => {} });
+    vi.stubGlobal("navigator", { onLine: false });
+    // No account by default; the tests that need one register it.
+    registerOnlineListener(
+      makeClient(async () => ({ data: {} })),
+      () => undefined,
+    );
   });
 
   afterEach(() => {
@@ -120,7 +145,8 @@ describe("flushQueue", () => {
         password: "secret",
       }),
     ).toBe(false);
-    expect(store.get("offline_queue")).toBeUndefined();
+    expect(store.get(SHARED)).toBeUndefined();
+    expect(store.get(OWN)).toBeUndefined();
   });
 
   it("keeps a row an older bundle appends to the shared array", async () => {
@@ -128,8 +154,8 @@ describe("flushQueue", () => {
     expect(enqueueRequest("POST", "/budgets", { name: "Rent" })).toBe(true);
 
     // A tab still running the previous bundle reads the array and appends its
-    // own row without sequence or resource key.
-    const rows = JSON.parse(store.get("offline_queue") ?? "[]") as unknown[];
+    // own row without sequence, key or owner.
+    const rows = JSON.parse(store.get(SHARED) ?? "[]") as unknown[];
     expect(Array.isArray(rows)).toBe(true);
     rows.push({
       id: "old-row",
@@ -139,7 +165,7 @@ describe("flushQueue", () => {
       timestamp: 1,
       retryCount: 0,
     });
-    store.set("offline_queue", JSON.stringify(rows));
+    store.set(SHARED, JSON.stringify(rows));
 
     const sent: string[] = [];
     await flushQueue(
@@ -151,6 +177,37 @@ describe("flushQueue", () => {
 
     expect(sent).toEqual(["/budgets", "/transactions"]);
     expect(readQueue(store)).toHaveLength(0);
+  });
+
+  it("keeps a keyed import out of reach of an older bundle", async () => {
+    const store = stubStorage();
+
+    expect(
+      enqueueRequest(
+        "POST",
+        "/transactions/import",
+        { rows: [{ amount: 1 }] },
+        { timeout: 120_000, idempotencyKey: "key-123456" },
+      ),
+    ).toBe(true);
+
+    // The previous bundle sends method, URL and body only: replaying the import
+    // through it would insert the batch a second time, so it sees nothing.
+    expect(readQueue(store, SHARED)).toEqual([]);
+    expect(readQueue(store, OWN)).toHaveLength(1);
+
+    const configs: unknown[] = [];
+    await flushQueue(
+      makeClient(async (_url, _data, config) => {
+        configs.push(config);
+        return { data: {} };
+      }),
+    );
+
+    expect(configs).toEqual([
+      { timeout: 120_000, headers: { "Idempotency-Key": "key-123456" } },
+    ]);
+    expect(store.get(OWN)).toBeUndefined();
   });
 
   it("keeps a write throttled more than five times and clears it once accepted", async () => {
@@ -246,7 +303,7 @@ describe("flushQueue", () => {
     // The newer edit carries the earlier deadline, as happens when the API
     // answers two throttled PUTs with different windows.
     store.set(
-      "offline_queue",
+      SHARED,
       JSON.stringify([
         {
           id: "edit-20",
@@ -289,6 +346,79 @@ describe("flushQueue", () => {
 
     expect(written).toEqual([20, 25]);
     expect(readQueue(store)).toHaveLength(0);
+  });
+
+  it("blocks a new edit behind a waiting row that stored an ID-less key", async () => {
+    const store = stubStorage();
+    const start = Date.now();
+
+    // Rows written by the build that read serialised bodies as objects stored
+    // `PUT /transactions ` with no id; the key must not be trusted.
+    store.set(
+      SHARED,
+      JSON.stringify([
+        {
+          id: "edit-20",
+          sequence: 1,
+          resourceKey: "PUT /transactions ",
+          method: "PUT",
+          url: "/transactions",
+          data: { id: 42, amount: 20 },
+          retryCount: 0,
+          nextAttemptAt: start + 11_000,
+        },
+      ]),
+    );
+    enqueueRequest("PUT", "/transactions", { id: 42, amount: 25 });
+
+    const written: number[] = [];
+    const post: MockPost = async (_url, data) => {
+      written.push((data as { amount: number }).amount);
+      return { data: {} };
+    };
+
+    vi.setSystemTime(start + 10_500);
+    await flushQueue(makeClient(post));
+    expect(written).toEqual([]);
+
+    vi.setSystemTime(start + 11_500);
+    await flushQueue(makeClient(post));
+
+    expect(written).toEqual([20, 25]);
+  });
+
+  it("does not replay a row queued by another account", async () => {
+    const store = stubStorage();
+    registerOnlineListener(
+      makeClient(async () => ({ data: {} })),
+      () => "7",
+    );
+    enqueueRequest("POST", "/transactions", { amount: 10 });
+    enqueueRequest(
+      "POST",
+      "/transactions/import",
+      { rows: [] },
+      {
+        timeout: 120_000,
+        idempotencyKey: "key-123456",
+      },
+    );
+
+    registerOnlineListener(
+      makeClient(async () => ({ data: {} })),
+      () => "8",
+    );
+    const sent: string[] = [];
+    await flushQueue(
+      makeClient(async (url) => {
+        sent.push(url);
+        return { data: {} };
+      }),
+    );
+
+    expect(sent).toEqual([]);
+    expect(store.get(SHARED)).toBeUndefined();
+    expect(store.get(OWN)).toBeUndefined();
   });
 
   it("backs off exponentially while replay keeps hitting an unreachable API", async () => {
