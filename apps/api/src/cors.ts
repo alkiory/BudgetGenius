@@ -145,5 +145,13 @@ export const buildCorsOptions = (
   ],
   credentials: true,
   optionsSuccessStatus: 204,
-  exposedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    // The offline queue schedules its replay from this header. Cross-origin
+    // JavaScript can only read headers listed here, and without it a throttled
+    // write waits the 10 s fallback instead of the window the API announced.
+    'Retry-After',
+  ],
 });

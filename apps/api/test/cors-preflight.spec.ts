@@ -91,6 +91,14 @@ describe('CORS preflight — header enumeration (v1.3.0.x regression guard)', ()
     ).toLowerCase();
     expect(allowHeaders).toContain('idempotency-key');
     expect(allowHeaders).toContain('content-type');
+
+    // The offline queue reads Retry-After to schedule a throttled replay; a
+    // header left out of the expose list is invisible to cross-origin JS even
+    // when the API sends it.
+    const exposed = String(
+      response.headers['access-control-expose-headers'] ?? '',
+    ).toLowerCase();
+    expect(exposed).toContain('retry-after');
   });
 
   it('OPTIONS from an origin outside PRODUCTION_DEFAULT_ORIGINS is NOT echoed (blocks preflight)', async () => {

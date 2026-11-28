@@ -130,8 +130,16 @@ type ReplayClient = {
 
 /** The API throttled the request: the write is valid, only too soon. */
 const RATE_LIMIT_STATUS = 429;
+/** Only for a 429 that arrives without a usable `Retry-After`. */
 const DEFAULT_RATE_LIMIT_WAIT_MS = 10_000;
-const MAX_RATE_LIMIT_WAIT_MS = 60_000;
+/**
+ * setTimeout overflows past 2^31-1 ms. A longer deadline stays in the row
+ * (`nextAttemptAt`), and the capped wake-up only re-reads it: nothing is sent
+ * before the server said it would accept the write.
+ */
+const MAX_TIMER_MS = 2_147_483_000;
+/** Floor for a wake-up: a zero delay would spin while the API is unreachable. */
+const MIN_RETRY_WAIT_MS = 1_000;
 
 type ReplayVerdict = {
   /** Milliseconds to wait before sending it again. */
@@ -176,11 +184,10 @@ function replayVerdict(
   const status = response?.status;
 
   if (status === RATE_LIMIT_STATUS) {
+    // The server deadline wins. A password-recovery bucket asks for an hour,
+    // and retrying after a minute only spends requests against it.
     return {
-      waitMs: Math.min(
-        readRetryAfterMs(response?.headers) ?? DEFAULT_RATE_LIMIT_WAIT_MS,
-        MAX_RATE_LIMIT_WAIT_MS,
-      ),
+      waitMs: readRetryAfterMs(response?.headers) ?? DEFAULT_RATE_LIMIT_WAIT_MS,
       counts: false,
     };
   }
@@ -217,6 +224,23 @@ export function clearQueue(): void {
 }
 
 /**
+ * Wakes the queue for the earliest deadline in `pending`.
+ *
+ * Scheduling from the merged list, not only from the rows this pass rejected,
+ * is what makes a write the interceptor re-queued mid-flush retry once the
+ * network is back, without waiting for an `online` event that may never fire.
+ */
+function scheduleFlush(
+  apiInstance: ReplayClient,
+  pending: QueuedRequest[],
+): void {
+  const now = Date.now();
+  const dueAt = Math.min(...pending.map((req) => req.nextAttemptAt ?? now));
+  const wait = Math.min(Math.max(dueAt - now, MIN_RETRY_WAIT_MS), MAX_TIMER_MS);
+  setTimeout(() => void flushQueue(apiInstance), wait);
+}
+
+/**
  * Process queued requests sequentially with exponential backoff.
  */
 export async function flushQueue(apiInstance: ReplayClient): Promise<void> {
@@ -224,15 +248,21 @@ export async function flushQueue(apiInstance: ReplayClient): Promise<void> {
   flushInProgress = true;
 
   const startedAtVersion = queueVersion;
+  const now = Date.now();
   const queue = getQueue();
   if (queue.length === 0) {
     flushInProgress = false;
     return;
   }
 
-  const remaining: QueuedRequest[] = [];
+  // A row waiting on a deadline that outlived a reload must not be sent just
+  // because a flush was requested: only the due ones are attempted.
+  const due = queue.filter((req) => (req.nextAttemptAt ?? 0) <= now);
+  const waiting = queue.filter((req) => (req.nextAttemptAt ?? 0) > now);
+  const snapshotIds = new Set(queue.map((req) => req.id));
+  const remaining: QueuedRequest[] = [...waiting];
 
-  for (const req of queue) {
+  for (const req of due) {
     const config: ReplayConfig = {};
     if (req.timeout) {
       config.timeout = req.timeout;
@@ -278,20 +308,19 @@ export async function flushQueue(apiInstance: ReplayClient): Promise<void> {
     return;
   }
 
-  // The interceptor re-queues a write that hits the network again mid-flush.
-  // Overwriting storage with this snapshot would erase the row it just added
-  // and return the write to nowhere, so keep whatever appeared during the
-  // flush and only replace the rows this flush already handled.
-  const handled = new Set(queue.map((req) => req.id));
-  const addedMeanwhile = getQueue().filter((req) => !handled.has(req.id));
+  // The interceptor re-queues a write that hits the network again mid-flush and
+  // resolves it, so that row is in neither `due` nor `remaining`. Overwriting
+  // storage with this snapshot would erase it and leave the write unsynced
+  // until an event that may never come, so keep what appeared and replace only
+  // what this pass took.
+  const addedMeanwhile = getQueue().filter((req) => !snapshotIds.has(req.id));
+  const pending = [...remaining, ...addedMeanwhile];
 
-  saveQueue([...addedMeanwhile, ...remaining]);
+  saveQueue(pending);
   flushInProgress = false;
 
-  if (remaining.length > 0) {
-    const now = Date.now();
-    const dueAt = Math.min(...remaining.map((req) => req.nextAttemptAt ?? now));
-    setTimeout(() => flushQueue(apiInstance), Math.max(0, dueAt - now));
+  if (pending.length > 0) {
+    scheduleFlush(apiInstance, pending);
   }
 }
 
