@@ -1,4 +1,5 @@
 import { HttpCatalogRepository } from "@adapters/http/catalog.repository";
+import { shouldRetryQuery } from "@infrastructure/queryClient";
 import { useQuery } from "@tanstack/react-query";
 
 /** Shared key so the backoffice can invalidate it after authoring a change. */
@@ -16,6 +17,6 @@ export function useCatalogEntries() {
     staleTime: 30_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
-    retry: 1,
+    retry: shouldRetryQuery,
   });
 }

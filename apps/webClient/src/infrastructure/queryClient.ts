@@ -1,4 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 
 /**
  * The app-wide React Query client.
@@ -13,4 +14,33 @@ import { QueryClient } from "@tanstack/react-query";
  * `QueryClient` is stateful, so this module must stay a singleton — do
  * not instantiate another client anywhere else.
  */
-export const queryClient = new QueryClient();
+
+/**
+ * Transport failures and 5xx deserve a couple of attempts; a 4xx does not.
+ *
+ * React Query's default is three retries for every error, so one denied
+ * backoffice request became four (`overview` ×4, `modules` ×3, `api-keys` ×2
+ * in production) and the retries are what the operator sees as "the app fires
+ * a burst of requests". A 403, 404, 415 or 429 answers the same way on the
+ * fourth attempt: repeating it only adds load to an API that is already
+ * refusing the call.
+ */
+export function shouldRetryQuery(
+  failureCount: number,
+  error: unknown,
+): boolean {
+  if (isAxiosError(error)) {
+    const status = error.response?.status;
+    if (status && status >= 400 && status < 500) {
+      return false;
+    }
+  }
+
+  return failureCount < 2;
+}
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: shouldRetryQuery },
+  },
+});

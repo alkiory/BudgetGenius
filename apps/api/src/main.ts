@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { accessLogMiddleware } from '@infrastructure/log/access-log.middleware';
 import { LoggingService } from '@infrastructure/log/logger.service';
 import cookieParser from 'cookie-parser';
 import { json, urlencoded } from 'express';
@@ -19,6 +20,12 @@ async function bootstrap() {
   });
 
   const isProduction = process.env.NODE_ENV === 'production';
+
+  // ── Access log ─────────────────────────────────────────────────────────
+  // First middleware on the Express instance: a request that never reaches
+  // this line was stopped in front of the API (tunnel, nginx, the browser),
+  // which is what separates a backend stall from a proxy one.
+  app.use(accessLogMiddleware);
 
   // ── CORS ───────────────────────────────────────────────────────────────
   // Register CORS BEFORE all body parsers so parser rejections (e.g. 413

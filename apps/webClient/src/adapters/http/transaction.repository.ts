@@ -4,7 +4,7 @@ import {
   TransactionTypeFilter,
 } from "@domain/dashboard/transactions/transaction.entity";
 import { TransactionRepository } from "@domain/dashboard/transactions/transactionRepository";
-import api from "@infrastructure/api.config";
+import api, { LONG_REQUEST_TIMEOUT_MS } from "@infrastructure/api.config";
 
 // Phase 3 (T3.2): HttpTransactionRepository forwards an optional `type`
 // query param to the backend. The backend applies a sign-convention
@@ -25,7 +25,18 @@ export const HttpTransactionRepository: TransactionRepository = {
   },
 
   async importTransactions(transactions) {
-    const response = await api.post("/transactions/import", { transactions });
+    // One key per import, carried through the offline queue and every replay:
+    // the API stores a receipt keyed by (userId, Idempotency-Key) inside the
+    // same transaction as the rows, so a retry that arrives after a timeout
+    // returns the stored outcome instead of inserting the rows twice.
+    const response = await api.post(
+      "/transactions/import",
+      { transactions },
+      {
+        timeout: LONG_REQUEST_TIMEOUT_MS,
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+      },
+    );
     return response.data;
   },
 

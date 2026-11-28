@@ -8,9 +8,9 @@ import toast from "react-hot-toast";
 import { getDeviceId } from "./device-id";
 import { isNativePlatform } from "./native";
 import {
-  carriesCredentials,
   clearQueue,
   enqueueRequest,
+  flushQueue,
   registerOnlineListener,
   resumeQueue,
 } from "./offline-queue";
@@ -18,6 +18,8 @@ import { queryClient } from "./queryClient";
 import { requestQueue } from "./request-queue";
 
 interface ApiError {
+  /** Axios transport code, e.g. `ECONNABORTED` when the timeout fired. */
+  code?: string;
   config: AxiosRequestConfig & {
     /** Caller opt-out: never attempt a token refresh for this request. */
     _retry?: boolean;
@@ -36,15 +38,52 @@ const headers: Record<string, string> = {
   "Content-Type": "application/json",
 };
 
+/**
+ * Ceiling for every request.
+ *
+ * Without one, a request the server never answers stays "pending" in DevTools
+ * forever: it keeps one of the browser's six connections to the API origin, so
+ * every query mounted afterwards waits behind it and the whole app looks dead
+ * until a reload. A bounded timeout turns that into a normal failure the caller
+ * can surface and retry.
+ *
+ * The three calls that legitimately outlive it (Finny's provider round-trip,
+ * the base64 media upload, the bulk spreadsheet import) pass
+ * `LONG_REQUEST_TIMEOUT_MS` explicitly.
+ */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+export const LONG_REQUEST_TIMEOUT_MS = 120_000;
+
 // Configuración de Axios
 const api = axios.create({
   baseURL: base,
   headers,
   withCredentials: true,
+  timeout: DEFAULT_REQUEST_TIMEOUT_MS,
 });
 
-// Register online listener to flush the offline queue when connectivity returns
-registerOnlineListener(api);
+// The signed-in account, as far as the queue is concerned. Read lazily: the
+// store is created after this module loads, and the queue replays nothing until
+// it knows who is signed in.
+const queueOwner = (): string | undefined => {
+  const id = store.getState().auth?.user?.id;
+  return id === undefined || id === null ? undefined : String(id);
+};
+
+// Register online listener to flush the offline queue when connectivity returns.
+registerOnlineListener(api, queueOwner);
+
+// A queue held back while the account was unknown must be replayed as soon as
+// the account is known — a page load starts with no user, so the `online` event
+// alone would never release it.
+let lastQueueOwner: string | undefined;
+store.subscribe(() => {
+  const owner = queueOwner();
+  if (owner !== undefined && owner !== lastQueueOwner) {
+    lastQueueOwner = owner;
+    void flushQueue(api);
+  }
+});
 
 /** Status codes that indicate the backend is unreachable (e.g., Vite proxy returning 502). */
 const PROXY_UNAVAILABLE_CODES = [502, 503, 504];
@@ -342,6 +381,31 @@ const refreshToken = (): Promise<void> => {
   return inflightRefresh;
 };
 
+/**
+ * Reads a header from an axios config, whichever way it was declared
+ * (`AxiosHeaders` normalises keys, a plain object does not).
+ */
+function readHeader(
+  headers: AxiosRequestConfig["headers"],
+  name: string,
+): string | undefined {
+  if (!headers) return undefined;
+
+  const getter = (headers as { get?: (key: string) => unknown }).get;
+  if (typeof getter === "function") {
+    const value = getter.call(headers, name);
+    return typeof value === "string" ? value : undefined;
+  }
+
+  const record = headers as Record<string, unknown>;
+  const key = Object.keys(record).find(
+    (candidate) => candidate.toLowerCase() === name.toLowerCase(),
+  );
+  return key && typeof record[key] === "string"
+    ? (record[key] as string)
+    : undefined;
+}
+
 api.interceptors.response.use(
   (response) => {
     // Persist tokens from successful auth responses so the next
@@ -413,12 +477,18 @@ api.interceptors.response.use(
       }
     }
 
+    // A timeout is not "offline": the server may have received and applied the
+    // mutation before it stopped answering, so replaying it later would double
+    // the write. Timeouts fail loudly instead of entering the offline queue.
+    const isTimeout =
+      error.code === "ECONNABORTED" || error.code === "ETIMEDOUT";
+
     // Network error (ERR_NETWORK) OR proxy unavailable (502/503/504 via Vite) —
     // backend is unreachable or user is offline. Queue mutations for retry.
     // A structured `{ code }` body means the backend answered on purpose
     // (e.g. Finny's 503 setup state), so it must reach the caller instead of
     // being mistaken for the dev proxy being down.
-    const isNetworkError = !error.response;
+    const isNetworkError = !isTimeout && !error.response;
     const isAppError =
       typeof (error.response?.data as { code?: unknown } | undefined)?.code ===
       "string";
@@ -431,13 +501,10 @@ api.interceptors.response.use(
       const method = originalRequest.method?.toUpperCase() || "";
       const isMutation = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
 
-      // Credentials never reach storage: a queued password change would sit
-      // in `localStorage` in plaintext and, worse, report success to a form
-      // whose value was never applied. Those requests fail loudly instead.
-      const queueable =
-        isMutation &&
-        !originalRequest.skipOfflineQueue &&
-        !carriesCredentials(originalRequest.data);
+      // Credentials are rejected by `enqueueRequest` itself, which is the only
+      // place that writes to storage; here it is enough to decide whether the
+      // request is a candidate at all.
+      const queueable = isMutation && !originalRequest.skipOfflineQueue;
 
       if (queueable) {
         // Strip the baseURL prefix so the URL is stored as a relative path.
@@ -452,16 +519,39 @@ api.interceptors.response.use(
         if (!relativeUrl.startsWith("/")) {
           relativeUrl = "/" + relativeUrl;
         }
-        enqueueRequest(method, relativeUrl, originalRequest.data);
-        // Return a resolved promise so the caller doesn't see an error and the
-        // mutation's onSuccess fires, closing modals and providing feedback.
-        return Promise.resolve({
-          data: {
-            _offline: true,
-            _queued: true,
-            message: "Saved offline — will sync when connection returns",
+        const queued = enqueueRequest(
+          method,
+          relativeUrl,
+          originalRequest.data,
+          {
+            // Replay-safe options. The import needs its 120 s deadline on the
+            // retry, and the key it was sent with, or a resend after a timeout
+            // duplicates every row.
+            timeout:
+              originalRequest.timeout === DEFAULT_REQUEST_TIMEOUT_MS
+                ? undefined
+                : originalRequest.timeout,
+            idempotencyKey: readHeader(
+              originalRequest.headers,
+              "Idempotency-Key",
+            ),
           },
-        });
+        );
+
+        if (queued) {
+          // Resolving lets the mutation's onSuccess close the modal and report
+          // the offline save. It is only honest once the row is persisted: the
+          // queue is the only copy of a write the server never received.
+          return Promise.resolve({
+            data: {
+              _offline: true,
+              _queued: true,
+              message: "Saved offline — will sync when connection returns",
+            },
+          });
+        }
+        // Storage rejected it (full, unavailable) or the session ended: fall
+        // through and let the caller see the network error.
       }
     }
 

@@ -22,6 +22,10 @@ import { ConfigService } from '@nestjs/config';
         ssl: false,
         extra: {
           ssl: false, // Algunos drivers leen esto de la propiedad 'extra'
+          // Same deadline as the data source registered in AppModule: `pg`
+          // waits forever for a free client, and which data source a
+          // repository receives must not change how long a request can hang.
+          connectionTimeoutMillis: 10_000,
         },
         // En producción (Docker), buscamos los archivos compilados .js
         // En local (ts-node), buscamos los .ts

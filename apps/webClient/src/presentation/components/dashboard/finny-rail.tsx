@@ -4,7 +4,7 @@ import {
   useFetchDashboard,
   useFetchExpenseCategories,
 } from "@adapters/query/dashboard";
-import api from "@infrastructure/api.config";
+import api, { LONG_REQUEST_TIMEOUT_MS } from "@infrastructure/api.config";
 import { BrandDots } from "@presentation/components/loader";
 import {
   AlertTriangle,
@@ -271,22 +271,26 @@ export function FinnyRail() {
 
   const mutation = useMutation({
     mutationFn: async (text: string) => {
-      const { data } = await api.post<string>("/ai/analysis", {
-        prompt: text,
-        context: {
-          balance: overview?.balance ?? 0,
-          income: overview?.income ?? 0,
-          expenses: overview?.expenses ?? 0,
-          topCategory: topCategory?.name ?? null,
-          totalSpent: breakdown?.total ?? 0,
-          budgets: (budgets ?? []).map((budget) => ({
-            name: budget.name,
-            type: budget.type,
-            spent: budget.totalSpent,
-            allocated: budget.totalAllocated,
-          })),
+      const { data } = await api.post<string>(
+        "/ai/analysis",
+        {
+          prompt: text,
+          context: {
+            balance: overview?.balance ?? 0,
+            income: overview?.income ?? 0,
+            expenses: overview?.expenses ?? 0,
+            topCategory: topCategory?.name ?? null,
+            totalSpent: breakdown?.total ?? 0,
+            budgets: (budgets ?? []).map((budget) => ({
+              name: budget.name,
+              type: budget.type,
+              spent: budget.totalSpent,
+              allocated: budget.totalAllocated,
+            })),
+          },
         },
-      });
+        { timeout: LONG_REQUEST_TIMEOUT_MS },
+      );
       return data;
     },
     onSuccess: (reply) => {
