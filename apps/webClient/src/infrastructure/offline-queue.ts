@@ -224,18 +224,56 @@ export function clearQueue(): void {
 }
 
 /**
- * Wakes the queue for the earliest deadline in `pending`.
+ * Which resource a write touches. Two edits to one transaction share it, so
+ * the queue can keep them in the order the user made them: the server applies
+ * whatever PUT arrives last, and per-row deadlines alone would let the newer
+ * edit land first and be overwritten by the older amount.
+ */
+function writeKey(request: QueuedRequest): string {
+  const body = request.data as
+    | { id?: unknown; transactionId?: unknown }
+    | undefined;
+  const id = body?.id ?? body?.transactionId ?? "";
+  return `${request.method} ${request.url} ${String(id)}`;
+}
+
+/** The first pending write of every resource: the only rows that may go out. */
+function eligibleRows(pending: QueuedRequest[]): QueuedRequest[] {
+  const seen = new Set<string>();
+  const eligible: QueuedRequest[] = [];
+  for (const request of pending) {
+    const key = writeKey(request);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    eligible.push(request);
+  }
+  return eligible;
+}
+
+/** Streak of flushes that only produced rows the interceptor had to requeue. */
+let transportFailures = 0;
+const MAX_BACKOFF_MS = 30_000;
+
+function transportBackoffMs(): number {
+  return Math.min(1000 * Math.pow(2, transportFailures - 1), MAX_BACKOFF_MS);
+}
+
+/**
+ * Wakes the queue for the earliest deadline among the rows that could actually
+ * be sent next.
  *
- * Scheduling from the merged list, not only from the rows this pass rejected,
- * is what makes a write the interceptor re-queued mid-flush retry once the
- * network is back, without waiting for an `online` event that may never fire.
+ * Scheduling from every pending row would wake for a successor whose deadline
+ * is earlier than the edit it has to wait for, and that wake would find
+ * nothing to do.
  */
 function scheduleFlush(
   apiInstance: ReplayClient,
   pending: QueuedRequest[],
 ): void {
   const now = Date.now();
-  const dueAt = Math.min(...pending.map((req) => req.nextAttemptAt ?? now));
+  const dueAt = Math.min(
+    ...eligibleRows(pending).map((req) => req.nextAttemptAt ?? now),
+  );
   const wait = Math.min(Math.max(dueAt - now, MIN_RETRY_WAIT_MS), MAX_TIMER_MS);
   setTimeout(() => void flushQueue(apiInstance), wait);
 }
@@ -248,21 +286,33 @@ export async function flushQueue(apiInstance: ReplayClient): Promise<void> {
   flushInProgress = true;
 
   const startedAtVersion = queueVersion;
-  const now = Date.now();
   const queue = getQueue();
   if (queue.length === 0) {
+    transportFailures = 0;
     flushInProgress = false;
     return;
   }
 
-  // A row waiting on a deadline that outlived a reload must not be sent just
-  // because a flush was requested: only the due ones are attempted.
-  const due = queue.filter((req) => (req.nextAttemptAt ?? 0) <= now);
-  const waiting = queue.filter((req) => (req.nextAttemptAt ?? 0) > now);
   const snapshotIds = new Set(queue.map((req) => req.id));
-  const remaining: QueuedRequest[] = [...waiting];
+  // Resources whose earlier write has not landed yet. Nothing for them may be
+  // sent out of order, not even a newer edit with an earlier deadline.
+  const blocked = new Set<string>();
+  const remaining: QueuedRequest[] = [];
 
-  for (const req of due) {
+  for (const req of queue) {
+    const key = writeKey(req);
+    if (blocked.has(key)) {
+      remaining.push(req);
+      continue;
+    }
+
+    // A deadline that outlived a reload: this row is not due yet, and the newer
+    // edits of the same resource wait behind it.
+    if ((req.nextAttemptAt ?? 0) > Date.now()) {
+      blocked.add(key);
+      remaining.push(req);
+      continue;
+    }
     const config: ReplayConfig = {};
     if (req.timeout) {
       config.timeout = req.timeout;
@@ -295,6 +345,8 @@ export async function flushQueue(apiInstance: ReplayClient): Promise<void> {
           retryCount: req.retryCount + (verdict.counts ? 1 : 0),
           nextAttemptAt: Date.now() + verdict.waitMs,
         });
+        // The resource keeps its order: nothing newer may jump ahead.
+        blocked.add(key);
       }
       // Otherwise drop it: retrying cannot change the answer, or the outcome of
       // an unkeyed write is unknown and a resend could duplicate it.
@@ -309,13 +361,25 @@ export async function flushQueue(apiInstance: ReplayClient): Promise<void> {
   }
 
   // The interceptor re-queues a write that hits the network again mid-flush and
-  // resolves it, so that row is in neither `due` nor `remaining`. Overwriting
-  // storage with this snapshot would erase it and leave the write unsynced
-  // until an event that may never come, so keep what appeared and replace only
-  // what this pass took.
+  // resolves it, so that row is in neither `blocked` nor `remaining`.
+  // Overwriting storage with this snapshot would erase it and leave the write
+  // unsynced until an event that may never come, so keep what appeared and
+  // replace only what this pass took.
   const addedMeanwhile = getQueue().filter((req) => !snapshotIds.has(req.id));
-  const pending = [...remaining, ...addedMeanwhile];
 
+  transportFailures = addedMeanwhile.length > 0 ? transportFailures + 1 : 0;
+  const backoff = transportFailures > 0 ? transportBackoffMs() : 0;
+
+  // Those rows arrive with no deadline of their own, and the floor for a wake
+  // is one second: without a backoff the replay would hammer an API that is
+  // still unreachable.
+  const requeued = addedMeanwhile.map((req) =>
+    req.nextAttemptAt === undefined
+      ? { ...req, nextAttemptAt: Date.now() + backoff }
+      : req,
+  );
+
+  const pending = [...remaining, ...requeued];
   saveQueue(pending);
   flushInProgress = false;
 
