@@ -15,6 +15,11 @@ export interface QueuedRequest {
    * inserting the rows a second time.
    */
   idempotencyKey?: string;
+  /**
+   * Earliest moment this row may be retried. A throttled request waits for
+   * the window the API announced instead of hammering the endpoint.
+   */
+  nextAttemptAt?: number;
   timestamp: number;
   retryCount: number;
 }
@@ -123,24 +128,75 @@ type ReplayClient = {
   delete: (url: string, config?: ReplayConfig) => Promise<unknown>;
 };
 
+/** The API throttled the request: the write is valid, only too soon. */
+const RATE_LIMIT_STATUS = 429;
+const DEFAULT_RATE_LIMIT_WAIT_MS = 10_000;
+const MAX_RATE_LIMIT_WAIT_MS = 60_000;
+
+type ReplayVerdict = {
+  /** Milliseconds to wait before sending it again. */
+  waitMs: number;
+  /** Whether this attempt spends the row's retry budget. */
+  counts: boolean;
+};
+
+/** `Retry-After` is either delta-seconds or an HTTP date. */
+function readRetryAfterMs(headers?: Record<string, unknown>): number | null {
+  const raw = headers?.["retry-after"];
+  if (raw === undefined || raw === null) return null;
+
+  const text = String(raw).trim();
+  const seconds = Number(text);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+
+  const date = Date.parse(text);
+  return Number.isNaN(date) ? null : Math.max(0, date - Date.now());
+}
+
 /**
- * Whether a rejected replay may be sent again.
+ * How long to wait before replaying a rejected request, or null to drop it.
  *
- * A 4xx answers the same way on every attempt, and a timeout on a write that
- * carries no idempotency key has an unknown outcome: the server may have
- * committed it, so resending is exactly how a spreadsheet import ends up in
- * the account twice.
+ * - 429: the write is valid and must not be lost. It stays queued, waits for
+ *   the window the API announced, and does not spend the retry budget, so a
+ *   batch of offline records is not trimmed to the throttler limit.
+ * - any other 4xx: permanent, the answer cannot change.
+ * - timeout without an idempotency key: unknown outcome, and resending is how
+ *   a spreadsheet import ends up in the account twice.
+ * - everything else: bounded exponential backoff.
  */
-function shouldReplay(error: unknown, request: QueuedRequest): boolean {
-  const status = (error as { response?: { status?: number } })?.response
-    ?.status;
-  if (status && status >= 400 && status < 500) return false;
+function replayVerdict(
+  error: unknown,
+  request: QueuedRequest,
+): ReplayVerdict | null {
+  const response = (
+    error as {
+      response?: { status?: number; headers?: Record<string, unknown> };
+    }
+  )?.response;
+  const status = response?.status;
+
+  if (status === RATE_LIMIT_STATUS) {
+    return {
+      waitMs: Math.min(
+        readRetryAfterMs(response?.headers) ?? DEFAULT_RATE_LIMIT_WAIT_MS,
+        MAX_RATE_LIMIT_WAIT_MS,
+      ),
+      counts: false,
+    };
+  }
+
+  if (status && status >= 400 && status < 500) return null;
 
   const code = (error as { code?: string })?.code;
   const timedOut = code === "ECONNABORTED" || code === "ETIMEDOUT";
-  if (timedOut && !request.idempotencyKey) return false;
+  if (timedOut && !request.idempotencyKey) return null;
 
-  return request.retryCount < MAX_RETRIES;
+  if (request.retryCount >= MAX_RETRIES) return null;
+
+  return {
+    waitMs: Math.min(1000 * Math.pow(2, request.retryCount), 30_000),
+    counts: true,
+  };
 }
 
 /**
@@ -202,8 +258,13 @@ export async function flushQueue(apiInstance: ReplayClient): Promise<void> {
       }
       // Success — request is done, don't add it back
     } catch (error) {
-      if (shouldReplay(error, req)) {
-        remaining.push({ ...req, retryCount: req.retryCount + 1 });
+      const verdict = replayVerdict(error, req);
+      if (verdict) {
+        remaining.push({
+          ...req,
+          retryCount: req.retryCount + (verdict.counts ? 1 : 0),
+          nextAttemptAt: Date.now() + verdict.waitMs,
+        });
       }
       // Otherwise drop it: retrying cannot change the answer, or the outcome of
       // an unkeyed write is unknown and a resend could duplicate it.
@@ -217,14 +278,20 @@ export async function flushQueue(apiInstance: ReplayClient): Promise<void> {
     return;
   }
 
-  saveQueue(remaining);
+  // The interceptor re-queues a write that hits the network again mid-flush.
+  // Overwriting storage with this snapshot would erase the row it just added
+  // and return the write to nowhere, so keep whatever appeared during the
+  // flush and only replace the rows this flush already handled.
+  const handled = new Set(queue.map((req) => req.id));
+  const addedMeanwhile = getQueue().filter((req) => !handled.has(req.id));
+
+  saveQueue([...addedMeanwhile, ...remaining]);
   flushInProgress = false;
 
-  // If there are remaining items, schedule a retry with exponential backoff
   if (remaining.length > 0) {
-    const minRetry = Math.min(...remaining.map((r) => r.retryCount));
-    const delay = Math.min(1000 * Math.pow(2, minRetry), 30000);
-    setTimeout(() => flushQueue(apiInstance), delay);
+    const now = Date.now();
+    const dueAt = Math.min(...remaining.map((req) => req.nextAttemptAt ?? now));
+    setTimeout(() => flushQueue(apiInstance), Math.max(0, dueAt - now));
   }
 }
 

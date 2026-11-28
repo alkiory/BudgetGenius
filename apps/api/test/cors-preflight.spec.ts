@@ -1,21 +1,9 @@
-const PROD_ALLOWED_HEADERS = [
-  'Content-Type',
-  'Authorization',
-  'X-Requested-With',
-  'X-Device-Id',
-] as const;
-
-const PROD_ALLOWED_ORIGINS = [
-  'https://budgetgeniusia.web.app',
-  'https://budgetgeniusia.firebaseapp.com',
-  'https://localhost', // Capacitor 4+ with `androidScheme: 'https'`
-  'capacitor://localhost', // Capacitor 2/3 legacy
-] as const;
-
 import { Controller, Get, INestApplication } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test, TestingModule } from '@nestjs/testing';
 import request = require('supertest');
+
+import { buildCorsOptions, PRODUCTION_DEFAULT_ORIGINS } from '../src/cors';
 
 @Controller('dashboard')
 class TestDashboardController {
@@ -30,7 +18,13 @@ class TestDashboardController {
   }
 }
 
-describe('CORS preflight — X-Device-Id enumeration (v1.3.0.x regression guard)', () => {
+/**
+ * The spec used to carry its own copy of the production header list, so
+ * `cors.ts` could lose a header without any test failing — which is how
+ * `Idempotency-Key` shipped while the browser was already sending it.
+ * It now boots with the same options object `main.ts` uses.
+ */
+describe('CORS preflight — header enumeration (v1.3.0.x regression guard)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -41,23 +35,7 @@ describe('CORS preflight — X-Device-Id enumeration (v1.3.0.x regression guard)
     app = moduleFixture.createNestApplication<NestExpressApplication>();
 
     app.setGlobalPrefix('/api');
-    app.enableCors({
-      origin: (origin, callback) => {
-        if (!origin) {
-          return callback(null, true);
-        }
-        const normalized = origin.trim().replace(/\/+$/, '');
-        if ((PROD_ALLOWED_ORIGINS as readonly string[]).includes(normalized)) {
-          return callback(null, true);
-        }
-        return callback(null, false);
-      },
-      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-      allowedHeaders: [...PROD_ALLOWED_HEADERS],
-      credentials: true,
-      optionsSuccessStatus: 204,
-      exposedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    });
+    app.enableCors(buildCorsOptions(PRODUCTION_DEFAULT_ORIGINS));
 
     await app.init();
   });
@@ -93,7 +71,29 @@ describe('CORS preflight — X-Device-Id enumeration (v1.3.0.x regression guard)
     expect(methods).toMatch(/\bGET\b/);
   });
 
-  it('OPTIONS from an origin outside PROD_ALLOWED_ORIGINS is NOT echoed (blocks preflight)', async () => {
+  it('OPTIONS /api/transactions/import from the hosted frontend origin allows Idempotency-Key (204)', async () => {
+    const response = await request(app.getHttpServer())
+      .options('/api/transactions/import')
+      .set('Origin', 'https://budgetgeniusia.web.app')
+      .set('Access-Control-Request-Method', 'POST')
+      .set(
+        'Access-Control-Request-Headers',
+        'content-type,authorization,idempotency-key',
+      );
+
+    expect(response.status).toBe(204);
+    expect(response.headers['access-control-allow-origin']).toBe(
+      'https://budgetgeniusia.web.app',
+    );
+
+    const allowHeaders = String(
+      response.headers['access-control-allow-headers'] ?? '',
+    ).toLowerCase();
+    expect(allowHeaders).toContain('idempotency-key');
+    expect(allowHeaders).toContain('content-type');
+  });
+
+  it('OPTIONS from an origin outside PRODUCTION_DEFAULT_ORIGINS is NOT echoed (blocks preflight)', async () => {
     const response = await request(app.getHttpServer())
       .options('/api/dashboard/overview')
       .set('Origin', 'https://evil.example.com')
