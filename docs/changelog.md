@@ -2,6 +2,15 @@
 
 ---
 
+## [v1.14.1] — 2026-11-28
+
+### Fixed
+
+- end the access tokens issued before the operator promotion (`b4688c6`)
+- decide the operator role from the row, not from the token (`956d0d6`)
+
+---
+
 ## [v1.14.0] — 2026-11-28
 
 ### Added
