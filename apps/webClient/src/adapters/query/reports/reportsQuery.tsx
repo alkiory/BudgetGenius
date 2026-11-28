@@ -1,11 +1,14 @@
 import { HttpReportRepository } from "@adapters/http/reports.repository";
+import { shouldRetryQuery } from "@infrastructure/queryClient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 export const useOverview = ({ start, end }: { start: string; end: string }) => {
   const queryClient = useQueryClient();
 
   const cancelOverviewQuery = () => {
-    queryClient.cancelQueries({ queryKey: ["reports", "overview", start, end] });
+    queryClient.cancelQueries({
+      queryKey: ["reports", "overview", start, end],
+    });
   };
 
   return {
@@ -13,7 +16,7 @@ export const useOverview = ({ start, end }: { start: string; end: string }) => {
       queryKey: ["reports", "overview", start, end],
       queryFn: () => HttpReportRepository.getOverview({ start, end }),
       enabled: Boolean(start && end),
-      retry: 2,
+      retry: shouldRetryQuery,
       staleTime: 1000 * 60,
       gcTime: 1000 * 60 * 5,
     }),
@@ -41,7 +44,7 @@ export const useCategoryBreakdown = ({
       queryKey: ["reports", "categories", "income-expense", start, end],
       queryFn: () => HttpReportRepository.getCategories({ start, end }),
       enabled: start !== undefined && end !== undefined,
-      retry: 2,
+      retry: shouldRetryQuery,
       staleTime: 1000 * 60,
       gcTime: 1000 * 60 * 5,
     }),
@@ -49,7 +52,13 @@ export const useCategoryBreakdown = ({
   };
 };
 
-export const useWeeklyTrend = ({ start, end }: { start: string; end: string }) => {
+export const useWeeklyTrend = ({
+  start,
+  end,
+}: {
+  start: string;
+  end: string;
+}) => {
   const queryClient = useQueryClient();
 
   const cancelWeeklyTrendQuery = () => {
@@ -60,7 +69,7 @@ export const useWeeklyTrend = ({ start, end }: { start: string; end: string }) =
     ...useQuery({
       queryKey: ["reports", "weekly", start, end],
       queryFn: () => HttpReportRepository.getWeekly({ start, end }),
-      retry: 2,
+      retry: shouldRetryQuery,
       staleTime: 1000 * 60,
       gcTime: 1000 * 60 * 5,
     }),
@@ -80,7 +89,7 @@ export const useSavingsGrowth = ({ year }: { year: string }) => {
       queryKey: ["reports", "savings", year],
       queryFn: () => HttpReportRepository.getSavings({ year }),
       enabled: year !== undefined,
-      retry: 2,
+      retry: shouldRetryQuery,
       staleTime: 1000 * 60,
       gcTime: 1000 * 60 * 5,
     }),
@@ -100,7 +109,7 @@ export const useInsights = ({ year }: { year: string }) => {
       queryKey: ["reports", "insights", year],
       queryFn: () => HttpReportRepository.getInsights({ year }),
       enabled: year !== undefined,
-      retry: 2,
+      retry: shouldRetryQuery,
       staleTime: 1000 * 60,
       gcTime: 1000 * 60 * 5,
     }),

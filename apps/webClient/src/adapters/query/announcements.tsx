@@ -1,4 +1,5 @@
 import { HttpAnnouncementRepository } from "@adapters/http/announcement.repository";
+import { shouldRetryQuery } from "@infrastructure/queryClient";
 import { useQuery } from "@tanstack/react-query";
 
 /**
@@ -13,5 +14,5 @@ export const useLiveAnnouncements = () =>
     staleTime: 30_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
-    retry: 1,
+    retry: shouldRetryQuery,
   });

@@ -94,10 +94,7 @@ export const normalizeOrigin = (raw: string): string =>
  * Empty entries are dropped; duplicates are de-duplicated by the caller.
  */
 export const parseOriginList = (raw: string | undefined | null): string[] =>
-  (raw ?? '')
-    .split(',')
-    .map(normalizeOrigin)
-    .filter(Boolean);
+  (raw ?? '').split(',').map(normalizeOrigin).filter(Boolean);
 
 /**
  * Effective allow-list for the given environment: environment defaults
@@ -141,8 +138,20 @@ export const buildCorsOptions = (
     'Authorization',
     'X-Requested-With',
     'X-Device-Id',
+    // Replay-safe imports: the SPA sends it on POST /api/transactions/import.
+    // Without it the browser blocks the preflight, the request never leaves,
+    // and the offline interceptor queues an import the server never saw.
+    'Idempotency-Key',
   ],
   credentials: true,
   optionsSuccessStatus: 204,
-  exposedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    // The offline queue schedules its replay from this header. Cross-origin
+    // JavaScript can only read headers listed here, and without it a throttled
+    // write waits the 10 s fallback instead of the window the API announced.
+    'Retry-After',
+  ],
 });
