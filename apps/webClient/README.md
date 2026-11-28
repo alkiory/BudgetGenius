@@ -68,14 +68,15 @@ injected at build time. Never commit either file.
 ## Behaviour worth knowing before you change it
 
 - **Offline writes** — a mutation that cannot reach the network is stored in
-  `localStorage` under `offline_queue` and replayed when the connection
-  returns; logout clears it. The interceptor reports `_offline` to the caller
-  instead of an error, so the optimistic UI closes its modal.
+  `localStorage` (`offline_queue`, plus `offline_queue:replay` for rows that
+  need an idempotency key) and replayed when the connection returns; logout
+  clears both. Identity, ordering, retries and account scoping live in
+  [`docs/offline-queue.md`](../../docs/offline-queue.md).
 - **Errors and retries** — the Axios interceptor refreshes on `401`, ends the
   session on an unrecoverable one (clearing the React Query cache), and reports
-  proxy `502/503/504` as "API down" rather than as a validation error. The
-  shared `queryClient` sets no retry policy of its own: each query passes its
-  own `retry` count, so a `4xx` is retried as often as that query asks.
+  proxy `502/503/504` as "API down" rather than as a validation error.
+  `shouldRetryQuery` in `queryClient.ts` is the global policy: it refuses to
+  retry any `4xx` and caps everything else at two attempts.
 - **Design tokens and components** — read [`DESIGN.md`](../../DESIGN.md) before
   changing public UI. Icons come from `@animateicons/react` through
   `presentation/components/ui/animated-icons.tsx`; do not add `lucide-react` or

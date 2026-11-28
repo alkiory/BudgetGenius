@@ -1055,6 +1055,21 @@ If YES to all three — the call site is safe. If NO to any — fix and re-verif
   - **Adding `@JoinColumn({ name: '<other>' })` to an entity that already has a SEPARATE relation to `<other>` is BAD** — TypeORM would shadow the `'user' + Id` join derivation with whatever `<other>` was supplied at definition time. Pick exactly one explicit `@JoinColumn` per side of a relation; never sandwich two `@JoinColumn` decorators on the same property.
 - **Pre-cascade precondition is load-bearing.** The new `expect(... >= 1)` assertion in the spec ensures the cascade has work to do. Without it, a future regression that makes the cascade silently no-op (e.g., someone reverts to raw SQL inside `deleteUserTransactional`) would still trip `assertChildCountIsZero` green at the post-cascade assertion because the rows were never there to delete in the first place — masking the bug.
 
+#### 6.8.9 The offline queue invariants (v1.13.x — must read before touching `offline-queue*.ts`)
+
+The offline queue stores mutations the API never received. Its rules live on their own page — [`docs/offline-queue.md`](docs/offline-queue.md) — because reading them out of the flush loop is how three rounds of regressions happened. Read it before changing either file.
+
+The invariants that must survive any edit:
+
+1. **Identity is derived, never stored.** `resourceKey` (method + URL + id) and `state` (from `nextAttemptAt`) are computed in `hydrateQueue`. A stored `resourceKey` once split two edits of the same transaction into different groups, letting the newer amount sync first and be overwritten by the older one.
+2. **One writer for state and deadline.** `withDeadline(write, deadline, now)` is the only place that assigns `state` and `nextAttemptAt`; `isDue` reads `state` alone. A row cannot be `waiting` without a future deadline or `ready` with one.
+3. **The shared store stays array-shaped and unkeyed.** `offline_queue` holds only rows an older bundle can replay faithfully. Rows with an `Idempotency-Key` or a custom `timeout` live in `offline_queue:replay`, which no older bundle reads — otherwise that tab replays an import without its key and inserts the batch twice.
+4. **Nothing replays without an account.** `flushQueue` returns before touching storage when the account is unknown, a row replays only into the account that queued it, and a keyed row with no owner is never replayed. The interceptor reports `_offline` only when `enqueueRequest` returned `true`.
+5. **Order is per resource, not per deadline.** A successor waits for the head of its `resourceKey` even when its own deadline is earlier; a successful head releases its successors in the same pass.
+6. **A 429 spends no budget.** It waits for `Retry-After` with no cap. The retry budget (five) and the transport backoff (1 s → 30 s) apply to everything else; an `online` wake with nothing due does not reset that backoff.
+
+The specs are `apps/webClient/src/infrastructure/__tests__/offline-queue.model.spec.ts` (rules, no browser) and `offline-queue.spec.ts` (storage and replay). When you touch a rule, mutate it on purpose once and confirm the suite goes red: every finding on this surface so far was a rule with no test that could fail.
+
 ---
 
 ## 7. Development Workflow

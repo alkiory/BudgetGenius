@@ -9,18 +9,18 @@
 <p align="center">
   <img src="https://img.shields.io/badge/status-active-brightgreen" alt="Status" />
   <img src="https://img.shields.io/badge/license-UNLICENSED-blue" alt="License" />
-  <img src="https://img.shields.io/badge/version-v1.13.2-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v1.14.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen" alt="Node" />
   <a href="https://paypal.me/SergioCampbelldev" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
 </p>
 
-## ✨ What's New in v1.13.0
+## ✨ What's New in v1.14.0
 
-- **The Android app updates itself** — `releases/latest` is the source of truth; the bundle compares it with its own version, downloads the APK and hands it to the system installer, including Android 6.
-- **Sessions end for real** — a password change or reset kills live access tokens and stored refresh tokens, a demoted operator cannot rotate back in, and logout drops the offline queue instead of keeping the previous account's writes.
-- **Offline writes are queued, not lost** — a save that cannot reach the API is stored and replayed when the connection returns, and logging out drops it instead of keeping the previous account's writes.
+- **The offline queue has an explicit model** — resource key, order, idempotency, state and deadline are written down instead of implied by the flush loop, so two edits of one transaction replay in order and a retry cannot duplicate an import. See [`docs/offline-queue.md`](docs/offline-queue.md).
+- **Imports are deduplicated** — `POST /transactions/import` carries an `Idempotency-Key`, and the API answers from its stored receipt instead of inserting the batch a second time.
+- **Every API request is logged** — method, path without query, status and duration, with static assets filtered out.
 
-From v1.12.0: the guided catalogue with the **Emergency fund** module, dated savings contributions that keep goals in sync, and the backoffice page editor.
+From v1.13.0: in-app APK updates, and sessions that end for real on password change, reset or demotion. From v1.12.0: the guided catalogue with the **Emergency fund** module and the backoffice page editor.
 
 Full history in [`docs/changelog.md`](docs/changelog.md).
 ---
@@ -1240,6 +1240,7 @@ When the backend is running, Swagger API documentation is available at:
 | Document | What it answers |
 |---|---|
 | [`knowledge.md`](knowledge.md) | The engineering guide: architecture, invariants and the traps that have already bitten this codebase |
+| [`docs/offline-queue.md`](docs/offline-queue.md) | The queue model: identity, order, retries, and why a queued write cannot land in another account |
 | [`docs/changelog.md`](docs/changelog.md) | Every release, with the reason behind the change |
 | [`docs/rpi/`](docs/rpi/README.md) | The Research → Plan → Implement process this repository uses |
 | [`DESIGN.md`](DESIGN.md) | Tokens, type scale and component patterns for the UI |

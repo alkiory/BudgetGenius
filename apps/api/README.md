@@ -78,19 +78,26 @@ environment file on the host (or `Sites → Secrets` when deployed as a Worker).
 
 - **CORS** — `buildCorsOptions` in `cors.ts` owns the allowed origins, the
   accepted request headers (`Content-Type`, `Authorization`,
-  `X-Requested-With`, `X-Device-Id`) and the exposed ones (`Content-Type`,
-  `Authorization`, `X-Requested-With`). A header that is not listed there is
-  invisible to the browser even if the API sends it, and
-  `test/cors-preflight.spec.ts` pins the list. Adding a request header on the
-  client means adding it here first.
+  `X-Requested-With`, `X-Device-Id`, `Idempotency-Key`) and the exposed ones
+  (`Content-Type`, `Authorization`, `X-Requested-With`, `Retry-After`). A
+  header that is not listed there is invisible to the browser even if the API
+  sends it, and `test/cors-preflight.spec.ts` pins the list. Adding a request
+  header on the client means adding it here first; dropping `Idempotency-Key`
+  or `Retry-After` silently breaks replay and throttling.
 - **Idempotency** — `POST /transactions/import` stores a receipt with the rows
-  it inserted, keyed by `Idempotency-Key`; a retry carrying the same key answers
-  from that receipt instead of inserting again. The deduplication only happens
-  when the caller sends the header: a replay that omits it is a second import.
+  it inserted, keyed by `(userId, Idempotency-Key)`; a retry carrying the same
+  key answers from that receipt instead of inserting again. The web client
+  generates the key per import and keeps it on the queued row, so an offline
+  replay is deduplicated. A caller that omits the header gets a second import.
 - **Tenancy** — every table lives in the `bg_public` schema and every query is
   scoped by `req.user.id`, never by a client-supplied id.
-- **Timeouts** — the Axios client sets no default timeout and the pool uses the
-  driver defaults; a stuck request is bounded by the proxy, not by the code.
+- **Timeouts** — the Axios client defaults to 30 s, with 120 s for media
+  uploads, spreadsheet imports and AI analysis. The database pool gives up on a
+  connection after 10 s (`connectionTimeoutMillis` in both `AppModule` and
+  `DatabaseModule`).
+- **Access log** — `infrastructure/log/access-log.middleware.ts` logs method,
+  path without query, status and duration; static assets are filtered out so the
+  log stays readable.
 
 ## Tests
 
