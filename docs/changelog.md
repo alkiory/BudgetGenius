@@ -2,6 +2,29 @@
 
 ---
 
+## [v1.14.0] — 2026-11-28
+
+### Added
+
+- log every API request with method, path, status and duration (`0307aef`)
+
+### Changed
+
+- model the offline queue instead of patching it (`7d01e49`)
+
+### Fixed
+
+- never replay a queued write into an account that did not make it (`7d4134a`)
+- keep offline rows only where they can be replayed faithfully (`2543122`)
+- make the offline queue honest about storage and its own state (`e58f161`)
+- keep offline edits to one row in order and back off while offline (`362fc3b`)
+- honour Retry-After past a minute and wake replayed writes (`f441dd7`)
+- allow Idempotency-Key in CORS and keep throttled writes queued (`a92aadc`)
+- make offline replays idempotent and log requests on arrival (`9e1cbd1`)
+- cut the backoffice request storm and bound every request wait (`bd8f7c3`)
+
+---
+
 ## [v1.13.2] — 2026-11-27
 
 ### Fixed
