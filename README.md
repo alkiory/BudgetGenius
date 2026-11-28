@@ -735,10 +735,11 @@ production deployment.
 #### Required secrets and variables
 
 The **Deploy** workflow publishes the web build only — the API credentials live
-on the server. It does **not** validate the secrets it consumes: a missing
-`VITE_API_URL` still produces a deployed bundle, and that bundle sends every
-request to whatever origin Vite inlined. Re-check the repository secrets after
-changing them, and verify the deployed app loads data before announcing it.
+on the server. Before building it runs **Check required build variables**, which
+fails when any required `VITE_*` is empty: Vite would otherwise inline an empty
+`VITE_API_URL`, ship the bundle, and send every request to the hosting origin.
+The API secrets are not validated anywhere, so re-check them after rotating,
+and confirm the deployed app loads data before announcing a release.
 
 | Scope | Where | Secrets / variables |
 |-------|-------|--------------------|

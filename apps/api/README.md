@@ -101,11 +101,13 @@ environment file on the host (or `Sites → Secrets` when deployed as a Worker).
 
 ## Tests
 
-Jest specs live in `test/` and run against the module graph with mocks; they do
-not need a database. Anything that needs PostgreSQL belongs in a migration test
-or in the deploy check, not here.
+Jest specs live in `test/`. Most mock the module graph, but **the default suite
+is not database-free**: `user-delete-permission.spec.ts` boots the real
+`AppModule`, deletes a user and asserts the cascade against live tables. CI runs
+it against a PostgreSQL service after `pnpm --filter api migration:run`, so make
+sure `DB_*` and `REDIS_*` point at a running stack before `pnpm test`.
 
-`pnpm test` runs the default Jest config, whose `testRegex` (`.*\.spec\.ts$`)
-does not match `*.e2e-spec.ts`. Those boot the real `AppModule` through
-`test/jest-e2e.json` and are **not** part of CI — run `pnpm test:e2e` yourself
-when you touch auth, CORS or the throttler.
+`*.e2e-spec.ts` files are the other half: the default `testRegex`
+(`.*\.spec\.ts$`) does not match them, they run through `test/jest-e2e.json`
+with `pnpm test:e2e`, and CI never calls that command. Run them yourself when
+you touch auth, CORS or the throttler.

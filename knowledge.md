@@ -1244,7 +1244,7 @@ The dev stack has no frontend container: the SPA runs on the Vite dev server
 - **Location:** `apps/api/test/`
 - **Types:** unit tests for services, plus `*.e2e-spec.ts` files that boot the real `AppModule`
 - **Config:** `jest.config.ts` for `pnpm test` (its `testRegex` does **not** match `*-e2e-spec.ts`), `test/jest-e2e.json` for `pnpm test:e2e`
-- **CI:** `.github/workflows/ci.yml` runs `pnpm --filter api test` only. The e2e specs exist but are not part of the pipeline, so run them yourself before touching auth, CORS or the throttler.
+- **CI:** `.github/workflows/ci.yml` starts PostgreSQL and Redis services, applies migrations and runs `pnpm --filter api test`. That suite is **not** database-free — `user-delete-permission.spec.ts` boots `AppModule` and deletes a real row — so a local `pnpm test` needs the dev stack up. The `*.e2e-spec.ts` files are the ones outside the pipeline: run `pnpm test:e2e` yourself before touching auth, CORS or the throttler.
 - **Status:** Jest unit and integration specs live under `apps/api/test/` and run with `pnpm --filter api test`; the e2e suite uses `pnpm --filter api test:e2e`. CI runs them on every push
 - **Key test files:**
   - `user-service.spec.ts`
