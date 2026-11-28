@@ -798,6 +798,14 @@ Without `set -a`, a file of plain `VAR=value` lines leaves the variables in the
 shell but unexported, and Compose aborts on
 `required variable REDIS_PASSWORD is missing a value`.
 
+`.env.secrets` sits in the checkout but is ignored — `/.env.secrets` in the root
+`.gitignore`, and no commit in the repository has ever contained it. On a fresh
+server, confirm before your first staging:
+
+```bash
+git check-ignore -v .env.secrets   # must print the .gitignore rule, not nothing
+```
+
 - Use `docker-compose.prod.yml` alone: it declares the complete stack
   (`bg-backend-prod`, `bg-db-prod`, `bg-redis-prod`) and interpolates
   `DB_PASSWORD` / `REDIS_PASSWORD`. The stack refuses to start without
