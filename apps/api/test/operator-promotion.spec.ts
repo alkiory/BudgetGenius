@@ -36,6 +36,10 @@ const buildService = (options: { password?: string | null } = {}) => {
     incr: jest.fn().mockResolvedValue(1),
   };
   const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
+  const tokenEpoch = {
+    current: jest.fn().mockResolvedValue(0),
+    bump: jest.fn().mockResolvedValue(1),
+  };
 
   const service = new AuthService(
     userRepository as any,
@@ -47,10 +51,10 @@ const buildService = (options: { password?: string | null } = {}) => {
     {} as any,
     {} as any,
     {} as any,
-    { current: jest.fn().mockResolvedValue(0) } as any,
+    tokenEpoch as any,
   );
 
-  return { service, user, userRepository };
+  return { service, user, userRepository, tokenEpoch };
 };
 
 describe('operator promotion at sign-in', () => {
@@ -145,6 +149,31 @@ describe('operator promotion at sign-in', () => {
     // Fail-open on purpose: the cleanup retries next sign-in, while denying
     // this one would lock out the owner and keep the squatter's access.
     expect(session.userEntity.role).toBe('superadmin');
+  });
+
+  it('ends the access tokens issued before the promotion', async () => {
+    const { service, user, tokenEpoch } = buildService({
+      password: '$2a$04$squatter-hash',
+    });
+    jest.spyOn(service as any, 'validateOAuthUser').mockResolvedValue(user);
+
+    await service.oauthLogin({ email: OPERATOR_EMAIL, name: 'Operator' });
+
+    // Clearing the password and the refresh token leaves a live access token
+    // from the earlier registrant, and the backoffice now authorizes from the
+    // row, so that token would pass the guard. The epoch bump is what ends it.
+    expect(tokenEpoch.bump).toHaveBeenCalledWith(5);
+  });
+
+  it('does not disturb the other sessions of an operator who is already promoted', async () => {
+    const { service, user, tokenEpoch } = buildService();
+    user.role = 'superadmin';
+    jest.spyOn(service as any, 'validateOAuthUser').mockResolvedValue(user);
+
+    await service.oauthLogin({ email: OPERATOR_EMAIL, name: 'Operator' });
+
+    // A routine sign-in must not sign the operator out of their other devices.
+    expect(tokenEpoch.bump).not.toHaveBeenCalled();
   });
 
   it('retires the previous operator in the same sign-in (handover)', async () => {

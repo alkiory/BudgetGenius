@@ -63,9 +63,21 @@ export interface ChangelogEntry {
  */
 export const changelog: ChangelogEntry[] = [
   {
+    version: "1.14",
+    date: "2026-11-28",
+    highlight: true,
+    title: {
+      en: "Your edits wait for the connection",
+      es: "Tus cambios esperan a la conexión",
+    },
+    description: {
+      en: "Saving while offline no longer loses anything: the change waits and goes out when the connection returns, and your edits to the same record always arrive in the order you made them. An import you send twice still counts once, and the app waits its turn instead of insisting on a server that is struggling.",
+      es: "Guardar sin conexión ya no pierde nada: el cambio espera y sale cuando vuelve la conexión, y los cambios sobre un mismo registro llegan siempre en el orden en que los hiciste. Una importación enviada dos veces sigue contando una sola vez, y la app espera su turno en lugar de insistirle a un servidor que está teniendo problemas.",
+    },
+  },
+  {
     version: "1.13",
     date: "2026-11-27",
-    highlight: true,
     title: {
       en: "The Android app updates itself",
       es: "La app de Android se actualiza sola",

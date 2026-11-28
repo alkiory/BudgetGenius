@@ -17,6 +17,28 @@
 - Do not commit unless the user explicitly asks.
 - Follow the repository's existing commit-message style; keep the message concise and explain why the change was made.
 
+## Changelog
+
+Two changelogs, written in different places:
+
+- **`apps/webClient/src/presentation/data/changelog.ts`** is the user-facing
+timeline. The landing `/changelog` page and the in-app “what’s new” both read
+it. Newest first, `version` is `major.minor`, title and description in English
+and Spanish, plain language (“what you can now do”, no jargon), and
+`highlight: true` on the newest entry only. Describe what the app actually
+does: no claim wider than the code — ordering, retries and background work have
+exceptions, so promise what a user will reliably see.
+- **`docs/changelog.md`** is the engineering log: exact version, date, and one
+line per commit with its hash. **Never edit it by hand** —
+`scripts/version-bump.mjs` writes it from the commits since the last tag, and
+`release-android.yml` commits it with the version bump.
+
+Automatic releases only touch the version and that engineering log, so there is
+no later step that would write the public entry: a **user-visible** change adds
+its entry in the merge that ships it, or it ships undocumented. Internal changes
+— guards, migrations, deploy plumbing — need no public entry; the engineering
+log is their record.
+
 ## Design and UI
 
 - Read `DESIGN.md` before changing the landing or the public UI.
