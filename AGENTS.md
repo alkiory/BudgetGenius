@@ -17,6 +17,22 @@
 - Do not commit unless the user explicitly asks.
 - Follow the repository's existing commit-message style; keep the message concise and explain why the change was made.
 
+## Changelog
+
+Every release updates **both** changelogs, in the same commit as the version
+bump — a shipped version whose changelog is older is a bug, not a follow-up:
+
+- **`apps/webClient/src/presentation/data/changelog.ts`** is the user-facing
+timeline. The landing `/changelog` page and the in-app “what’s new” both read
+it. Newest first, `version` is `major.minor`, title and description in English
+and Spanish, plain language (“what you can now do”, no jargon), and
+`highlight: true` moves to the new entry.
+- **`docs/changelog.md`** is the engineering log: exact version, date, and one
+line per commit with its hash.
+
+When you add a user-visible change outside a release branch, add the entry in
+the branch that ships it — do not leave it for later.
+
 ## Design and UI
 
 - Read `DESIGN.md` before changing the landing or the public UI.
