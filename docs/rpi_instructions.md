@@ -1,92 +1,114 @@
-# rpi_instructions.md
+# Delegating an RPI task to an AI agent
 
-> **Propósito:** Esta guía práctica proporciona los prompts exactos para delegar tareas a agentes de IA (GitHub Copilot, Claude Code, Cursor, etc.) bajo el marco RPI (Research, Plan, Implement).
-> **Para el framework completo** (checklists, clasificación de fallos, artefactos, anti-patrones), consulta [`docs/rpi/README.md`](rpi/README.md).
+Prompts to hand a ticket to an AI coding agent (Copilot, Claude Code, Cursor…)
+under the RPI framework, one phase at a time.
 
-El framework RPI reduce la fricción, las suposiciones ocultas y el diseño prematuro de soluciones. Al interactuar con un agente de IA, **NUNCA** debes pedirle que "resuelva el problema" de una sola vez. Debes guiarlo secuencialmente a través de las tres fases, validando su salida en cada punto de control.
+**Framework reference:** [`docs/rpi/README.md`](rpi/README.md) — checklists,
+failure classification, artifacts and anti-patterns.
 
-> 💡 **Tip:** Los prompts de esta guía asumen que el agente tiene acceso a los docs del framework en `docs/rpi/`.
+RPI exists to reduce friction, hidden assumptions and premature solutioning.
+The rule that matters when prompting an agent: **never ask it to "solve the
+problem" in one go.** Walk it through the three phases and validate its output
+at each control point.
 
----
+## Before you start
 
-## 🏗️ Requisitos Previos (Setup del Proyecto)
-
-Antes de iniciar un nuevo ticket o requerimiento con el agente, asegúrate de que la estructura de tu proyecto esté preparada:
-
-1. Asegúrate de que los documentos base del framework (`README.md`, `Research.md`, `Plan.md`, `Implement.md`, y las escalas de validación) estén ubicados en la carpeta `/docs` (o `/docs/rpi`) para que el agente tenga el contexto como referencia.
-2. Inicia un nuevo esfuerzo creando un subdirectorio específico para la tarea, por ejemplo: `rpi/initiative-X/`. Aquí es donde el agente guardará los artefactos.
-
----
-
-## 📜 Fase 1: Research (Investigación)
-
-**Objetivo:** Convertir la incertidumbre en una comprensión estructurada del problema, usuarios y restricciones. El agente debe mapear el código sin proponer la solución final todavía.
-
-### Paso 1: Inicializar el contexto
-
-Copia y pega este prompt en el chat de tu agente de IA, reemplazando los valores entre corchetes:
-
-> **Prompt para el Agente:**
-> "I need to work on a new requirement: [DESCRIBE_PROBLEM_OR_PASTE_TICKET_HERE].
-> We use the RPI (Research, Plan, Implement) framework. Please read `docs/README.md` and `docs/Research.md` to understand our process.
-> Your first task is ONLY the Research phase. Analyze the codebase to clarify the scope and map affected code surfaces. Generate the artifact at `rpi/[TICKET-ID]/research.md` exactly as specified in the templates. You must include the FAR Scale output at the end. Do not write any production code yet."
-
-### Paso 2: Validación Humana (Punto de Control)
-
-*Revisa el archivo `research.md` generado.*
-
-* ¿El puntaje de la escala FAR (Factual, Actionable, Relevant) tiene un **Mean ≥ 4.00**?.
-* Si el puntaje es menor a 4.00 después de dos intentos, es un "Failure Trigger" y debes redefinir el problema.
-* **Aprobación:** Si es correcto, procede a la Fase 2.
+1. Keep the framework documents where the agent can read them: `docs/rpi/`
+   holds `README.md`, `Research.md`, `Plan.md` and `Implement.md`.
+2. Create one subfolder per effort, for example `rpi/initiative-x/`. The agent
+   writes its artifacts there.
 
 ---
 
-## 📝 Fase 2: Plan (Planificación Atómica)
+## Phase 1 — Research
 
-**Objetivo:** Convertir la investigación en un camino ejecutable, dividiendo el alcance y definiendo la arquitectura.
+**Goal:** turn uncertainty into a structured understanding of the problem, the
+users and the constraints. The agent maps the code; it does not propose the
+final solution yet.
 
-### Paso 3: Instruir la creación del Plan
+### Step 1: set the context
 
-Una vez aprobado el documento de investigación, utiliza el siguiente prompt:
+Paste this prompt, replacing the bracketed values:
 
-> **Prompt para el Agente:**
-> "The Research phase is approved. Now, please read `docs/Plan.md`.
-> Based on the `rpi/[TICKET-ID]/research.md` document, generate the technical implementation plan at `rpi/[TICKET-ID]/plan.md`. You must break down the solution into atomic, single-responsibility tasks using checkboxes (`- [ ]`). Explicitly define dependencies and include the FACTS Scale output. Do not start executing the tasks yet."
+> I need to work on a new requirement: [DESCRIBE_PROBLEM_OR_PASTE_TICKET_HERE].
+>
+> We use the RPI (Research, Plan, Implement) framework. Read
+> `docs/rpi/README.md` and `docs/rpi/Research.md` to understand the process.
+>
+> Your first task is **only** the Research phase. Analyse the codebase to
+> clarify the scope and map the affected surfaces. Write the artifact to
+> `rpi/[TICKET-ID]/research.md` following the template, and include the FAR
+> scale output at the end. Do not write production code yet.
 
-### Paso 4: Validación Humana (Punto de Control)
+### Step 2: human validation
 
-*Revisa el archivo `plan.md` generado.*
+Review the generated `research.md`:
 
-* ¿Cada tarea es atómica (ej. un solo comando, la edición de un solo archivo) y tiene una definición clara de "done"?.
-* ¿El puntaje de la escala FACTS (Feasibility, Atomicity, Clarity, Testability, Size) tiene un **Mean ≥ 3.00**?.
-* **Aprobación:** Si el plan es sólido y no tiene dependencias circulares, procede a la Fase 3.
+- Is the FAR score (Factual, Actionable, Relevant) at least **4.00** on average,
+  with **no axis under its floor** — Factual ≥ 4, Actionable ≥ 3, Relevant ≥ 3?
+- Below those thresholds after two attempts is a failure trigger: redefine the
+  problem before continuing.
+
+If it holds, move to Phase 2.
 
 ---
 
-## ⚙️ Fase 3: Implement (Ejecución Mecánica)
+## Phase 2 — Plan
 
-**Objetivo:** Entregar porciones significativas a producción, medir y adaptar. El agente ejecutará el plan mecánicamente.
+**Goal:** turn the research into an executable path — bounded scope, defined
+approach, atomic tasks.
 
-### Paso 5: Instruir la Ejecución
+### Step 3: request the plan
 
-Usa este prompt para que el agente comience a programar:
+> The Research phase is approved. Read `docs/rpi/Plan.md`.
+>
+> Based on `rpi/[TICKET-ID]/research.md`, write the implementation plan to
+> `rpi/[TICKET-ID]/plan.md`. Break the solution into atomic,
+> single-responsibility tasks using checkboxes (`- [ ]`), state the
+> dependencies explicitly and include the FACTS scale output. Do not start
+> executing yet.
 
-> **Prompt para el Agente:**
-> "The Plan phase is approved (FACTS mean is >= 3.00). Please review `docs/Implement.md` for our execution rules.
-> Begin executing the tasks defined in `rpi/[TICKET-ID]/plan.md` sequentially. For each task:
+### Step 4: human validation
+
+Review the generated `plan.md`:
+
+- Is every task atomic (one command, one file edit) with a clear definition of
+  done?
+- Is the FACTS score (Feasibility, Atomicity, Clarity, Testability, Size) at
+  least **3.00** on average?
+- Are there circular dependencies?
+
+If the plan holds, move to Phase 3.
+
+---
+
+## Phase 3 — Implement
+
+**Goal:** deliver meaningful slices, measure, adapt. The agent executes the plan
+mechanically.
+
+### Step 5: start the execution
+
+> The Plan phase is approved (FACTS mean ≥ 3.00). Read `docs/rpi/Implement.md`
+> for the execution rules.
+>
+> Execute the tasks in `rpi/[TICKET-ID]/plan.md` in order. For each task:
+>
 > 1. Write the code.
-> 2. Run our quality gates: Build -> Lint -> Test.
-> 3. Only if all gates pass, mark the task as complete (`- [x]`) in the plan document.
-> 
-> 
-> Stop and ask for my review after completing Phase 1 of the plan, or immediately if any quality gate fails."
+> 2. Run the quality gates: build → lint → test.
+> 3. Only if every gate passes, mark the task complete (`- [x]`) in the plan.
+>
+> Stop for my review after the first phase of the plan, or immediately if a
+> gate fails.
 
-### Paso 6: Manejo de Errores y Postmortems (Solo si es necesario)
+### Step 6: failures and postmortems
 
-Si el agente se atasca o los tests fallan repetidamente (ej. 3+ fallos consecutivos), detén la iteración y consulta el sistema de clasificación de fallos en el [Failure Handling Framework](rpi/README.md#failure-handling-framework).
+If the agent gets stuck or tests fail repeatedly (three or more consecutive
+failures), stop the iteration and apply the
+[failure handling framework](rpi/README.md#failure-handling).
 
-Según la gravedad del fallo, usa este prompt:
-
-> **Prompt para el Agente:**
-> "We have hit consecutive failures during implementation. Please halt coding.
-> According to our Failure Handling Framework, generate a postmortem document at `rpi/[TICKET-ID]/implement-postmortem.md` detailing the failed task, the system state, root cause analysis, and recommended next steps."
+> We have hit consecutive failures during implementation. Stop coding.
+>
+> Following the failure handling framework, write a postmortem to
+> `rpi/[TICKET-ID]/implement-postmortem.md` covering the failed task, the state
+> of the system, the root cause and the recommended next steps.

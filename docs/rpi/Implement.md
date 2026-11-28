@@ -32,7 +32,7 @@ Implement phase failures are classified and handled according to task execution 
 
 **Catastrophic Failure Output**: Critical failures generate implement-postmortem.md at rpi/[problem-short-name]/implement-postmortem.md
 
-For complete failure handling procedures, escalation timelines, recovery paths, and postmortem requirements, see: [Failure Handling Framework](../README.md#failure-handling-framework)
+For complete failure handling procedures, escalation timelines, recovery paths, and postmortem requirements, see [Failure handling](README.md#failure-handling).
 
 ## Task Execution Strategy
 
@@ -114,7 +114,7 @@ flowchart TD
   K -- No --> L[Done: Implement Complete]
 ```
 
-*For detailed failure criteria, escalation procedures, and recovery paths, see [Failure Handling Framework](../README.md#failure-handling-framework)*
+*For detailed failure criteria, escalation procedures, and recovery paths, see [Failure handling](README.md#failure-handling).*
 
 ### Parallel Execution with Sub-Agents
 > **Note:** When using tools like Claude Code that support sub-agents, the workflow can be modified to execute independent tasks in parallel:
@@ -179,4 +179,4 @@ Implement phase completes with:
 
 ## Reference
 Plan artifact: rpi/[problem-short-name]/plan.md
-FACTS validation: [FACTS Scale for Plan](../scales/facts-scale.md)
+FACTS validation: Feasibility, Atomicity, Clarity, Testability, Size — the plan passes at a mean of 3.00.

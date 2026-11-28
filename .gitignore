@@ -19,6 +19,8 @@
 .env.prod
 .env.development
 .env.production
+# Production passwords sourced by the deploy script on the server
+/.env.secrets
 
 # Backup files
 .env.bak

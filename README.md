@@ -9,18 +9,18 @@
 <p align="center">
   <img src="https://img.shields.io/badge/status-active-brightgreen" alt="Status" />
   <img src="https://img.shields.io/badge/license-UNLICENSED-blue" alt="License" />
-  <img src="https://img.shields.io/badge/version-v1.12.0-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v1.14.0-blue" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen" alt="Node" />
   <a href="https://paypal.me/SergioCampbelldev" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
 </p>
 
-## ✨ What's New in v1.12.0
+## ✨ What's New in v1.14.0
 
-- **Guided catalogue** — step-by-step modules such as the **Emergency fund**, with its 4-week plan, checklist and FAQ.
-- **A calculator with your real numbers** — the emergency fund reads your last six months of expenses and turns the 3–6 month target into a real savings goal.
-- **Every contribution is a dated transaction** — choose the day you put the money aside and it appears in Transactions as a savings movement.
-- **Goals stay in sync** — edit or delete a contribution and the goal follows; savings never count as spending in reports.
-- **Backoffice page editor** — write the module pages, reorder tabs, add blocks and upload images without a deploy.
+- **The offline queue has an explicit model** — resource key, order, idempotency, state and deadline are written down instead of implied by the flush loop, so two edits of one transaction replay in order and a retry cannot duplicate an import. See [`docs/offline-queue.md`](docs/offline-queue.md).
+- **Imports are deduplicated** — `POST /transactions/import` carries an `Idempotency-Key`, and the API answers from its stored receipt instead of inserting the batch a second time.
+- **Every API request is logged** — method, path without query, status and duration, with static assets filtered out.
+
+From v1.13.0: in-app APK updates, and sessions that end for real on password change, reset or demotion. From v1.12.0: the guided catalogue with the **Emergency fund** module and the backoffice page editor.
 
 Full history in [`docs/changelog.md`](docs/changelog.md).
 ---
@@ -34,13 +34,14 @@ Full history in [`docs/changelog.md`](docs/changelog.md).
 - [Getting Started](#-getting-started)
 - [Web Development Workflow](#-web-development-workflow)
 - [Mobile Development](#-mobile-development)
-- [CI/CD & Deployment](#-cicd--deployment)
 - [Testing](#-testing)
 - [RPI Development Framework](#-rpi-development-framework)
 - [Project Structure](#-project-structure)
 - [Environment Variables](#-environment-variables)
+- [Superadmin backoffice](#-superadmin-backoffice)
 - [Web Surfaces & Password Recovery](#-web-surfaces--password-recovery)
 - [API Documentation](#-api-documentation)
+- [More Documentation](#-more-documentation)
 - [Contributing](#-contributing)
 
 ---
@@ -123,7 +124,7 @@ BudgetGenius/
 │   └── bootstrap.sh      # One-command setup
 ├── docker-compose.yml     # Base Docker services
 ├── docker-compose.dev.yml # Development overrides
-├── docker-compose.prod.yml# Production overrides
+├── docker-compose.prod.yml# Production stack (self-hosted)
 └── turbo.json             # Turbo pipeline config
 ```
 
@@ -180,9 +181,8 @@ BudgetGenius/
 | **GitHub Actions** | CI/CD pipeline (test, build, deploy) |
 | **Turbo** | Monorepo task orchestration |
 | **pnpm** | Fast, disk-efficient package manager |
-| **Vercel** | Frontend hosting |
-| **Firebase Hosting** | Static asset hosting |
-| **AWS RDS** | Managed PostgreSQL (production) |
+| **Firebase Hosting** | Landing + SPA hosting (production) |
+| **Docker PostgreSQL** | PostgreSQL 15 container on the production server |
 | **Playwright** | End-to-end browser testing |
 | **Jest** | Backend unit and e2e testing |
 
@@ -713,30 +713,62 @@ If you see CORS errors in the emulator's WebView, make sure the backend's CORS a
 | Workflow | Trigger | Actions |
 |----------|---------|---------|
 | **CI** (`.github/workflows/ci.yml`) | Push to `main`/`dev`/`feature*`, PR to `main`/`dev`, manual | API: migrations → tests → build. Web: typecheck → unit tests → landing + SPA build |
-| **Deploy** (`.github/workflows/deploy.yml`) | Push to `main`, manual | Verify → API image to DockerHub → pull/restart on GCE; landing + SPA → Firebase Hosting |
+| **Deploy** (`.github/workflows/deploy.yml`) | Push to `main`, manual | Verify → landing + SPA → Firebase Hosting. The API is not deployed from CI: it is rebuilt on the self-hosted server (see *API deployment*) |
 | **Build Android APK** | Push/PR to `main`/`dev` | Debug APK artifact |
 | **Release Android** | Version tag | Signed APK on the GitHub Release |
 
 ### Deployment Architecture
 
 - **Frontend:** Firebase Hosting (primary); Vercel can serve the same `dist/`
-- **Backend:** Docker container on GCE, image pulled from DockerHub
-- **Database:** PostgreSQL on the VM (compose) / Docker PostgreSQL (development)
-- **Cache:** Redis on the VM (compose, password-protected) / Docker Redis (development)
+- **Backend:** Docker container `bg-backend-prod` on the self-hosted Linux
+  server. The server pulls `main`, builds `apps/api/Dockerfile` and starts the
+  stack with `docker-compose.prod.yml`; no cloud VM and no image registry.
+- **Database:** PostgreSQL 15 container `bg-db-prod` (volume `pgdata_prod`) /
+  Docker PostgreSQL (development)
+- **Cache:** Redis 7.2 container `bg-redis-prod`, password-protected /
+  Docker Redis (development)
 
-#### Required GitHub secrets and variables
+The earlier Google Cloud VM target (`docker-compose.gce.yml`,
+`scripts/gce-setup.sh`) has been removed: this stack is the only supported
+production deployment.
 
-The **Deploy** workflow fails fast if a required secret is missing:
+#### Required secrets and variables
 
-| Scope | Secrets / variables |
-|-------|--------------------|
-| API + GCE | `DOCKER_USERNAME`, `DOCKER_PASSWORD`, `GCE_HOST`, `GCE_USER`, `GCE_SSH_KEY`, `DB_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET` |
-| API runtime | `OPENAI_API_KEY`, `FRONTEND_URL`, `COOKIE_DOMAIN`, `RESEND_API_KEY`, `MAIL_FROM`, `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`, `PROVIDER_KEYS_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` |
-| Web build | `VITE_API_URL`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MEASUREMENT_ID`, `FIREBASE_SERVICE_ACCOUNT_BUDGETGENIUSIA` |
-| Variables | `PUBLIC_APP_URL`, `PUBLIC_APK_URL` (optional) |
+The **Deploy** workflow publishes the web build only — the API credentials live
+on the server. It does not check the values it consumes: Vite inlines whatever
+it receives, so an empty `VITE_API_URL` still produces a bundle, and that bundle
+sends every request to the hosting origin. Re-check the repository secrets after
+rotating them and confirm the deployed app loads data before announcing a
+release.
 
-Push to `main` deploys automatically. To deploy the current branch without
-merging, run **Actions → Deploy → Run workflow** and pick the ref.
+The API side fails earlier, but only on presence:
+
+- `docker compose -f docker-compose.prod.yml up` aborts before starting anything
+  when `REDIS_PASSWORD` is unset — the file interpolates it as
+  `${REDIS_PASSWORD:?…}`.
+- `DB_PASSWORD` has no such guard: it is passed straight into `POSTGRES_PASSWORD`,
+  so an empty value leaves `bg-db-prod` unable to initialize and the backend
+  never starts, because it waits for that healthcheck.
+- A missing `RESEND_API_KEY` makes `ResendMailerService` throw while the
+  container builds, so `bg-backend-prod` restart-loops instead of booting
+  without mail.
+
+None of that proves a rotated credential still works — only a real send, a real
+login and a real query do.
+
+| Scope | Where | Secrets / variables |
+|-------|-------|--------------------|
+| API (compose) | `.env.secrets` on the server | `DB_PASSWORD`, `REDIS_PASSWORD` |
+| API runtime | `apps/api/.env.production` on the server | `JWT_SECRET`, `OPENAI_API_KEY`, `RESEND_API_KEY`, `MAIL_FROM`, `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`, `PROVIDER_KEYS_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `FRONTEND_URL`, `COOKIE_DOMAIN` |
+| Web build | GitHub repository secrets | `VITE_API_URL`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MEASUREMENT_ID`, `FIREBASE_SERVICE_ACCOUNT_BUDGETGENIUSIA` |
+| Variables | GitHub repository variables | `PUBLIC_APP_URL`, `PUBLIC_APK_URL` (optional) |
+
+> `deploy.yml` only verifies the code and publishes the web build; it does not
+> build or ship the API image, so no DockerHub or SSH secrets are needed.
+
+Push to `main` publishes the web build automatically. To deploy the current
+branch without merging, run **Actions → Deploy → Run workflow** and pick the ref.
+The API is not part of that flow — redeploy it on the server (next section).
 
 ```bash
 # Local production build (same artifact the deploy publishes)
@@ -744,15 +776,94 @@ pnpm --filter api build   # apps/api/dist
 pnpm build:web             # dist/ → landing at /, SPA at /app/
 ```
 
-#### Production environment file
+#### API deployment (self-hosted server)
 
-`docker-compose.prod.yml` reads the secrets it interpolates (`DB_PASSWORD` and `REDIS_PASSWORD`) from the root `.env` on the server; the backend-specific settings still come from `apps/api/.env.production`. The stack refuses to start if `REDIS_PASSWORD` is missing, because Redis runs with `--requirepass`:
+Run this on the server, from a checkout of this repository:
 
 ```bash
-# Generate once, keep it: the same password must survive every redeploy.
-grep -q '^REDIS_PASSWORD=' .env || printf 'REDIS_PASSWORD=%s\n' "$(openssl rand -hex 24)" >> .env
-docker compose -f docker-compose.prod.yml up -d
+#!/usr/bin/env bash
+set -euo pipefail            # a failed pull must stop the deploy, not build the old tree
+
+cd ~/projects/BudgetGenius
+set -a                       # export everything the file defines, so Compose sees it
+. ./.env.secrets             # DB_PASSWORD, REDIS_PASSWORD
+set +a
+
+git pull --ff-only origin main
+docker compose -f docker-compose.prod.yml up -d --build
+docker image prune -f || true   # housekeeping must not mask a deploy failure
 ```
+
+Without `set -a`, a file of plain `VAR=value` lines leaves the variables in the
+shell but unexported, and Compose aborts on
+`required variable REDIS_PASSWORD is missing a value`.
+
+`.env.secrets` sits in the checkout but is ignored — `/.env.secrets` in the root
+`.gitignore`, and no commit in the repository has ever contained it. On a fresh
+server, confirm before your first staging:
+
+```bash
+git check-ignore -v .env.secrets   # must print the .gitignore rule, not nothing
+```
+
+- Use `docker-compose.prod.yml` alone: it declares the complete stack
+  (`bg-backend-prod`, `bg-db-prod`, `bg-redis-prod`) and interpolates
+  `DB_PASSWORD` / `REDIS_PASSWORD`. The stack refuses to start without
+  `REDIS_PASSWORD` because Redis runs with `--requirepass`.
+- The API listens on port 5000 inside `app-network`; NPM
+  (nginx-proxy-manager, external `npm_network`) is the only public entry point,
+  so no host port is published.
+- `UPLOAD_DIR=/data` plus the `api_uploads` volume keep catalogue images across
+  redeploys.
+- The web build is served by Firebase Hosting, so an API-only deploy changes no
+  frontend files; just reload the app after the container restarts.
+
+#### Database operations (production)
+
+Postgres is not published on the host, so query it inside the container:
+container `bg-db-prod`, superuser `postgres_admin_prod`, database
+`budgetgenius_prod`, schema `bg_public`. Use `docker exec` rather than
+`docker compose exec`: compose interpolates the whole file first and aborts with
+`required variable REDIS_PASSWORD is missing a value` when the shell has not
+sourced `.env.secrets`.
+
+```bash
+# Inspect
+# Login inside the container goes through the local socket, so no password.
+docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod \
+  -c "SELECT id, email, role FROM \"bg_public\".\"users\" ORDER BY id;"
+
+# Grant the backoffice (Catálogos): only `superadmin` sees it.
+# Promote by id, not by email. Sign in with the operator account first, copy the
+# id it authenticated with, then run this: the email in the WHERE is a check,
+# not the key, so a wrong id fails instead of promoting somebody else. The
+# address must also be the one in SUPERADMIN_EMAIL, or RolesGuard returns 403.
+docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod \
+  -c "UPDATE \"bg_public\".\"users\" SET role='superadmin' WHERE id=<id> AND lower(email)='superadmin@example.com';"
+
+# Revoke it from everybody else
+docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod \
+  -c "UPDATE \"bg_public\".\"users\" SET role='user' WHERE role='superadmin' AND lower(email)<>'superadmin@example.com';"
+```
+
+> ⚠️ **Promoting by email to an address nobody owns is a privilege hole.**
+> The `id` form above closes it: the id comes from a session you signed in to, and
+> the email is only cross-checked, so a wrong id fails instead of promoting
+> somebody else.
+>
+> The role row is also not the whole gate. `RolesGuard` re-reads the account on
+> every superadmin request and requires **both** `role='superadmin'` **and** an
+> address equal to `SUPERADMIN_EMAIL`; promoting any other mailbox leaves the
+> backoffice answering 403. So set `SUPERADMIN_EMAIL` to the account you control
+> **before** the first deploy — or seed it with `SUPERADMIN_EMAIL` /
+> `SUPERADMIN_PASSWORD` (see `apps/api/.env.production`), which creates that
+> account on boot — instead of promoting an address after someone else registered
+> it.
+
+Use `-it` instead of `-i` for an interactive `psql` session. The SPA caches the
+role until the profile is refetched, so reload the page (or wait up to five
+minutes) after changing it. `pgdata_prod` is the only copy of production data:
+back up the volume before hand-written `UPDATE`/`DELETE` statements.
 
 ---
 
@@ -861,7 +972,7 @@ BudgetGenius/
 ├── .github/workflows/                # CI/CD pipelines
 ├── docker-compose.yml                # Base Docker services
 ├── docker-compose.dev.yml            # Development config
-├── docker-compose.prod.yml           # Production config
+├── docker-compose.prod.yml           # Production stack (self-hosted)
 ├── pnpm-workspace.yaml               # Workspace definition
 └── turbo.json                         # Turbo pipeline
 ```
@@ -1160,6 +1271,19 @@ When the backend is running, Swagger API documentation is available at:
 
 ---
 
+## 📚 More Documentation
+
+| Document | What it answers |
+|---|---|
+| [`knowledge.md`](knowledge.md) | The engineering guide: architecture, invariants and the traps that have already bitten this codebase |
+| [`docs/offline-queue.md`](docs/offline-queue.md) | The queue model: identity, order, retries, and why a queued write cannot land in another account |
+| [`docs/changelog.md`](docs/changelog.md) | Every release, with the reason behind the change |
+| [`docs/rpi/`](docs/rpi/README.md) | The Research → Plan → Implement process this repository uses |
+| [`DESIGN.md`](DESIGN.md) | Tokens, type scale and component patterns for the UI |
+| [`apps/api/README.md`](apps/api/README.md) · [`apps/webClient/README.md`](apps/webClient/README.md) · [`apps/mobile/README.md`](apps/mobile/README.md) | Per-app setup, scripts and gotchas |
+
+---
+
 ## 🤝 Contributing
 
 ### Development Process
@@ -1168,7 +1292,7 @@ When the backend is running, Swagger API documentation is available at:
 2. Create a feature branch from `dev`
 3. Implement changes with quality gates (Build → Lint → Test)
 4. Submit a PR to `dev`
-5. Use the [Pull Request Template](.github/PULL_REQUEST_TEMPLATE.md)
+5. Use the [Pull Request Template](.github/workflows/PULL_REQUEST_TEMPLATE.md)
 
 ### Code Conventions
 

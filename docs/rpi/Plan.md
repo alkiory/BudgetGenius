@@ -84,7 +84,7 @@ Use the **FACTS Scale** (Feasibility, Atomicity, Clarity, Testability, Size) for
 
 Apply the FACTS Scale for Plan phase validation. Summarized scoring table + pass/fail decision required.
 
-For complete FACTS Scale criteria, scoring rules, and examples: [../scales/facts-scale.md](../scales/facts-scale.md)
+The FACTS scale scores an implementation plan out of 5 on **Feasibility**, **Atomicity**, **Clarity**, **Testability** and **Size**. A plan passes at a mean of 3.00 or above.
 
 *For code validation in the previous phase, see the FAR Scale in Research.md*
 
@@ -163,7 +163,7 @@ Plan phase failures are classified and handled according to FACTS Scale scores:
 
 Additional triggers include task breakdown failure (non-atomic tasks) and dependency deadlock (circular dependencies).
 
-For complete failure handling procedures, escalation timelines, recovery paths, and postmortem requirements, see: [Failure Handling Framework](../README.md#failure-handling-framework)
+For complete failure handling procedures, escalation timelines, recovery paths, and postmortem requirements, see [Failure handling](README.md#failure-handling).
 
 ## Quality Gates Before Completion
 - Every task maps to specific code locations or clear creation instructions
@@ -204,4 +204,4 @@ Implement phase receives:
 - Creating tasks too large for single AI agent sessions
 
 ## Reference
-FACTS rubric: [FACTS Scale](../scales/facts-scale.md)
+FACTS rubric: Feasibility, Atomicity, Clarity, Testability, Size — scored out of 5, pass at a mean of 3.00.

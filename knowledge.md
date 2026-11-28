@@ -48,7 +48,7 @@ BudgetGenius/
 │   └── bootstrap.sh       # One-command setup script
 ├── docker-compose.yml     # Base service definitions
 ├── docker-compose.dev.yml # Development overrides
-├── docker-compose.prod.yml# Production overrides
+├── docker-compose.prod.yml# Production stack (self-hosted)
 ├── turbo.json             # Turbo pipeline configuration
 ├── pnpm-workspace.yaml   # Workspace definition
 └── package.json           # Root workspace scripts
@@ -105,9 +105,9 @@ Both apps follow a **Clean Architecture / Hexagonal** pattern with strict layer 
 |----------|-----------|
 | CI/CD | GitHub Actions |
 | Containerization | Docker + Docker Compose |
-| Hosting (Frontend) | Vercel + Firebase Hosting |
-| Hosting (Backend) | Docker on VPS / AWS |
-| DB Hosting | AWS RDS (PostgreSQL) |
+| Hosting (Frontend) | Firebase Hosting |
+| Hosting (Backend) | Docker on self-hosted server (`docker-compose.prod.yml`) |
+| DB Hosting | PostgreSQL container on the same server (`bg-db-prod`) |
 | Monorepo Orchestration | Turbo |
 
 ---
@@ -1055,6 +1055,21 @@ If YES to all three — the call site is safe. If NO to any — fix and re-verif
   - **Adding `@JoinColumn({ name: '<other>' })` to an entity that already has a SEPARATE relation to `<other>` is BAD** — TypeORM would shadow the `'user' + Id` join derivation with whatever `<other>` was supplied at definition time. Pick exactly one explicit `@JoinColumn` per side of a relation; never sandwich two `@JoinColumn` decorators on the same property.
 - **Pre-cascade precondition is load-bearing.** The new `expect(... >= 1)` assertion in the spec ensures the cascade has work to do. Without it, a future regression that makes the cascade silently no-op (e.g., someone reverts to raw SQL inside `deleteUserTransactional`) would still trip `assertChildCountIsZero` green at the post-cascade assertion because the rows were never there to delete in the first place — masking the bug.
 
+#### 6.8.9 The offline queue invariants (v1.13.x — must read before touching `offline-queue*.ts`)
+
+The offline queue stores mutations the API never received. Its rules live on their own page — [`docs/offline-queue.md`](docs/offline-queue.md) — because reading them out of the flush loop is how three rounds of regressions happened. Read it before changing either file.
+
+The invariants that must survive any edit:
+
+1. **Identity is derived, never stored.** `resourceKey` (method + URL + id) and `state` (from `nextAttemptAt`) are computed in `hydrateQueue`. A stored `resourceKey` once split two edits of the same transaction into different groups, letting the newer amount sync first and be overwritten by the older one.
+2. **One writer for state and deadline.** `withDeadline(write, deadline, now)` is the only place that assigns `state` and `nextAttemptAt`; `isDue` reads `state` alone. A row cannot be `waiting` without a future deadline or `ready` with one.
+3. **The shared store stays array-shaped and unkeyed.** `offline_queue` holds only rows an older bundle can replay faithfully. Rows with an `Idempotency-Key` or a custom `timeout` live in `offline_queue:replay`, which no older bundle reads — otherwise that tab replays an import without its key and inserts the batch twice.
+4. **Nothing replays without an account.** `flushQueue` returns before touching storage when the account is unknown, a row replays only into the account that queued it, and a keyed row with no owner is never replayed. The interceptor reports `_offline` only when `enqueueRequest` returned `true`.
+5. **Order is per resource, not per deadline.** A successor waits for the head of its `resourceKey` even when its own deadline is earlier; a successful head releases its successors in the same pass.
+6. **A 429 spends no budget.** It waits for `Retry-After` with no cap. The retry budget (five) and the transport backoff (1 s → 30 s) apply to everything else; an `online` wake with nothing due does not reset that backoff.
+
+The specs are `apps/webClient/src/infrastructure/__tests__/offline-queue.model.spec.ts` (rules, no browser) and `offline-queue.spec.ts` (storage and replay). When you touch a rule, mutate it on purpose once and confirm the suite goes red: every finding on this surface so far was a rule with no test that could fail.
+
 ---
 
 ## 7. Development Workflow
@@ -1183,26 +1198,45 @@ VITE_FIREBASE_MEASUREMENT_ID=
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `ci.yml` | Push to main, PR to main/dev | Backend tests + Docker build/push + SSH deploy; Frontend tests |
-| `playwright.yml` | Push to main/dev, PR | E2E Playwright tests |
-| `firebase-hosting-merge.yml` | Push to main | Deploy frontend to Firebase Hosting |
-| `firebase-hosting-pull-request.yml` | PR | Preview channel on Firebase Hosting |
+| `ci.yml` | Push to main, PR to main/dev | Backend migrations + tests + build; frontend typecheck + unit tests + assembled build |
+| `deploy.yml` | Push to main, manual | Re-runs the checks and publishes the web build (landing + SPA) to Firebase Hosting. The API is deployed separately on the self-hosted server |
+| `build-apk.yml` | Push/PR to main/dev | Debug APK artifact |
+| `release-android.yml` | Push to main (auto-bump) / tag | Bumps the version, commits it, tags it and publishes the signed APK |
 
 ### 9.2 Deployment Targets
 
-- **Frontend:** Vercel (primary) + Firebase Hosting (static files)
-- **Backend:** Docker container on VPS (SSH deploy via GitHub Actions)
-- **Database:** AWS RDS PostgreSQL (production) / Docker PostgreSQL (dev)
-- **Cache:** Redis (Docker in dev, managed in prod)
+- **Frontend:** Firebase Hosting (primary) + Vercel (same `dist/`)
+- **Backend:** Docker container `bg-backend-prod` on the self-hosted Linux
+  server, built from `apps/api/Dockerfile` and started with
+  `docker-compose.prod.yml` (no image registry, no cloud VM)
+- **Database:** PostgreSQL 15 container `bg-db-prod` (volume `pgdata_prod`) /
+  Docker PostgreSQL (dev)
+- **Cache:** Redis 7.2 container `bg-redis-prod`, password-protected / Docker
+  Redis (dev)
+
+The API is deployed by pulling `main` on the server and running
+`set -euo pipefail; set -a; . ./.env.secrets; set +a; docker compose -f docker-compose.prod.yml up -d --build`
+(`set -a` is load-bearing: a file of plain `VAR=value` lines does not export
+anything, and Compose aborts on the missing `REDIS_PASSWORD`. `set -euo` is the
+other half: without it an unreadable `.env.secrets` is just a failed `.` and the
+chain still reaches Compose, which then reuses whatever passwords happen to be
+exported in the shell).
+There is no second compose variant: the old GCE target was removed. DB queries
+go through
+`docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod`
+(schema `bg_public`), because `docker compose exec` aborts when
+`REDIS_PASSWORD` is not in the shell.
 
 ### 9.3 Docker Services
 
 | Service | Container Name (dev) | Port Mapping | Purpose |
 |---------|---------------------|-------------|---------|
 | backend | bg-backend-dev | 3000:5000 | NestJS API |
-| frontend | bg-frontend-dev | 3001:80 | React SPA (nginx) |
 | database | bg-db-dev | 5432:5432 | PostgreSQL 15 |
 | redis | bg-redis-dev | 6379:6379 | Redis 7.2 |
+
+The dev stack has no frontend container: the SPA runs on the Vite dev server
+(`pnpm dev`).
 
 ---
 
@@ -1211,9 +1245,10 @@ VITE_FIREBASE_MEASUREMENT_ID=
 ### 10.1 Backend Tests (Jest)
 
 - **Location:** `apps/api/test/`
-- **Types:** Unit tests for services, E2E tests for API endpoints
-- **Config:** `jest.config.ts` (unit), `test/jest-e2e.json` (e2e)
-- **Status:** ✅ **15 tests passing** — all service tests pass, including `auth-service.spec.ts`, `user-service.spec.ts`, and `transaction.service.spec.ts`
+- **Types:** unit tests for services, plus `*.e2e-spec.ts` files that boot the real `AppModule`
+- **Config:** `jest.config.ts` for `pnpm test` (its `testRegex` does **not** match `*-e2e-spec.ts`), `test/jest-e2e.json` for `pnpm test:e2e`
+- **CI:** `.github/workflows/ci.yml` starts PostgreSQL and Redis services, applies migrations and runs `pnpm --filter api test`. That suite is **not** database-free — `user-delete-permission.spec.ts` boots `AppModule` and deletes a real row — so a local `pnpm test` needs the dev stack up. The `*.e2e-spec.ts` files are the ones outside the pipeline: run `pnpm test:e2e` yourself before touching auth, CORS or the throttler.
+- **Status:** Jest unit and integration specs live under `apps/api/test/` and run with `pnpm --filter api test`; the e2e suite uses `pnpm --filter api test:e2e`. CI runs them on every push
 - **Key test files:**
   - `user-service.spec.ts`
   - `auth-service.spec.ts`
@@ -1226,7 +1261,7 @@ VITE_FIREBASE_MEASUREMENT_ID=
 - **Location:** `apps/webClient/tests/`
 - **Types:** E2E browser tests
 - **Config:** `playwright.config.ts` (baseURL: `http://localhost:5173` — Vite dev server)
-- **Status:** ✅ **15 tests passing** — all `home.spec.ts` and `auth.spec.ts` tests pass in ~11s
+- **Status:** Playwright specs under `apps/webClient/tests/` run with `pnpm --filter frontend-web test` against the Vite dev server (baseURL `http://localhost:5173`)
 - **Key test files:**
   - `home.spec.ts` — Landing page, theme toggle, and how-it-works navigation
   - `auth.spec.ts` — Login validation, successful authentication flow
@@ -1351,7 +1386,7 @@ Ambiguity → [Research] → [Plan] → [Implement] → Outcome
 - Firebase config in `auth.service.ts` duplicates env vars already available via `ConfigService`
 - `user.service.ts` has an artificial 1-second delay (`setTimeout`) in `createUser`
 - `finance.entity.ts` is referenced in the project tree but no longer exists
-- Test coverage is limited (3 backend unit spec files + 3 frontend E2E spec files, 30 total tests) — all existing tests pass
+- Test coverage is uneven: 32 API spec files and six web spec files run in CI; the Playwright suite is not part of it
 - No database seed data for development (only a `UserSeederService` placeholder)
 - **Protected-route infinite-render outage (2026-06):** a rewrite of `apps/webClient/src/presentation/routes/protected-route.tsx` collapsed three auth slice fields into a single `useSelector((s) => s.auth)` and React 19 + StrictMode tripped React's `getSnapshot should be cached` guard, leaving `/app/*` routes blank on hard refresh. Fixed by splitting into three leaf selectors; codified as §6.8 so the next combined-slice selector gets caught pre-merge.
 - **Capacitor Android APK third-party cookie outage (2026-06, fixed in v1.3.0):** Android System WebView silently drops `Set-Cookie` from cross-origin responses, so the entire Capacitor mobile auth path — `/auth/firebase-login` → `/api/...` round-trip → `/auth/refresh` — was broken on real devices (cookies never reached the WebView's cookie jar; the backend's `req.cookies.refreshToken` reads returned undefined; users got 401s and were bounced back to `/auth/login`). The RPI-install path for `@capacitor-community/cookies` (`rpi/mobile-cookies-persistence/`) was not available on the npm registry at install time (E404 on both `@capacitor-community/cookies@^6.0.0` and `@capacitor-community/cookies@^7.0.0`), so the v1.3.0 fix shipped **without a native cookies plugin** and instead relied on the body-token + Authorization-header defense-in-depth: backend `/auth/{login,signup,firebase-login,refresh}` now returns `{accessToken, refreshToken, user, ...}` in the response body; `/auth/refresh` also reads the refresh token from `req.body.refreshToken` or `Authorization: Bearer ...`; webClient's `apps/webClient/src/infrastructure/api.config.ts` request interceptor attaches `Authorization: Bearer ${localStorage.accessToken}` and `X-Device-Id` on every request, and the response interceptor persists tokens to localStorage + `document.cookie` on every successful auth response. Backend also gained `@SkipThrottle()` on `/auth/refresh`, `cookieOptions.maxAge` bumped 15 → 30 minutes, and the cross-cutting watchdog spec `apps/api/test/auth-cookie-bridge.spec.ts` covers cookie+body+header input/output across all four auth routes. Full RPI artifacts + research + plan + FAR (4.67) / FACTS (4.80) scores at `rpi/mobile-cookies-persistence/`.
@@ -1371,7 +1406,8 @@ Ambiguity → [Research] → [Plan] → [Implement] → Outcome
 | Change JWT behavior | `apps/api/src/infrastructure/config/strategy/jwt.strategy.ts` |
 | Add env vars | Backend: `app.module.ts` ConfigModule validation; Frontend: `vite.config.ts` |
 | Create a migration | `pnpm --filter api migration:create` |
-| Deploy | `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` |
+| Deploy | `docker compose -f docker-compose.prod.yml up -d --build` on the server, with `.env.secrets` sourced |
+| Query the production DB | `docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod` (schema `bg_public`) |
 
 ---
 
@@ -1466,11 +1502,15 @@ git push origin main --tags
 
 `.github/workflows/ci.yml` validates every push/PR (API migrations + tests +
 build, web typecheck + unit tests + assembled build). `.github/workflows/deploy.yml`
-runs on `main` or manually: it re-runs the checks, pushes the API image to
-DockerHub, pulls it on GCE and publishes the web build to Firebase Hosting.
-The web deploy sets `VITE_APP_VERSION` from the commit SHA, and
-`release-android.yml` derives `versionName`/`versionCode` from the published
-tag (`v1.12.0` → `1.12.0` / `11200`), so both surfaces show the release version.
+runs on `main` or manually: it re-runs the checks and publishes the web build to
+Firebase Hosting. The API is not deployed by CI — it is rebuilt on the
+self-hosted server with `docker-compose.prod.yml` (`bg-backend-prod`), which is
+why the workflow no longer contains an `API → GCE` job. The web build takes its
+version from the root `package.json` (`vite.config.ts` falls back to it whenever
+`VITE_APP_VERSION` is unset, so the deployed bundle shows `1.13.x` instead of a
+commit SHA), and `release-android.yml` derives `versionName`/`versionCode` from
+the published tag (`v1.12.0` → `1.12.0` / `11200`), so both surfaces show the
+release version.
 
 ### 16.5 Full release checklist
 

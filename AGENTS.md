@@ -1,5 +1,15 @@
 # BudgetGenius project instructions
 
+## Git workflow
+
+- **Never work or push directly on `main`.** Before the first edit of a task, run
+  `git rev-parse --abbrev-ref HEAD` and check the remote state. If the branch is
+  `main`, stop and ask the user, then create a dedicated branch
+  (`feat/…`, `fix/…`, `docs/…`, `chore/…`) and make the change there.
+- Commits and pushes go to that branch. Pushing or merging to `main` only happens
+  when the user explicitly asks for it in that message.
+- If the user explicitly asks to commit on `main`, do it, but say so in the reply.
+
 ## Commits
 
 - **No attribution.** Never add `Co-Authored-By`, `Generated with`, `Codebuff`, or any other AI/tool trailer or signature to a commit. The commit message must contain only the user's message text and nothing else.

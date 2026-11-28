@@ -17,17 +17,17 @@ The Playwright spec was a frontend-only assertion against mocked backend respons
 
 ## What the v1.7.3 production regression actually was
 
-Operator's curl trace from `/home/alkiory-dev/projects/BudgetGenius/.cache/user-trace.txt` (extracted from the GitHub issue body):
+Operator's curl trace (extracted from the GitHub issue body, identifiers redacted):
 
-```
+```text
 $ curl 'https://api-budgetgenius.alkiory.com/api/user/8' \
     -X 'DELETE' \
-    -H 'Authorization: Bearer eyJ…' \
-    -H 'X-Device-Id: a6339705-…' \
+    -H 'Authorization: Bearer <redacted>' \
+    -H 'X-Device-Id: <redacted>' \
     -H 'X-Requested-With: com.budgetgenius.mobile'
 ```
 
-The Bearer token claims `{id: 8, email: 'sergiopararedes@gmail.com', role: 'user'}`. The `:id` URL param is `8`. The controller returns `401 ⛔ You do not have permission to delete this user` — but the trace shows the user IS the user with id=8.
+The Bearer token claims `{id: 8, email: '<user email>', role: 'user'}`. The `:id` URL param is `8`. The controller returns `401 ⛔ You do not have permission to delete this user` — but the trace shows the user IS the user with id=8.
 
 The root cause is in `apps/api/src/adapters/user/http/user.controller.ts` line 75:
 
