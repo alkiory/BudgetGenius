@@ -52,7 +52,7 @@ Use the **FAR Scale** (Factual, Actionable, Relevant) for code-focused validatio
 
 Apply the FAR Scale for Research phase validation. Summarized scoring table + pass/fail decision required.
 
-For complete FAR Scale criteria, scoring rules, and examples: [../scales/far-scale.md](../scales/far-scale.md)
+The FAR scale scores a problem statement on three axes out of 5 — **Factual** (is it true?), **Actionable** (can work start from it?) and **Relevant** (does it matter?). A phase passes at a mean of 4.00 or above.
 
 *For planning validation in the next phase, see the FACTS Scale in Plan.md*
 
@@ -154,7 +154,7 @@ Research phase failures are classified and handled according to FAR Scale scores
 - **Major Failure**: FAR scores 2.0-3.4 (restart Research phase)
 - **Critical Failure**: FAR scores <2.0 (leadership escalation)
 
-For complete failure handling procedures, escalation timelines, recovery paths, and postmortem requirements, see: [Failure Handling Framework](../README.md#failure-handling-framework)
+For complete failure handling procedures, escalation timelines, recovery paths, and postmortem requirements, see [Failure handling](README.md#failure-handling).
 
 ## Quality Gates Before Completion
 - Every code reference resolves (exists + line within bounds).
@@ -188,4 +188,4 @@ Plan phase receives:
 - Estimating implementation timelines
 
 ## Reference
-FAR rubric: [FAR Scale](../scales/far-scale.md)
+FAR rubric: Factual, Actionable, Relevant — scored out of 5, pass at a mean of 4.00.

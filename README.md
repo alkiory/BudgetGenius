@@ -9,18 +9,18 @@
 <p align="center">
   <img src="https://img.shields.io/badge/status-active-brightgreen" alt="Status" />
   <img src="https://img.shields.io/badge/license-UNLICENSED-blue" alt="License" />
-  <img src="https://img.shields.io/badge/version-v1.12.0-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v1.13.2-blue" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen" alt="Node" />
   <a href="https://paypal.me/SergioCampbelldev" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
 </p>
 
-## ✨ What's New in v1.12.0
+## ✨ What's New in v1.13.0
 
-- **Guided catalogue** — step-by-step modules such as the **Emergency fund**, with its 4-week plan, checklist and FAQ.
-- **A calculator with your real numbers** — the emergency fund reads your last six months of expenses and turns the 3–6 month target into a real savings goal.
-- **Every contribution is a dated transaction** — choose the day you put the money aside and it appears in Transactions as a savings movement.
-- **Goals stay in sync** — edit or delete a contribution and the goal follows; savings never count as spending in reports.
-- **Backoffice page editor** — write the module pages, reorder tabs, add blocks and upload images without a deploy.
+- **The Android app updates itself** — `releases/latest` is the source of truth; the bundle compares it with its own version, downloads the APK and hands it to the system installer, including Android 6.
+- **Sessions end for real** — a password change or reset kills live access tokens and stored refresh tokens, a demoted operator cannot rotate back in, and logout drops the offline queue instead of keeping the previous account's writes.
+- **Offline writes are queued, not lost** — a save that cannot reach the API is replayed later, per resource and in order, with an idempotency key. See [`docs/offline-queue.md`](docs/offline-queue.md).
+
+From v1.12.0: the guided catalogue with the **Emergency fund** module, dated savings contributions that keep goals in sync, and the backoffice page editor.
 
 Full history in [`docs/changelog.md`](docs/changelog.md).
 ---
@@ -34,13 +34,14 @@ Full history in [`docs/changelog.md`](docs/changelog.md).
 - [Getting Started](#-getting-started)
 - [Web Development Workflow](#-web-development-workflow)
 - [Mobile Development](#-mobile-development)
-- [CI/CD & Deployment](#-cicd--deployment)
 - [Testing](#-testing)
 - [RPI Development Framework](#-rpi-development-framework)
 - [Project Structure](#-project-structure)
 - [Environment Variables](#-environment-variables)
+- [Superadmin backoffice](#-superadmin-backoffice)
 - [Web Surfaces & Password Recovery](#-web-surfaces--password-recovery)
 - [API Documentation](#-api-documentation)
+- [More Documentation](#-more-documentation)
 - [Contributing](#-contributing)
 
 ---
@@ -1218,6 +1219,19 @@ When the backend is running, Swagger API documentation is available at:
 
 ---
 
+## 📚 More Documentation
+
+| Document | What it answers |
+|---|---|
+| [`knowledge.md`](knowledge.md) | The engineering guide: architecture, invariants and the traps that have already bitten this codebase |
+| [`docs/offline-queue.md`](docs/offline-queue.md) | How a mutation that fails offline survives, in what order, and why it cannot leak into another account |
+| [`docs/changelog.md`](docs/changelog.md) | Every release, with the reason behind the change |
+| [`docs/rpi/`](docs/rpi/README.md) | The Research → Plan → Implement process this repository uses |
+| [`DESIGN.md`](DESIGN.md) | Tokens, type scale and component patterns for the UI |
+| [`apps/api/README.md`](apps/api/README.md) · [`apps/webClient/README.md`](apps/webClient/README.md) · [`apps/mobile/README.md`](apps/mobile/README.md) | Per-app setup, scripts and gotchas |
+
+---
+
 ## 🤝 Contributing
 
 ### Development Process
@@ -1226,7 +1240,7 @@ When the backend is running, Swagger API documentation is available at:
 2. Create a feature branch from `dev`
 3. Implement changes with quality gates (Build → Lint → Test)
 4. Submit a PR to `dev`
-5. Use the [Pull Request Template](.github/PULL_REQUEST_TEMPLATE.md)
+5. Use the [Pull Request Template](.github/workflows/PULL_REQUEST_TEMPLATE.md)
 
 ### Code Conventions
 
