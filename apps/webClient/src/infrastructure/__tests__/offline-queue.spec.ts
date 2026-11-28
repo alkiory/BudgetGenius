@@ -1,99 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  carriesCredentials,
+  type QueuedWrite,
   clearQueue,
   enqueueRequest,
   flushQueue,
   resumeQueue,
-  type QueuedWrite,
 } from "../offline-queue";
-
-/**
- * The queue persists request bodies in `localStorage`, so a credential body
- * would survive logout and be readable by any other profile on the browser.
- * Login, signup and password change all carry one.
- */
-describe("carriesCredentials", () => {
-  it("detects the password-change payload", () => {
-    expect(
-      carriesCredentials({
-        currentPassword: "#Password123",
-        newPassword: "#NewPass456",
-      }),
-    ).toBe(true);
-  });
-
-  it("detects login and signup payloads", () => {
-    expect(carriesCredentials({ email: "a@b.com", password: "secret" })).toBe(
-      true,
-    );
-  });
-
-  it("ignores ordinary mutation bodies", () => {
-    expect(carriesCredentials({ name: "Alk", surname: "Campbell" })).toBe(
-      false,
-    );
-    expect(
-      carriesCredentials({
-        amount: 10,
-        category: "food",
-        description: "lunch",
-      }),
-    ).toBe(false);
-  });
-
-  it("handles bodies that are not objects", () => {
-    expect(carriesCredentials(undefined)).toBe(false);
-    expect(carriesCredentials(null)).toBe(false);
-    expect(carriesCredentials("password")).toBe(false);
-    expect(carriesCredentials(["password"])).toBe(false);
-  });
-});
-
-/**
- * The queue is purged when the session ends, so the next account that uses the
- * browser profile cannot read the previous one's pending movements.
- */
-describe("clearQueue", () => {
-  afterEach(() => {
-    resumeQueue();
-    vi.unstubAllGlobals();
-  });
-
-  it("removes the persisted queue", () => {
-    const removeItem = vi.fn();
-    vi.stubGlobal("localStorage", {
-      getItem: vi.fn(),
-      setItem: vi.fn(),
-      removeItem,
-    });
-
-    clearQueue();
-
-    expect(removeItem).toHaveBeenCalledWith("offline_queue");
-  });
-
-  it("does not throw when storage is unavailable", () => {
-    expect(() => clearQueue()).not.toThrow();
-  });
-
-  it("refuses to queue until the next sign-in", () => {
-    const store = new Map<string, string>();
-    vi.stubGlobal("localStorage", {
-      getItem: (key: string) => store.get(key) ?? null,
-      setItem: (key: string, value: string) => store.set(key, value),
-      removeItem: (key: string) => store.delete(key),
-    });
-
-    clearQueue();
-    enqueueRequest("POST", "/transactions", { amount: 10 });
-    expect(store.get("offline_queue")).toBeUndefined();
-
-    resumeQueue();
-    enqueueRequest("POST", "/transactions", { amount: 10 });
-    expect(store.get("offline_queue")).toContain("10");
-  });
-});
 
 const stubStorage = (): Map<string, string> => {
   const store = new Map<string, string>();
@@ -108,7 +20,7 @@ const stubStorage = (): Map<string, string> => {
 const readQueue = (store: Map<string, string>): QueuedWrite[] => {
   const raw = store.get("offline_queue");
   if (!raw) return [];
-  return (JSON.parse(raw) as { writes: QueuedWrite[] }).writes;
+  return JSON.parse(raw) as QueuedWrite[];
 };
 
 type MockPost = (
@@ -132,8 +44,39 @@ const throttled = (retryAfter?: string) => ({
 });
 
 /**
- * Replay behaviour. A throttled or interrupted write must survive: it is the
- * only copy of what the user recorded while offline.
+ * The queue is purged when the session ends, so the next account that uses the
+ * browser profile cannot read the previous one's pending movements.
+ */
+describe("clearQueue", () => {
+  afterEach(() => {
+    resumeQueue();
+    vi.unstubAllGlobals();
+  });
+
+  it("removes the persisted queue", () => {
+    const store = stubStorage();
+
+    clearQueue();
+
+    expect(store.get("offline_queue")).toBeUndefined();
+  });
+
+  it("refuses to queue until the next sign-in", () => {
+    const store = stubStorage();
+
+    clearQueue();
+    expect(enqueueRequest("POST", "/transactions", { amount: 10 })).toBe(false);
+    expect(store.get("offline_queue")).toBeUndefined();
+
+    resumeQueue();
+    expect(enqueueRequest("POST", "/transactions", { amount: 10 })).toBe(true);
+    expect(store.get("offline_queue")).toContain("10");
+  });
+});
+
+/**
+ * Replay behaviour. A queued write is the only copy of what the user did while
+ * offline, so it must survive throttling, interruptions and reloads.
  */
 describe("flushQueue", () => {
   beforeEach(() => {
@@ -148,6 +91,66 @@ describe("flushQueue", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it("reports whether the row reached storage", () => {
+    const store = stubStorage();
+
+    expect(enqueueRequest("POST", "/budgets", { name: "Rent" })).toBe(true);
+    expect(readQueue(store)).toHaveLength(1);
+
+    vi.stubGlobal("localStorage", {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error("QuotaExceededError");
+      },
+      removeItem: () => {},
+    });
+
+    // The interceptor only answers "saved offline" when this is true.
+    expect(enqueueRequest("POST", "/budgets", { name: "Food" })).toBe(false);
+  });
+
+  it("never writes a credential body to storage", () => {
+    const store = stubStorage();
+
+    expect(
+      enqueueRequest("POST", "/auth/login", {
+        email: "a@b.com",
+        password: "secret",
+      }),
+    ).toBe(false);
+    expect(store.get("offline_queue")).toBeUndefined();
+  });
+
+  it("keeps a row an older bundle appends to the shared array", async () => {
+    const store = stubStorage();
+    expect(enqueueRequest("POST", "/budgets", { name: "Rent" })).toBe(true);
+
+    // A tab still running the previous bundle reads the array and appends its
+    // own row without sequence or resource key.
+    const rows = JSON.parse(store.get("offline_queue") ?? "[]") as unknown[];
+    expect(Array.isArray(rows)).toBe(true);
+    rows.push({
+      id: "old-row",
+      method: "POST",
+      url: "/transactions",
+      data: { amount: 5 },
+      timestamp: 1,
+      retryCount: 0,
+    });
+    store.set("offline_queue", JSON.stringify(rows));
+
+    const sent: string[] = [];
+    await flushQueue(
+      makeClient(async (url) => {
+        sent.push(url);
+        return { data: {} };
+      }),
+    );
+
+    expect(sent).toEqual(["/budgets", "/transactions"]);
+    expect(readQueue(store)).toHaveLength(0);
   });
 
   it("keeps a write throttled more than five times and clears it once accepted", async () => {
@@ -185,12 +188,36 @@ describe("flushQueue", () => {
 
     const [row] = readQueue(store);
     expect(row.retryCount).toBe(0);
+    expect(row.state).toBe("waiting");
     expect((row.nextAttemptAt ?? 0) - Date.now()).toBe(3_600_000);
 
-    // A flush requested before the deadline (a reload, another write) must not
-    // resend it: the stored deadline wins over the wake-up.
+    // A reload, or a wake, before the deadline must not resend it.
     await flushQueue(makeClient(post));
     expect(calls).toBe(1);
+  });
+
+  it("revives a waiting row once its deadline passes", async () => {
+    const store = stubStorage();
+    enqueueRequest("POST", "/transactions", { amount: 1 });
+
+    await flushQueue(
+      makeClient(async () => {
+        throw throttled("60");
+      }),
+    );
+    expect(readQueue(store)[0].state).toBe("waiting");
+
+    vi.setSystemTime(Date.now() + 61_000);
+    const sent: unknown[] = [];
+    await flushQueue(
+      makeClient(async (_url, data) => {
+        sent.push(data);
+        return { data: {} };
+      }),
+    );
+
+    expect(sent).toHaveLength(1);
+    expect(readQueue(store)).toHaveLength(0);
   });
 
   it("reschedules a write the interceptor re-queued during the flush", async () => {
@@ -223,19 +250,19 @@ describe("flushQueue", () => {
       JSON.stringify([
         {
           id: "edit-20",
+          sequence: 1,
           method: "PUT",
           url: "/transactions",
           data: { id: 42, amount: 20 },
-          timestamp: start,
           retryCount: 0,
           nextAttemptAt: start + 11_000,
         },
         {
           id: "edit-25",
+          sequence: 2,
           method: "PUT",
           url: "/transactions",
           data: { id: 42, amount: 25 },
-          timestamp: start + 1,
           retryCount: 0,
           nextAttemptAt: start + 10_000,
         },
@@ -251,8 +278,8 @@ describe("flushQueue", () => {
     await flushQueue(makeClient(post));
     expect(written).toEqual([]);
 
-    // The newer edit is due, but the edit it depends on is not: it must not
-    // overtake it, or the older amount would be the one that sticks.
+    // The newer edit is due, but the edit it depends on is not: overtaking it
+    // would leave the older amount as the one that sticks.
     vi.setSystemTime(start + 10_500);
     await flushQueue(makeClient(post));
     expect(written).toEqual([]);
@@ -264,50 +291,11 @@ describe("flushQueue", () => {
     expect(readQueue(store)).toHaveLength(0);
   });
 
-  it("never writes a credential body to storage", () => {
-    const store = stubStorage();
-
-    enqueueRequest("POST", "/auth/login", {
-      email: "a@b.com",
-      password: "secret",
-    });
-
-    expect(store.get("offline_queue")).toBeUndefined();
-  });
-
-  it("persists the deadline as a waiting row and revives it once it passes", async () => {
-    const store = stubStorage();
-    enqueueRequest("POST", "/transactions", { amount: 1 });
-
-    await flushQueue(
-      makeClient(async () => {
-        throw throttled("60");
-      }),
-    );
-
-    const [row] = readQueue(store);
-    expect(row.state).toBe("waiting");
-    expect(row.nextAttemptAt).toBe(Date.now() + 60_000);
-
-    // A reload re-reads the stored deadline: the row is due again by then.
-    vi.setSystemTime(Date.now() + 61_000);
-    const sent: unknown[] = [];
-    await flushQueue(
-      makeClient(async (_url, data) => {
-        sent.push(data);
-        return { data: {} };
-      }),
-    );
-
-    expect(sent).toHaveLength(1);
-    expect(readQueue(store)).toHaveLength(0);
-  });
-
   it("backs off exponentially while replay keeps hitting an unreachable API", async () => {
     const store = stubStorage();
 
-    // A clean pass resets the failure streak.
-    store.delete("offline_queue");
+    // A send that lands is the only thing that resets the streak.
+    enqueueRequest("POST", "/transactions", { amount: 0 });
     await flushQueue(makeClient(async () => ({ data: {} })));
 
     enqueueRequest("POST", "/transactions", { amount: 1 });
@@ -329,5 +317,33 @@ describe("flushQueue", () => {
     }
 
     expect(waits).toEqual([1_000, 2_000, 4_000]);
+  });
+
+  it("does not reset the outage backoff on a wake that sends nothing", async () => {
+    const store = stubStorage();
+    // The streak is module state shared with the tests above; a send that lands
+    // is the only thing that clears it, so start from a known zero.
+    enqueueRequest("POST", "/transactions", { amount: 0 });
+    await flushQueue(makeClient(async () => ({ data: {} })));
+
+    enqueueRequest("POST", "/transactions", { amount: 1 });
+
+    const post: MockPost = async () => {
+      enqueueRequest("POST", "/transactions", { amount: 1 });
+      return { data: {} };
+    };
+
+    await flushQueue(makeClient(post)); // streak 1, successor waits one second
+    await flushQueue(makeClient(post)); // nothing due: no evidence either way
+    expect(readQueue(store)).toHaveLength(1);
+
+    vi.setSystemTime(Date.now() + 1_000);
+    await flushQueue(makeClient(post)); // streak 2
+
+    expect(readQueue(store)).toHaveLength(1);
+    const next =
+      Math.min(...readQueue(store).map((row) => row.nextAttemptAt ?? 0)) -
+      Date.now();
+    expect(next).toBe(2_000);
   });
 });

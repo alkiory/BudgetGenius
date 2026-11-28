@@ -8,7 +8,6 @@ import toast from "react-hot-toast";
 import { getDeviceId } from "./device-id";
 import { isNativePlatform } from "./native";
 import {
-  carriesCredentials,
   clearQueue,
   enqueueRequest,
   registerOnlineListener,
@@ -481,13 +480,10 @@ api.interceptors.response.use(
       const method = originalRequest.method?.toUpperCase() || "";
       const isMutation = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
 
-      // Credentials never reach storage: a queued password change would sit
-      // in `localStorage` in plaintext and, worse, report success to a form
-      // whose value was never applied. Those requests fail loudly instead.
-      const queueable =
-        isMutation &&
-        !originalRequest.skipOfflineQueue &&
-        !carriesCredentials(originalRequest.data);
+      // Credentials are rejected by `enqueueRequest` itself, which is the only
+      // place that writes to storage; here it is enough to decide whether the
+      // request is a candidate at all.
+      const queueable = isMutation && !originalRequest.skipOfflineQueue;
 
       if (queueable) {
         // Strip the baseURL prefix so the URL is stored as a relative path.
@@ -502,28 +498,39 @@ api.interceptors.response.use(
         if (!relativeUrl.startsWith("/")) {
           relativeUrl = "/" + relativeUrl;
         }
-        enqueueRequest(method, relativeUrl, originalRequest.data, {
-          // Replay-safe options. The import needs its 120 s deadline on the
-          // retry, and the key it was sent with, or a resend after a timeout
-          // duplicates every row.
-          timeout:
-            originalRequest.timeout === DEFAULT_REQUEST_TIMEOUT_MS
-              ? undefined
-              : originalRequest.timeout,
-          idempotencyKey: readHeader(
-            originalRequest.headers,
-            "Idempotency-Key",
-          ),
-        });
-        // Return a resolved promise so the caller doesn't see an error and the
-        // mutation's onSuccess fires, closing modals and providing feedback.
-        return Promise.resolve({
-          data: {
-            _offline: true,
-            _queued: true,
-            message: "Saved offline — will sync when connection returns",
+        const queued = enqueueRequest(
+          method,
+          relativeUrl,
+          originalRequest.data,
+          {
+            // Replay-safe options. The import needs its 120 s deadline on the
+            // retry, and the key it was sent with, or a resend after a timeout
+            // duplicates every row.
+            timeout:
+              originalRequest.timeout === DEFAULT_REQUEST_TIMEOUT_MS
+                ? undefined
+                : originalRequest.timeout,
+            idempotencyKey: readHeader(
+              originalRequest.headers,
+              "Idempotency-Key",
+            ),
           },
-        });
+        );
+
+        if (queued) {
+          // Resolving lets the mutation's onSuccess close the modal and report
+          // the offline save. It is only honest once the row is persisted: the
+          // queue is the only copy of a write the server never received.
+          return Promise.resolve({
+            data: {
+              _offline: true,
+              _queued: true,
+              message: "Saved offline — will sync when connection returns",
+            },
+          });
+        }
+        // Storage rejected it (full, unavailable) or the session ended: fall
+        // through and let the caller see the network error.
       }
     }
 

@@ -2,8 +2,8 @@
  * The offline write queue, as a model.
  *
  * A row is a write the API has not confirmed yet. Five properties are explicit
- * and every rule in this module reads them — nothing is inferred from the
- * payload at send time:
+ * and every rule here reads them — nothing is inferred from the payload at send
+ * time:
  *
  * - `resourceKey` — what the write touches. Rows that share it are replayed in
  *   `sequence` order, because the server applies the last PUT it receives and
@@ -11,18 +11,16 @@
  * - `sequence` — enqueue order, assigned once and never reused.
  * - `idempotencyKey` — makes a resend safe: the API stores a receipt and
  *   answers with it instead of writing the rows twice.
- * - `state` — `ready` (due now) or `waiting` (a deadline in the future). A row
- *   in flight is never persisted: if the tab dies mid-send it reloads as
- *   `ready`, and the idempotency key keeps the outcome single.
- * - `nextAttemptAt` — the deadline: the window the API announced
- *   (`Retry-After`) or the backoff this queue chose.
+ * - `state` / `nextAttemptAt` — `waiting` means the row has a deadline in the
+ *   future, `ready` means it may be sent now. Both are written only by
+ *   `withDeadline`, so they cannot disagree.
  *
- * Storage and the flush loop live in `offline-queue.ts`; this module stays
- * pure so the invariants can be tested without a browser.
+ * A row in flight is never persisted: if the tab dies mid-send it reloads as
+ * `ready`, and the idempotency key keeps the outcome single.
+ *
+ * Storage and the flush loop live in `offline-queue.ts`; this module stays pure
+ * so the invariants can be tested without a browser.
  */
-
-/** Current persisted schema. v1 was a bare array with no sequence or key. */
-export const QUEUE_STORAGE_VERSION = 2;
 
 export type QueuedMethod = "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -43,16 +41,8 @@ export interface QueuedWrite {
   timeout?: number;
   state: QueuedState;
   nextAttemptAt?: number;
-  timestamp: number;
   /** Failed attempts that spent the budget (a 429 does not). */
   retryCount: number;
-}
-
-export interface QueuedStore {
-  version: typeof QUEUE_STORAGE_VERSION;
-  /** Next sequence to hand out; never reused, survives a reload. */
-  nextSequence: number;
-  writes: QueuedWrite[];
 }
 
 /** Base of the exponential backoff applied to transport failures. */
@@ -75,6 +65,52 @@ const MAX_RETRIES = 5;
 const CREDENTIAL_FIELDS = ["password", "currentPassword", "newPassword"];
 
 /**
+ * The only place that writes `state` and `nextAttemptAt`.
+ *
+ * A deadline in the future makes the row `waiting`; anything else clears it and
+ * makes the row `ready`. Having one constructor for the pair is what keeps
+ * "one source of truth" from decaying into two fields that drift.
+ */
+export function withDeadline(
+  write: QueuedWrite,
+  nextAttemptAt: number | undefined,
+  now: number,
+): QueuedWrite {
+  const waiting = nextAttemptAt !== undefined && nextAttemptAt > now;
+
+  return {
+    ...write,
+    nextAttemptAt: waiting ? nextAttemptAt : undefined,
+    state: waiting ? "waiting" : "ready",
+  };
+}
+
+/**
+ * The body as an object, whichever form it arrives in.
+ *
+ * The interceptor queues `config.data` after axios has serialised it, so real
+ * rows carry a JSON string. Reading only objects would miss the id (every edit
+ * of every transaction would share one resource key) and — worse — would let a
+ * serialised login body past the credential check.
+ */
+function asRecord(data: unknown): Record<string, unknown> | null {
+  if (typeof data === "string") {
+    try {
+      const parsed: unknown = JSON.parse(data);
+      return parsed && typeof parsed === "object"
+        ? (parsed as Record<string, unknown>)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return data && typeof data === "object"
+    ? (data as Record<string, unknown>)
+    : null;
+}
+
+/**
  * Whether a body carries a credential.
  *
  * The queue persists bodies, which is right for a transaction and wrong for a
@@ -83,9 +119,8 @@ const CREDENTIAL_FIELDS = ["password", "currentPassword", "newPassword"];
  * network error.
  */
 export function carriesCredentials(data: unknown): boolean {
-  if (!data || typeof data !== "object") return false;
-  const record = data as Record<string, unknown>;
-  return CREDENTIAL_FIELDS.some((field) => field in record);
+  const record = asRecord(data);
+  return record ? CREDENTIAL_FIELDS.some((field) => field in record) : false;
 }
 
 /**
@@ -100,21 +135,21 @@ export function deriveResourceKey(
   url: string,
   data?: unknown,
 ): string {
-  const body = data as { id?: unknown; transactionId?: unknown } | undefined;
+  const body = asRecord(data);
   const id = body?.id ?? body?.transactionId ?? "";
   return `${method} ${url} ${String(id)}`;
 }
 
-/** A row may be sent only when it is `ready` and its deadline has passed. */
-export function isDue(write: QueuedWrite, now: number): boolean {
-  return write.state === "ready" && (write.nextAttemptAt ?? 0) <= now;
+/** Only a `ready` row may be sent; `withDeadline` owns that field. */
+export function isDue(write: QueuedWrite): boolean {
+  return write.state === "ready";
 }
 
 /**
  * First pending write of every resource, in sequence order.
  *
- * Only these rows can be sent next: a successor has to wait for the write it
- * would overwrite, whatever its own deadline says.
+ * Only these rows can be sent next: a successor waits for the write it would
+ * overwrite, whatever its own deadline says.
  */
 export function firstPerResource(
   writes: readonly QueuedWrite[],
@@ -160,13 +195,9 @@ export function transportBackoffMs(streak: number): number {
 }
 
 export type ReplayDecision =
-  | {
-      action: "drop";
-      reason: "permanent" | "unknown-outcome" | "exhausted";
-    }
+  | { action: "drop" }
   | {
       action: "retry";
-      reason: "throttled" | "transport";
       waitMs: number;
       /** Whether the attempt spends the row's retry budget. */
       counts: boolean;
@@ -198,29 +229,27 @@ export function decideReplay(
   if (status === RATE_LIMIT_STATUS) {
     return {
       action: "retry",
-      reason: "throttled",
       waitMs: readRetryAfterMs(response?.headers) ?? DEFAULT_RATE_LIMIT_WAIT_MS,
       counts: false,
     };
   }
 
   if (status && status >= 400 && status < 500) {
-    return { action: "drop", reason: "permanent" };
+    return { action: "drop" };
   }
 
   const code = (error as { code?: string })?.code;
   const timedOut = code === "ECONNABORTED" || code === "ETIMEDOUT";
   if (timedOut && !write.idempotencyKey) {
-    return { action: "drop", reason: "unknown-outcome" };
+    return { action: "drop" };
   }
 
   if (write.retryCount >= MAX_RETRIES) {
-    return { action: "drop", reason: "exhausted" };
+    return { action: "drop" };
   }
 
   return {
     action: "retry",
-    reason: "transport",
     waitMs: Math.min(
       BASE_BACKOFF_MS * Math.pow(2, write.retryCount),
       MAX_BACKOFF_MS,
@@ -239,44 +268,38 @@ function readRetryAfterMs(headers?: Record<string, unknown>): number | null {
   if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
 
   const date = Date.parse(text);
-  return Number.isNaN(date) ? null : Math.max(0, date - Date.now());
+  return Number.isNaN(date) ? null : Math.max(0, date - now());
+}
+
+function now(): number {
+  return Date.now();
 }
 
 /**
- * Reads whatever a previous build stored and returns the current schema.
+ * Reads whatever is stored and returns the current rows.
  *
- * v1 was a bare array: order came from the array position, the resource key did
- * not exist, and credential bodies could still be sitting there. Those rows are
- * migrated in place — sequence from the position, key derived from the payload,
- * state from the deadline — and the credential ones are dropped.
+ * The value is kept as a JSON array on purpose: a tab still running the previous
+ * bundle writes an array too, and its rows are read here with `sequence` from
+ * the position and the resource key derived from the payload. Object-shaped
+ * values from the build that introduced them are still accepted and rewritten as
+ * an array on the next save. Credential rows left by an older build are dropped.
  */
-export function hydrateQueue(raw: string | null, now: number): QueuedStore {
-  const empty: QueuedStore = {
-    version: QUEUE_STORAGE_VERSION,
-    nextSequence: 1,
-    writes: [],
-  };
-  if (!raw) return empty;
+export function hydrateQueue(raw: string | null, at: number): QueuedWrite[] {
+  if (!raw) return [];
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return empty;
+    return [];
   }
-
-  const isCurrentSchema =
-    typeof parsed === "object" &&
-    parsed !== null &&
-    (parsed as { version?: unknown }).version === QUEUE_STORAGE_VERSION &&
-    Array.isArray((parsed as { writes?: unknown }).writes);
 
   const rows = Array.isArray(parsed)
     ? parsed
-    : isCurrentSchema
+    : Array.isArray((parsed as { writes?: unknown } | null)?.writes)
     ? (parsed as { writes: unknown[] }).writes
     : null;
-  if (!rows) return empty;
+  if (!rows) return [];
 
   const writes: QueuedWrite[] = [];
 
@@ -293,49 +316,33 @@ export function hydrateQueue(raw: string | null, now: number): QueuedStore {
         : index + 1;
     const method = (candidate.method ?? "POST") as QueuedMethod;
     const url = candidate.url ?? "";
-    const nextAttemptAt =
-      typeof candidate.nextAttemptAt === "number"
-        ? candidate.nextAttemptAt
-        : undefined;
 
-    writes.push({
-      id: typeof candidate.id === "string" ? candidate.id : String(sequence),
-      sequence,
-      resourceKey:
-        typeof candidate.resourceKey === "string" && candidate.resourceKey
-          ? candidate.resourceKey
-          : deriveResourceKey(method, url, candidate.data),
-      method,
-      url,
-      data: candidate.data,
-      idempotencyKey: candidate.idempotencyKey,
-      timeout: candidate.timeout,
-      timestamp:
-        typeof candidate.timestamp === "number" ? candidate.timestamp : now,
-      retryCount:
-        typeof candidate.retryCount === "number" ? candidate.retryCount : 0,
-      nextAttemptAt,
-      // A row persisted mid-send is not trusted as in flight: the reload cannot
-      // know whether the API applied it, and the idempotency key is what makes
-      // the resend safe.
-      state: (nextAttemptAt ?? 0) > now ? "waiting" : "ready",
-    });
+    writes.push(
+      withDeadline(
+        {
+          id:
+            typeof candidate.id === "string" ? candidate.id : String(sequence),
+          sequence,
+          resourceKey:
+            typeof candidate.resourceKey === "string" && candidate.resourceKey
+              ? candidate.resourceKey
+              : deriveResourceKey(method, url, candidate.data),
+          method,
+          url,
+          data: candidate.data,
+          idempotencyKey: candidate.idempotencyKey,
+          timeout: candidate.timeout,
+          retryCount:
+            typeof candidate.retryCount === "number" ? candidate.retryCount : 0,
+          state: "ready",
+        },
+        typeof candidate.nextAttemptAt === "number"
+          ? candidate.nextAttemptAt
+          : undefined,
+        at,
+      ),
+    );
   });
 
-  writes.sort((a, b) => a.sequence - b.sequence);
-
-  const storedNextSequence = isCurrentSchema
-    ? (parsed as { nextSequence?: unknown }).nextSequence
-    : undefined;
-  const highest = writes.reduce(
-    (max, write) => Math.max(max, write.sequence),
-    0,
-  );
-  const nextSequence =
-    typeof storedNextSequence === "number" &&
-    Number.isFinite(storedNextSequence)
-      ? Math.max(storedNextSequence, highest + 1)
-      : highest + 1;
-
-  return { version: QUEUE_STORAGE_VERSION, nextSequence, writes };
+  return writes.sort((a, b) => a.sequence - b.sequence);
 }

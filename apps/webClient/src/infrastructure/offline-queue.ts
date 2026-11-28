@@ -1,6 +1,5 @@
 import {
   type QueuedMethod,
-  type QueuedStore,
   type QueuedWrite,
   carriesCredentials,
   decideReplay,
@@ -9,22 +8,23 @@ import {
   isDue,
   nextWakeDelayMs,
   transportBackoffMs,
+  withDeadline,
 } from "./offline-queue.model";
 
-export { carriesCredentials } from "./offline-queue.model";
-export type {
-  QueuedMethod,
-  QueuedState,
-  QueuedWrite,
-} from "./offline-queue.model";
+export type { QueuedWrite } from "./offline-queue.model";
 
 /**
  * Storage and replay loop for the offline queue.
  *
  * The rules — resource identity, order, idempotency, state and deadlines — live
- * in `offline-queue.model.ts`; this module only persists rows, walks them in
- * order and talks to the API. Every decision it takes is delegated, so the
- * invariants stay testable without a browser.
+ * in `offline-queue.model.ts`; this module persists rows, walks them in order
+ * and talks to the API. Every decision it takes is delegated, so the invariants
+ * stay testable without a browser.
+ *
+ * The stored value is a JSON array, matching what a tab still running the
+ * previous bundle reads and writes: if it were an object, that tab would read
+ * nothing, treat the queue as empty and overwrite every pending write with its
+ * own first row.
  */
 
 const STORAGE_KEY = "offline_queue";
@@ -68,21 +68,23 @@ let queueBlocked = false;
 /** Consecutive flushes that only produced writes the interceptor re-queued. */
 let transportFailures = 0;
 
-function readStore(now = Date.now()): QueuedStore {
+function readStore(at = Date.now()): QueuedWrite[] {
   try {
-    return hydrateQueue(localStorage.getItem(STORAGE_KEY), now);
+    return hydrateQueue(localStorage.getItem(STORAGE_KEY), at);
   } catch {
     // Storage can be unavailable (incognito, sandboxed iframe); an empty queue
     // is the only safe answer.
-    return hydrateQueue(null, now);
+    return [];
   }
 }
 
-function writeStore(store: QueuedStore): void {
+/** Persists the rows. Returns false when storage rejects the write. */
+function writeStore(writes: QueuedWrite[]): boolean {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(writes));
+    return true;
   } catch {
-    /* nothing was persisted, and nothing can be */
+    return false;
   }
 }
 
@@ -95,34 +97,44 @@ export function resumeQueue(): void {
  *
  * The sequence and the resource key are assigned here, once: they are what
  * keeps two edits of one transaction in the order the user made them.
+ *
+ * Returns whether the row was persisted. The queue is the only copy of a write
+ * the API never received, so a caller that reports success must have got `true`.
  */
 export function enqueueRequest(
   method: string,
   url: string,
   data?: unknown,
   options?: { timeout?: number; idempotencyKey?: string },
-): void {
+): boolean {
   // Rejected before anything is written: a password must never reach storage,
   // not even for the moment between enqueue and the next read.
-  if (queueBlocked || carriesCredentials(data)) return;
-  const store = readStore();
-  const sequence = store.nextSequence;
+  if (queueBlocked || carriesCredentials(data)) return false;
 
-  store.writes.push({
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-    sequence,
-    resourceKey: deriveResourceKey(method, url, data),
-    method: method as QueuedMethod,
-    url,
-    data,
-    idempotencyKey: options?.idempotencyKey,
-    timeout: options?.timeout,
-    state: "ready",
-    timestamp: Date.now(),
-    retryCount: 0,
-  });
+  const writes = readStore();
+  const sequence =
+    writes.reduce((highest, write) => Math.max(highest, write.sequence), 0) + 1;
 
-  writeStore({ ...store, nextSequence: sequence + 1 });
+  writes.push(
+    withDeadline(
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        sequence,
+        resourceKey: deriveResourceKey(method, url, data),
+        method: method as QueuedMethod,
+        url,
+        data,
+        idempotencyKey: options?.idempotencyKey,
+        timeout: options?.timeout,
+        state: "ready",
+        retryCount: 0,
+      },
+      undefined,
+      Date.now(),
+    ),
+  );
+
+  return writeStore(writes);
 }
 
 /**
@@ -173,7 +185,7 @@ async function send(
 /**
  * Replays the queue in enqueue order.
  *
- * Ordering contract, enforced here and covered by the specs:
+ * Ordering contract, covered by the specs:
  *   1. rows are walked by `sequence`;
  *   2. a resource whose earlier write has not landed is blocked for the rest of
  *      the pass, even if the successor is due earlier;
@@ -183,21 +195,27 @@ export async function flushQueue(apiInstance: ReplayClient): Promise<void> {
   if (flushInProgress) return;
   flushInProgress = true;
 
-  const startedAtVersion = queueVersion;
-  const store = readStore();
-  if (store.writes.length === 0) {
-    transportFailures = 0;
+  try {
+    await drain(apiInstance);
+  } finally {
+    // A thrown or rejected persistence call must not leave the queue locked for
+    // the rest of the session.
     flushInProgress = false;
-    return;
   }
+}
 
-  const snapshotIds = new Set(store.writes.map((write) => write.id));
+async function drain(apiInstance: ReplayClient): Promise<void> {
+  const startedAtVersion = queueVersion;
+  const writes = readStore();
+  if (writes.length === 0) return;
+
+  const snapshotIds = new Set(writes.map((write) => write.id));
   const blocked = new Set<string>();
   const pending: QueuedWrite[] = [];
-  const now = Date.now();
+  let sent = 0;
 
-  for (const write of store.writes) {
-    if (blocked.has(write.resourceKey) || !isDue(write, now)) {
+  for (const write of writes) {
+    if (blocked.has(write.resourceKey) || !isDue(write)) {
       blocked.add(write.resourceKey);
       pending.push(write);
       continue;
@@ -205,61 +223,64 @@ export async function flushQueue(apiInstance: ReplayClient): Promise<void> {
 
     try {
       await send(apiInstance, write);
+      sent += 1;
       // The head landed: successors of the same resource may follow now, which
       // the loop reaches in sequence order.
     } catch (error) {
       const decision = decideReplay(error, write);
       if (decision.action === "retry") {
-        pending.push({
-          ...write,
-          retryCount: write.retryCount + (decision.counts ? 1 : 0),
-          nextAttemptAt: Date.now() + decision.waitMs,
-          state: "waiting",
-        });
+        const at = Date.now();
+        pending.push(
+          withDeadline(
+            {
+              ...write,
+              retryCount: write.retryCount + (decision.counts ? 1 : 0),
+            },
+            at + decision.waitMs,
+            at,
+          ),
+        );
       }
-      // Otherwise it is dropped: the answer cannot change, or the outcome of an
-      // unkeyed write is unknown and a resend could duplicate it.
+      // Otherwise the row is dropped: the answer cannot change, or the outcome
+      // of an unkeyed write is unknown and a resend could duplicate it.
       blocked.add(write.resourceKey);
     }
   }
 
   // The session ended while this flush was running: drop the rows instead of
   // writing the previous account's data back to storage.
-  if (queueVersion !== startedAtVersion) {
-    flushInProgress = false;
-    return;
-  }
+  if (queueVersion !== startedAtVersion) return;
 
   // The interceptor re-queues a write that hits the network again mid-flush and
-  // resolves it, so that row is in neither `pending` nor the snapshot. Keep it,
-  // and read the store again so its `nextSequence` is the one persisted.
-  const latest = readStore();
-  const added = latest.writes.filter((write) => !snapshotIds.has(write.id));
+  // resolves it, so that row is in neither `pending` nor the snapshot.
+  const added = readStore().filter((write) => !snapshotIds.has(write.id));
 
-  transportFailures = added.length > 0 ? transportFailures + 1 : 0;
+  // A row the interceptor had to queue again is proof the API was not reached,
+  // even though the request itself resolved. A send with nothing added is proof
+  // it was. A wake that sends nothing (the `online` event fires before any
+  // deadline) is no evidence either way and must not reset the outage backoff.
+  if (added.length > 0) {
+    transportFailures += 1;
+  } else if (sent > 0) {
+    transportFailures = 0;
+  }
+
   const backoff = transportBackoffMs(transportFailures);
+  const at = Date.now();
+  const merged = [
+    ...pending,
+    // Rows the interceptor queued arrive `ready` with no deadline; without a
+    // backoff the wake floor (one second) would hammer an unreachable API.
+    ...added.map((write) =>
+      backoff > 0 ? withDeadline(write, at + backoff, at) : write,
+    ),
+  ];
 
-  // Those rows arrive ready and with no deadline; without a backoff the wake
-  // floor (one second) would hammer an API that is still unreachable.
-  const requeued = added.map((write) =>
-    write.state === "ready" && write.nextAttemptAt === undefined
-      ? {
-          ...write,
-          nextAttemptAt: Date.now() + backoff,
-          state: "waiting" as const,
-        }
-      : write,
-  );
+  writeStore(merged);
 
-  const merged = [...pending, ...requeued];
-  writeStore({ ...latest, writes: merged });
-  flushInProgress = false;
-
-  if (merged.length > 0) {
-    const wait = nextWakeDelayMs(merged, Date.now());
-    if (wait !== null) {
-      setTimeout(() => void flushQueue(apiInstance), wait);
-    }
+  const wait = nextWakeDelayMs(merged, Date.now());
+  if (wait !== null) {
+    setTimeout(() => void flushQueue(apiInstance), wait);
   }
 }
 
@@ -267,7 +288,7 @@ export async function flushQueue(apiInstance: ReplayClient): Promise<void> {
  * Check if there are queued requests.
  */
 export function hasQueuedRequests(): boolean {
-  return readStore().writes.length > 0;
+  return readStore().length > 0;
 }
 
 /**

@@ -9,7 +9,10 @@ import {
   isDue,
   nextWakeDelayMs,
   transportBackoffMs,
+  withDeadline,
 } from "../offline-queue.model";
+
+const NOW = 1_800_000_000_000;
 
 const write = (overrides: Partial<QueuedWrite> = {}): QueuedWrite => ({
   id: "w1",
@@ -19,19 +22,33 @@ const write = (overrides: Partial<QueuedWrite> = {}): QueuedWrite => ({
   url: "/transactions",
   data: { id: 42 },
   state: "ready",
-  timestamp: 0,
   retryCount: 0,
   ...overrides,
 });
 
-const NOW = 1_800_000_000_000;
+describe("deadline helper", () => {
+  it("is the single writer of state and deadline", () => {
+    const waiting = withDeadline(write(), NOW + 5_000, NOW);
+    expect(waiting.state).toBe("waiting");
+    expect(waiting.nextAttemptAt).toBe(NOW + 5_000);
+
+    const ready = withDeadline(waiting, undefined, NOW);
+    expect(ready.state).toBe("ready");
+    expect(ready.nextAttemptAt).toBeUndefined();
+
+    // A deadline in the past is not a deadline: the row is due and the stale
+    // value is cleared instead of lingering next to a `ready` state.
+    const expired = withDeadline(write(), NOW - 1, NOW);
+    expect(expired.state).toBe("ready");
+    expect(expired.nextAttemptAt).toBeUndefined();
+  });
+});
 
 describe("resource identity", () => {
   it("groups edits of one transaction and separates the rest", () => {
     const first = deriveResourceKey("PUT", "/transactions", { id: 42 });
-    const second = deriveResourceKey("PUT", "/transactions", { id: 42 });
 
-    expect(first).toBe(second);
+    expect(deriveResourceKey("PUT", "/transactions", { id: 42 })).toBe(first);
     expect(deriveResourceKey("PUT", "/transactions", { id: 43 })).not.toBe(
       first,
     );
@@ -43,19 +60,39 @@ describe("resource identity", () => {
     );
   });
 
-  it("accepts transactionId as the id field", () => {
+  it("reads the id from the JSON string axios actually queues", () => {
+    // The interceptor hands over `config.data` after serialisation.
     expect(
-      deriveResourceKey("PUT", "/transactions", { transactionId: 7 }),
-    ).toBe("PUT /transactions 7");
+      deriveResourceKey("PUT", "/transactions", '{"id":42,"amount":20}'),
+    ).toBe("PUT /transactions 42");
+    expect(deriveResourceKey("PUT", "/transactions", "not json")).toBe(
+      "PUT /transactions ",
+    );
+  });
+});
+
+describe("credentials", () => {
+  it("detects password fields in objects and serialised bodies", () => {
+    expect(carriesCredentials({ email: "a@b.com", password: "secret" })).toBe(
+      true,
+    );
+    expect(carriesCredentials('{"email":"a@b.com","password":"secret"}')).toBe(
+      true,
+    );
+  });
+
+  it("ignores ordinary bodies", () => {
+    expect(carriesCredentials({ name: "Rent" })).toBe(false);
+    expect(carriesCredentials('{"amount":10}')).toBe(false);
+    expect(carriesCredentials(undefined)).toBe(false);
+    expect(carriesCredentials(["password"])).toBe(false);
   });
 });
 
 describe("due rule", () => {
-  it("only sends ready rows whose deadline has passed", () => {
-    expect(isDue(write(), NOW)).toBe(true);
-    expect(isDue(write({ state: "waiting" }), NOW)).toBe(false);
-    expect(isDue(write({ nextAttemptAt: NOW + 1 }), NOW)).toBe(false);
-    expect(isDue(write({ nextAttemptAt: NOW }), NOW)).toBe(true);
+  it("sends only rows the helper left ready", () => {
+    expect(isDue(write())).toBe(true);
+    expect(isDue(write({ state: "waiting" }))).toBe(false);
   });
 });
 
@@ -64,71 +101,55 @@ describe("replay decisions", () => {
     for (const status of [400, 403, 404, 409, 413]) {
       expect(decideReplay({ response: { status } }, write())).toEqual({
         action: "drop",
-        reason: "permanent",
       });
     }
   });
 
   it("keeps a throttled write and waits for the window the API announced", () => {
-    const decision = decideReplay(
-      { response: { status: 429, headers: { "retry-after": "7" } } },
-      write(),
-    );
-
-    expect(decision).toEqual({
-      action: "retry",
-      reason: "throttled",
-      waitMs: 7_000,
-      counts: false,
-    });
+    expect(
+      decideReplay(
+        { response: { status: 429, headers: { "retry-after": "7" } } },
+        write(),
+      ),
+    ).toEqual({ action: "retry", waitMs: 7_000, counts: false });
   });
 
   it("honours a throttling window longer than a minute", () => {
-    const decision = decideReplay(
-      { response: { status: 429, headers: { "retry-after": "3600" } } },
-      write(),
-    );
-
-    expect(decision).toMatchObject({ action: "retry", waitMs: 3_600_000 });
+    expect(
+      decideReplay(
+        { response: { status: 429, headers: { "retry-after": "3600" } } },
+        write(),
+      ),
+    ).toEqual({ action: "retry", waitMs: 3_600_000, counts: false });
   });
 
   it("falls back to ten seconds for a 429 without a usable header", () => {
-    expect(
-      decideReplay({ response: { status: 429, headers: {} } }, write()),
-    ).toMatchObject({ action: "retry", waitMs: 10_000 });
-
-    expect(
-      decideReplay(
-        { response: { status: 429, headers: { "retry-after": "later" } } },
-        write(),
-      ),
-    ).toMatchObject({ action: "retry", waitMs: 10_000 });
+    for (const headers of [{}, { "retry-after": "later" }]) {
+      expect(
+        decideReplay({ response: { status: 429, headers } }, write()),
+      ).toEqual({ action: "retry", waitMs: 10_000, counts: false });
+    }
   });
 
   it("drops a timeout whose outcome is unknown", () => {
-    expect(
-      decideReplay({ code: "ECONNABORTED" }, write({ retryCount: 0 })),
-    ).toEqual({ action: "drop", reason: "unknown-outcome" });
+    expect(decideReplay({ code: "ECONNABORTED" }, write())).toEqual({
+      action: "drop",
+    });
   });
 
   it("replays a keyed timeout, because the receipt makes it safe", () => {
-    const decision = decideReplay(
-      { code: "ETIMEDOUT" },
-      write({ idempotencyKey: "key-123456", retryCount: 2 }),
-    );
-
-    expect(decision).toEqual({
-      action: "retry",
-      reason: "transport",
-      waitMs: 4_000,
-      counts: true,
-    });
+    expect(
+      decideReplay(
+        { code: "ETIMEDOUT" },
+        write({ idempotencyKey: "key-123456", retryCount: 2 }),
+      ),
+    ).toEqual({ action: "retry", waitMs: 4_000, counts: true });
   });
 
   it("gives up on a transport failure after the retry budget", () => {
     expect(
       decideReplay({ code: "ERR_NETWORK" }, write({ retryCount: 5 })),
-    ).toEqual({ action: "drop", reason: "exhausted" });
+    ).toEqual({ action: "drop" });
   });
 });
 
@@ -146,14 +167,12 @@ describe("ordering and wake-ups", () => {
   const older = write({
     id: "older",
     sequence: 1,
-    resourceKey: "PUT /transactions 42",
     nextAttemptAt: NOW + 11_000,
     state: "waiting",
   });
   const newer = write({
     id: "newer",
     sequence: 2,
-    resourceKey: "PUT /transactions 42",
     nextAttemptAt: NOW + 10_000,
     state: "waiting",
   });
@@ -181,65 +200,72 @@ describe("ordering and wake-ups", () => {
 });
 
 describe("stored queue", () => {
-  it("returns an empty queue for missing or broken storage", () => {
-    expect(hydrateQueue(null, NOW).writes).toEqual([]);
-    expect(hydrateQueue("{not json", NOW).writes).toEqual([]);
+  it("returns nothing for missing or broken storage", () => {
+    expect(hydrateQueue(null, NOW)).toEqual([]);
+    expect(hydrateQueue("{not json", NOW)).toEqual([]);
   });
 
-  it("migrates the v1 array: sequence from position, key from the payload", () => {
-    const store = hydrateQueue(
+  it("migrates the array an older bundle wrote: sequence and key are derived", () => {
+    const rows = hydrateQueue(
       JSON.stringify([
         { id: "a", method: "PUT", url: "/transactions", data: { id: 42 } },
         {
           id: "b",
           method: "POST",
           url: "/transactions",
-          data: { amount: 10 },
+          data: '{"amount":10}',
           nextAttemptAt: NOW + 5_000,
         },
       ]),
       NOW,
     );
 
-    expect(store.version).toBe(2);
-    expect(store.writes.map((row) => row.sequence)).toEqual([1, 2]);
-    expect(store.writes[0].resourceKey).toBe("PUT /transactions 42");
-    expect(store.writes[1].resourceKey).toBe("POST /transactions ");
-    expect(store.writes[1].state).toBe("waiting");
-    expect(store.nextSequence).toBe(3);
+    expect(rows.map((row) => row.sequence)).toEqual([1, 2]);
+    expect(rows[0].resourceKey).toBe("PUT /transactions 42");
+    expect(rows[1].resourceKey).toBe("POST /transactions ");
+    expect(rows[1].state).toBe("waiting");
+    expect(rows[1].nextAttemptAt).toBe(NOW + 5_000);
+  });
+
+  it("still reads the object shape an intermediate build produced", () => {
+    const rows = hydrateQueue(
+      JSON.stringify({
+        version: 2,
+        nextSequence: 3,
+        writes: [{ id: "a", method: "POST", url: "/x", sequence: 9 }],
+      }),
+      NOW,
+    );
+
+    expect(rows.map((row) => row.id)).toEqual(["a"]);
+    expect(rows[0].sequence).toBe(9);
   });
 
   it("drops credential bodies left by an older build", () => {
-    const store = hydrateQueue(
+    const rows = hydrateQueue(
       JSON.stringify([
         {
           id: "a",
           method: "POST",
           url: "/auth/login",
-          data: { email: "a@b.com", password: "secret" },
+          data: '{"email":"a@b.com","password":"secret"}',
         },
       ]),
       NOW,
     );
 
-    expect(store.writes).toEqual([]);
-    expect(carriesCredentials({ password: "x" })).toBe(true);
+    expect(rows).toEqual([]);
   });
 
-  it("sorts by sequence and keeps nextSequence ahead of every row", () => {
-    const store = hydrateQueue(
-      JSON.stringify({
-        version: 2,
-        nextSequence: 2,
-        writes: [
-          { id: "b", sequence: 7, method: "POST", url: "/x" },
-          { id: "a", sequence: 3, method: "POST", url: "/y" },
-        ],
-      }),
+  it("sorts by sequence whatever order the JSON had", () => {
+    const rows = hydrateQueue(
+      JSON.stringify([
+        { id: "b", sequence: 7, method: "POST", url: "/x" },
+        { id: "a", sequence: 3, method: "POST", url: "/y" },
+      ]),
       NOW,
     );
 
-    expect(store.writes.map((row) => row.id)).toEqual(["a", "b"]);
-    expect(store.nextSequence).toBe(8);
+    expect(rows.map((row) => row.id)).toEqual(["a", "b"]);
   });
 });
