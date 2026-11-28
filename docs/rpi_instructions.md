@@ -44,9 +44,10 @@ Paste this prompt, replacing the bracketed values:
 
 Review the generated `research.md`:
 
-- Is the FAR score (Factual, Actionable, Relevant) at least **4.00** on average?
-- Below 4.00 after two attempts is a failure trigger: redefine the problem
-  before continuing.
+- Is the FAR score (Factual, Actionable, Relevant) at least **4.00** on average,
+  with **no axis under its floor** — Factual ≥ 4, Actionable ≥ 3, Relevant ≥ 3?
+- Below those thresholds after two attempts is a failure trigger: redefine the
+  problem before continuing.
 
 If it holds, move to Phase 2.
 

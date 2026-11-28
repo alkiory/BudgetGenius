@@ -52,7 +52,7 @@ Use the **FAR Scale** (Factual, Actionable, Relevant) for code-focused validatio
 
 Apply the FAR Scale for Research phase validation. Summarized scoring table + pass/fail decision required.
 
-The FAR scale scores a problem statement on three axes out of 5 — **Factual** (is it true?), **Actionable** (can work start from it?) and **Relevant** (does it matter?). A phase passes at a mean of 4.00 or above.
+The FAR scale scores a problem statement on three axes out of 5 — **Factual** (is it true?), **Actionable** (can work start from it?) and **Relevant** (does it matter?). A phase passes at a mean of 4.00 or above **and** no axis below its floor: Factual ≥ 4, Actionable ≥ 3, Relevant ≥ 3.
 
 *For planning validation in the next phase, see the FACTS Scale in Plan.md*
 
@@ -188,4 +188,4 @@ Plan phase receives:
 - Estimating implementation timelines
 
 ## Reference
-FAR rubric: Factual, Actionable, Relevant — scored out of 5, pass at a mean of 4.00.
+FAR rubric: Factual, Actionable, Relevant — scored out of 5; pass at a mean of 4.00 with Factual ≥ 4, Actionable ≥ 3 and Relevant ≥ 3.

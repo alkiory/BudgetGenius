@@ -1055,21 +1055,6 @@ If YES to all three — the call site is safe. If NO to any — fix and re-verif
   - **Adding `@JoinColumn({ name: '<other>' })` to an entity that already has a SEPARATE relation to `<other>` is BAD** — TypeORM would shadow the `'user' + Id` join derivation with whatever `<other>` was supplied at definition time. Pick exactly one explicit `@JoinColumn` per side of a relation; never sandwich two `@JoinColumn` decorators on the same property.
 - **Pre-cascade precondition is load-bearing.** The new `expect(... >= 1)` assertion in the spec ensures the cascade has work to do. Without it, a future regression that makes the cascade silently no-op (e.g., someone reverts to raw SQL inside `deleteUserTransactional`) would still trip `assertChildCountIsZero` green at the post-cascade assertion because the rows were never there to delete in the first place — masking the bug.
 
-#### 6.8.9 The offline queue invariants (v1.13.x — must read before touching `offline-queue*.ts`)
-
-The offline queue stores mutations the API never received. It has its own page — [`docs/offline-queue.md`](docs/offline-queue.md) — because the rules are easier to read in one place than in the loop that applies them. Read it before changing either file.
-
-The invariants that must survive any edit:
-
-1. **Identity is derived, never stored.** `resourceKey` (method + URL + id) and `state` (from `nextAttemptAt`) are computed in `hydrateQueue`. A stored `resourceKey` once split two edits of the same transaction into different groups, letting the newer amount sync first and be overwritten by the older one.
-2. **One writer for state and deadline.** `withDeadline(write, deadline, now)` is the only place that assigns `state` and `nextAttemptAt`; `isDue` reads `state` alone. A row cannot be `waiting` without a future deadline or `ready` with one.
-3. **The shared store stays array-shaped and unkeyed.** `offline_queue` holds only rows an older bundle can replay faithfully. Rows with an `Idempotency-Key` or a custom `timeout` live in `offline_queue:replay`, which no older bundle reads — otherwise that tab replays an import without its key and inserts the batch twice.
-4. **Nothing replays without an account.** `flushQueue` returns before touching storage when the account is unknown, a row replays only into the account that queued it, and a keyed row with no owner is never replayed. The interceptor reports `_offline` only when `enqueueRequest` returned `true`.
-5. **Order is per resource, not per deadline.** A successor waits for the head of its `resourceKey` even when its own deadline is earlier; a successful head releases its successors in the same pass.
-6. **A 429 spends no budget.** It waits for `Retry-After` with no cap. The retry budget (five) and the transport backoff (1 s → 30 s) apply to everything else; an `online` wake with nothing due does not reset that backoff.
-
-The specs are `apps/webClient/src/infrastructure/__tests__/offline-queue.model.spec.ts` (rules, no browser) and `offline-queue.spec.ts` (storage and replay). When you touch a rule, mutate it on purpose once and confirm the suite goes red: every finding on this surface so far was a rule with no test that could fail.
-
 ---
 
 ## 7. Development Workflow
@@ -1215,7 +1200,9 @@ VITE_FIREBASE_MEASUREMENT_ID=
   Redis (dev)
 
 The API is deployed by pulling `main` on the server and running
-`source .env.secrets && DB_PASSWORD=$DB_PASSWORD REDIS_PASSWORD=$REDIS_PASSWORD docker compose -f docker-compose.prod.yml up -d --build`.
+`set -a; . ./.env.secrets; set +a; docker compose -f docker-compose.prod.yml up -d --build`
+(`set -a` is load-bearing: a file of plain `VAR=value` lines does not export
+anything, and Compose aborts on the missing `REDIS_PASSWORD`).
 There is no second compose variant: the old GCE target was removed. DB queries
 go through
 `docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod`
@@ -1240,8 +1227,9 @@ The dev stack has no frontend container: the SPA runs on the Vite dev server
 ### 10.1 Backend Tests (Jest)
 
 - **Location:** `apps/api/test/`
-- **Types:** Unit tests for services, E2E tests for API endpoints
-- **Config:** `jest.config.ts` (unit), `test/jest-e2e.json` (e2e)
+- **Types:** unit tests for services, plus `*.e2e-spec.ts` files that boot the real `AppModule`
+- **Config:** `jest.config.ts` for `pnpm test` (its `testRegex` does **not** match `*-e2e-spec.ts`), `test/jest-e2e.json` for `pnpm test:e2e`
+- **CI:** `.github/workflows/ci.yml` runs `pnpm --filter api test` only. The e2e specs exist but are not part of the pipeline, so run them yourself before touching auth, CORS or the throttler.
 - **Status:** Jest unit and integration specs live under `apps/api/test/` and run with `pnpm --filter api test`; the e2e suite uses `pnpm --filter api test:e2e`. CI runs them on every push
 - **Key test files:**
   - `user-service.spec.ts`
@@ -1380,7 +1368,7 @@ Ambiguity → [Research] → [Plan] → [Implement] → Outcome
 - Firebase config in `auth.service.ts` duplicates env vars already available via `ConfigService`
 - `user.service.ts` has an artificial 1-second delay (`setTimeout`) in `createUser`
 - `finance.entity.ts` is referenced in the project tree but no longer exists
-- Test coverage is limited (3 backend unit spec files + 3 frontend E2E spec files, 30 total tests) — all existing tests pass
+- Test coverage is uneven: 32 API spec files and six web spec files run in CI; the Playwright suite is not part of it
 - No database seed data for development (only a `UserSeederService` placeholder)
 - **Protected-route infinite-render outage (2026-06):** a rewrite of `apps/webClient/src/presentation/routes/protected-route.tsx` collapsed three auth slice fields into a single `useSelector((s) => s.auth)` and React 19 + StrictMode tripped React's `getSnapshot should be cached` guard, leaving `/app/*` routes blank on hard refresh. Fixed by splitting into three leaf selectors; codified as §6.8 so the next combined-slice selector gets caught pre-merge.
 - **Capacitor Android APK third-party cookie outage (2026-06, fixed in v1.3.0):** Android System WebView silently drops `Set-Cookie` from cross-origin responses, so the entire Capacitor mobile auth path — `/auth/firebase-login` → `/api/...` round-trip → `/auth/refresh` — was broken on real devices (cookies never reached the WebView's cookie jar; the backend's `req.cookies.refreshToken` reads returned undefined; users got 401s and were bounced back to `/auth/login`). The RPI-install path for `@capacitor-community/cookies` (`rpi/mobile-cookies-persistence/`) was not available on the npm registry at install time (E404 on both `@capacitor-community/cookies@^6.0.0` and `@capacitor-community/cookies@^7.0.0`), so the v1.3.0 fix shipped **without a native cookies plugin** and instead relied on the body-token + Authorization-header defense-in-depth: backend `/auth/{login,signup,firebase-login,refresh}` now returns `{accessToken, refreshToken, user, ...}` in the response body; `/auth/refresh` also reads the refresh token from `req.body.refreshToken` or `Authorization: Bearer ...`; webClient's `apps/webClient/src/infrastructure/api.config.ts` request interceptor attaches `Authorization: Bearer ${localStorage.accessToken}` and `X-Device-Id` on every request, and the response interceptor persists tokens to localStorage + `document.cookie` on every successful auth response. Backend also gained `@SkipThrottle()` on `/auth/refresh`, `cookieOptions.maxAge` bumped 15 → 30 minutes, and the cross-cutting watchdog spec `apps/api/test/auth-cookie-bridge.spec.ts` covers cookie+body+header input/output across all four auth routes. Full RPI artifacts + research + plan + FAR (4.67) / FACTS (4.80) scores at `rpi/mobile-cookies-persistence/`.

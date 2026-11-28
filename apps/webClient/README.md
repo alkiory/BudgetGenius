@@ -13,8 +13,11 @@ pnpm dev            # API + web client together
 pnpm --filter frontend-web dev   # web client alone, http://localhost:5173
 ```
 
-The app talks to the API on `http://localhost:5000` through the Vite proxy; the
-API client lives in `src/infrastructure/api.config.ts`.
+The API client is `src/infrastructure/api.config.ts` and its base URL is
+exactly `VITE_API_URL`. The shipped example points straight at the API
+(`http://localhost:5000/api`), which is a cross-origin call the API's CORS list
+allows; set the base to `/api` instead if you want the Vite proxy
+(`vite.config.ts`) to carry the request and avoid CORS entirely.
 
 ## Scripts
 
@@ -64,13 +67,15 @@ injected at build time. Never commit either file.
 
 ## Behaviour worth knowing before you change it
 
-- **Offline writes** — a mutation that fails on the network is queued in
-  `localStorage` and replayed later. Identity, ordering, idempotency and
-  account scoping have their own page: [`docs/offline-queue.md`](../../docs/offline-queue.md).
+- **Offline writes** — a mutation that cannot reach the network is stored in
+  `localStorage` under `offline_queue` and replayed when the connection
+  returns; logout clears it. The interceptor reports `_offline` to the caller
+  instead of an error, so the optimistic UI closes its modal.
 - **Errors and retries** — the Axios interceptor refreshes on `401`, ends the
-  session on an unrecoverable one, and reports proxy `502/503/504` as "API
-  down" rather than as a validation error. React Query refuses to retry any
-  `4xx` (`queryClient.ts`).
+  session on an unrecoverable one (clearing the React Query cache), and reports
+  proxy `502/503/504` as "API down" rather than as a validation error. The
+  shared `queryClient` sets no retry policy of its own: each query passes its
+  own `retry` count, so a `4xx` is retried as often as that query asks.
 - **Design tokens and components** — read [`DESIGN.md`](../../DESIGN.md) before
   changing public UI. Icons come from `@animateicons/react` through
   `presentation/components/ui/animated-icons.tsx`; do not add `lucide-react` or
@@ -82,5 +87,8 @@ Vitest runs in the `node` environment with explicit imports (`globals: false`)
 and refuses to load CSS, which is why `vitest.config.ts` exists separately from
 `vite.config.ts`. Playwright specs live in `tests/` and mock the API per spec.
 
-Native behaviour (APK update, Google sign-in on device) is exercised through
-`tests/` against a mocked bridge, not in Vitest.
+Some native behaviour is unit-tested too: `__tests__/apk-update.spec.ts` covers
+the release check and download keying, and
+`adapters/auth/__tests__/native-google-login.strategy.spec.ts` covers the
+account-reauth matcher. The end-to-end device flows live in `tests/` (Playwright)
+against a mocked bridge.

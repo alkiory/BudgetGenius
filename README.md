@@ -18,7 +18,7 @@
 
 - **The Android app updates itself** — `releases/latest` is the source of truth; the bundle compares it with its own version, downloads the APK and hands it to the system installer, including Android 6.
 - **Sessions end for real** — a password change or reset kills live access tokens and stored refresh tokens, a demoted operator cannot rotate back in, and logout drops the offline queue instead of keeping the previous account's writes.
-- **Offline writes are queued, not lost** — a save that cannot reach the API is replayed later, per resource and in order, with an idempotency key. See [`docs/offline-queue.md`](docs/offline-queue.md).
+- **Offline writes are queued, not lost** — a save that cannot reach the API is stored and replayed when the connection returns, and logging out drops it instead of keeping the previous account's writes.
 
 From v1.12.0: the guided catalogue with the **Emergency fund** module, dated savings contributions that keep goals in sync, and the backoffice page editor.
 
@@ -734,8 +734,11 @@ production deployment.
 
 #### Required secrets and variables
 
-The **Deploy** workflow fails fast if a required secret is missing. Its jobs
-publish the web build only — the API credentials live on the server.
+The **Deploy** workflow publishes the web build only — the API credentials live
+on the server. It does **not** validate the secrets it consumes: a missing
+`VITE_API_URL` still produces a deployed bundle, and that bundle sends every
+request to whatever origin Vite inlined. Re-check the repository secrets after
+changing them, and verify the deployed app loads data before announcing it.
 
 | Scope | Where | Secrets / variables |
 |-------|-------|--------------------|
@@ -762,15 +765,22 @@ pnpm build:web             # dist/ → landing at /, SPA at /app/
 Run this on the server, from a checkout of this repository:
 
 ```bash
+#!/usr/bin/env bash
+set -euo pipefail            # a failed pull must stop the deploy, not build the old tree
+
 cd ~/projects/BudgetGenius
-source .env.secrets          # DB_PASSWORD, REDIS_PASSWORD, RESEND_API_KEY
-git pull origin main
+set -a                       # export everything the file defines, so Compose sees it
+. ./.env.secrets             # DB_PASSWORD, REDIS_PASSWORD
+set +a
 
-DB_PASSWORD=$DB_PASSWORD REDIS_PASSWORD=$REDIS_PASSWORD \
-  docker compose -f docker-compose.prod.yml up -d --build
-
-docker image prune -f
+git pull --ff-only origin main
+docker compose -f docker-compose.prod.yml up -d --build
+docker image prune -f || true   # housekeeping must not mask a deploy failure
 ```
+
+Without `set -a`, a file of plain `VAR=value` lines leaves the variables in the
+shell but unexported, and Compose aborts on
+`required variable REDIS_PASSWORD is missing a value`.
 
 - Use `docker-compose.prod.yml` alone: it declares the complete stack
   (`bg-backend-prod`, `bg-db-prod`, `bg-redis-prod`) and interpolates
@@ -807,6 +817,12 @@ docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod \
 docker exec -i bg-db-prod psql -U postgres_admin_prod -d budgetgenius_prod \
   -c "UPDATE \"bg_public\".\"users\" SET role='user' WHERE role='superadmin' AND lower(email)<>'superadmin@example.com';"
 ```
+
+> ⚠️ **The email is the whole gate.** That `UPDATE` promotes whichever account
+> already holds the address. Register and verify the operator account yourself
+> **before** running it: anyone who signs up with that address first gets the
+> backoffice. Prefer seeding it with `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD`
+> (see `apps/api/.env.production`), which creates the account on boot.
 
 Use `-it` instead of `-i` for an interactive `psql` session. The SPA caches the
 role until the profile is refetched, so reload the page (or wait up to five
@@ -1224,7 +1240,6 @@ When the backend is running, Swagger API documentation is available at:
 | Document | What it answers |
 |---|---|
 | [`knowledge.md`](knowledge.md) | The engineering guide: architecture, invariants and the traps that have already bitten this codebase |
-| [`docs/offline-queue.md`](docs/offline-queue.md) | How a mutation that fails offline survives, in what order, and why it cannot leak into another account |
 | [`docs/changelog.md`](docs/changelog.md) | Every release, with the reason behind the change |
 | [`docs/rpi/`](docs/rpi/README.md) | The Research → Plan → Implement process this repository uses |
 | [`DESIGN.md`](DESIGN.md) | Tokens, type scale and component patterns for the UI |
