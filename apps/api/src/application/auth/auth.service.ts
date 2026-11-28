@@ -249,6 +249,15 @@ export class AuthService {
     if (!configured) return user;
     if (normalizeEmail(user.email) !== configured) return user;
 
+    // An access token is a signed JWT with a seven-day life, and `RolesGuard`
+    // now authorizes the backoffice from the row, not from the token. So
+    // clearing the squatter's password and refresh token is no longer enough:
+    // the access token it already holds would keep passing. Whenever this
+    // sign-in changes the row, the session epoch is bumped at the end, which
+    // invalidates every token issued before it; the session this sign-in issues
+    // is stamped afterwards, in `issueSession`.
+    let endedPreviousSessions = false;
+
     // The provider just proved this mailbox belongs to the person signing in.
     // A local password on the row is therefore a second owner — someone who
     // registered the address before it was the operator's — and it must not
@@ -258,6 +267,7 @@ export class AuthService {
     if (user.password) {
       try {
         await this.userRepository.clearPassword(user.id);
+        endedPreviousSessions = true;
         this.logger.warn(
           `🛡️ Removed a local password from the operator account (id=${user.id})`,
         );
@@ -297,6 +307,7 @@ export class AuthService {
       }
 
       user.role = UserRole.SUPERADMIN;
+      endedPreviousSessions = true;
       this.logger.log(
         `🛡️ Operator account promoted to superadmin (id=${user.id})`,
       );
@@ -306,6 +317,20 @@ export class AuthService {
     // cleanup may have failed, and the old account must not keep the role
     // until the next restart.
     await this.demotePreviousOperators(user.id);
+
+    if (endedPreviousSessions) {
+      try {
+        await this.tokenEpoch.bump(user.id);
+      } catch (error) {
+        // Best effort, like the cleanup above: the next sign-in retries, and
+        // failing this one would lock the owner out without revoking anything.
+        this.logger.error(
+          `🛡️ Could not end the sessions issued before the operator promotion ` +
+            `(id=${user.id}): ${(error as Error).message}`,
+        );
+      }
+    }
+
     return user;
   }
 

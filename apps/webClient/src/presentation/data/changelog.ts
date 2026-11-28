@@ -71,8 +71,8 @@ export const changelog: ChangelogEntry[] = [
       es: "Tus cambios esperan a la conexión",
     },
     description: {
-      en: "Saving without connection no longer loses anything: the change waits and goes out when the connection is back, in the order you made it, and an import you send twice still counts once. The app also stops insisting on a server that is struggling — it waits its turn and tells you for how long instead of failing in a loop.",
-      es: "Guardar sin conexión ya no pierde nada: el cambio espera y sale cuando vuelve la conexión, en el orden en que lo hiciste, y una importación enviada dos veces sigue contando una sola vez. Además la app deja de insistirle a un servidor que está teniendo problemas — espera su turno y te dice cuánto, en lugar de fallar en bucle.",
+      en: "Saving while offline no longer loses anything: the change waits and goes out when the connection returns, and your edits to the same record always arrive in the order you made them. An import you send twice still counts once, and the app waits its turn instead of insisting on a server that is struggling.",
+      es: "Guardar sin conexión ya no pierde nada: el cambio espera y sale cuando vuelve la conexión, y los cambios sobre un mismo registro llegan siempre en el orden en que los hiciste. Una importación enviada dos veces sigue contando una sola vez, y la app espera su turno en lugar de insistirle a un servidor que está teniendo problemas.",
     },
   },
   {
