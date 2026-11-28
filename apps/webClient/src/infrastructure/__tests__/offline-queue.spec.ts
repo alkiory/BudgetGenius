@@ -47,6 +47,14 @@ const throttled = (retryAfter?: string) => ({
   },
 });
 
+/** What the app does on load and on every auth change. */
+const registerOwner = (owner?: string): void => {
+  registerOnlineListener(
+    makeClient(async () => ({ data: {} })),
+    () => owner,
+  );
+};
+
 /**
  * The queue is purged when the session ends, so the next account that uses the
  * browser profile cannot read the previous one's pending movements.
@@ -106,11 +114,8 @@ describe("flushQueue", () => {
     resumeQueue();
     vi.stubGlobal("window", { addEventListener: () => {} });
     vi.stubGlobal("navigator", { onLine: false });
-    // No account by default; the tests that need one register it.
-    registerOnlineListener(
-      makeClient(async () => ({ data: {} })),
-      () => undefined,
-    );
+    // One signed-in account, unless a test says otherwise.
+    registerOwner("1");
   });
 
   afterEach(() => {
@@ -387,12 +392,9 @@ describe("flushQueue", () => {
     expect(written).toEqual([20, 25]);
   });
 
-  it("does not replay a row queued by another account", async () => {
+  it("holds every row until the account is known, then drops the others", async () => {
     const store = stubStorage();
-    registerOnlineListener(
-      makeClient(async () => ({ data: {} })),
-      () => "7",
-    );
+    registerOwner("7");
     enqueueRequest("POST", "/transactions", { amount: 10 });
     enqueueRequest(
       "POST",
@@ -404,10 +406,46 @@ describe("flushQueue", () => {
       },
     );
 
-    registerOnlineListener(
-      makeClient(async () => ({ data: {} })),
-      () => "8",
+    const sent: string[] = [];
+    const post: MockPost = async (url) => {
+      sent.push(url);
+      return { data: {} };
+    };
+
+    // A page load starts with no account: the token in storage may belong to
+    // whoever signed in last, so nothing may be replayed yet.
+    registerOwner(undefined);
+    await flushQueue(makeClient(post));
+    expect(sent).toEqual([]);
+    expect(store.get(SHARED)).toBeDefined();
+    expect(store.get(OWN)).toBeDefined();
+
+    // Another account signs in: its rows are dropped, never sent.
+    registerOwner("8");
+    await flushQueue(makeClient(post));
+    expect(sent).toEqual([]);
+    expect(store.get(SHARED)).toBeUndefined();
+    expect(store.get(OWN)).toBeUndefined();
+  });
+
+  it("never replays a keyed import that has no account", async () => {
+    const store = stubStorage();
+    // A row an older bundle queued before accounts were recorded.
+    store.set(
+      OWN,
+      JSON.stringify([
+        {
+          id: "unowned",
+          sequence: 1,
+          method: "POST",
+          url: "/transactions/import",
+          data: { rows: [] },
+          idempotencyKey: "key-123456",
+          retryCount: 0,
+        },
+      ]),
     );
+
     const sent: string[] = [];
     await flushQueue(
       makeClient(async (url) => {
@@ -417,8 +455,59 @@ describe("flushQueue", () => {
     );
 
     expect(sent).toEqual([]);
-    expect(store.get(SHARED)).toBeUndefined();
     expect(store.get(OWN)).toBeUndefined();
+  });
+
+  it("replays a waiting keyed import before one an older tab queued", async () => {
+    const store = stubStorage();
+    const start = Date.now();
+
+    store.set(
+      OWN,
+      JSON.stringify([
+        {
+          id: "keyed",
+          sequence: 1,
+          method: "POST",
+          url: "/transactions/import",
+          data: { batches: [1] },
+          idempotencyKey: "key-123456",
+          timeout: 120_000,
+          owner: "1",
+          retryCount: 0,
+          nextAttemptAt: start + 11_000,
+        },
+      ]),
+    );
+    // The older tab appended its import without a sequence.
+    store.set(
+      SHARED,
+      JSON.stringify([
+        {
+          id: "old",
+          method: "POST",
+          url: "/transactions/import",
+          data: { batches: [2] },
+          retryCount: 0,
+        },
+      ]),
+    );
+
+    const batches: number[] = [];
+    const post: MockPost = async (_url, data) => {
+      batches.push((data as { batches: number[] }).batches[0]);
+      return { data: {} };
+    };
+
+    // The later import must not take a number below the waiting one, or it
+    // would be sent first and skip the window that one is serving.
+    vi.setSystemTime(start + 10_500);
+    await flushQueue(makeClient(post));
+    expect(batches).toEqual([]);
+
+    vi.setSystemTime(start + 11_500);
+    await flushQueue(makeClient(post));
+    expect(batches).toEqual([1, 2]);
   });
 
   it("backs off exponentially while replay keeps hitting an unreachable API", async () => {

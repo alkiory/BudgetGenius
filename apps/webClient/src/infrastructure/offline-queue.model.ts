@@ -307,7 +307,50 @@ export function needsOwnReplay(write: QueuedWrite): boolean {
 }
 
 /**
- * Reads a stored array and returns the current rows.
+ * Rows in a stored value, in either shape that has ever been written.
+ *
+ * A build in this branch persisted `{ version, nextSequence, writes }`; the
+ * array is what every other build writes. Both are read, so a queue saved by
+ * one of them is not overwritten as if it were empty.
+ */
+function parseRows(raw: string | null): unknown[] {
+  if (!raw) return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+
+  if (Array.isArray(parsed)) return parsed;
+
+  const writes = (parsed as { writes?: unknown } | null)?.writes;
+  return Array.isArray(writes) ? writes : [];
+}
+
+/**
+ * Highest sequence explicitly stored in any of the given values.
+ *
+ * The queue lives in two keys, and a row without a sequence can be appended to
+ * either one. Assigning it a number from only its own key would let it collide
+ * with — and sort before — a row already numbered in the other, which is how a
+ * newer import could overtake one still waiting for its retry window.
+ */
+export function highestExplicitSequence(...raws: (string | null)[]): number {
+  return raws.reduce((highest, raw) => {
+    for (const row of parseRows(raw)) {
+      const sequence = (row as Partial<QueuedWrite> | null)?.sequence;
+      if (typeof sequence === "number" && Number.isFinite(sequence)) {
+        highest = Math.max(highest, sequence);
+      }
+    }
+    return highest;
+  }, 0);
+}
+
+/**
+ * Reads a stored value and returns the current rows.
  *
  * Only the inputs are trusted: `resourceKey` is derived here from method, URL
  * and body — including for rows an older bundle wrote — so two edits of one
@@ -323,15 +366,8 @@ export function hydrateQueue(
   at: number,
   startAt = 0,
 ): QueuedWrite[] {
-  if (!raw) return [];
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
+  const parsed = parseRows(raw);
+  if (parsed.length === 0) return [];
 
   let next = parsed.reduce((highest: number, row: unknown) => {
     const sequence = (row as Partial<QueuedWrite> | null)?.sequence;

@@ -5,6 +5,7 @@ import {
   decideReplay,
   deriveResourceKey,
   firstPerResource,
+  highestExplicitSequence,
   hydrateQueue,
   isDue,
   needsOwnReplay,
@@ -245,6 +246,32 @@ describe("stored queue", () => {
     );
 
     expect(rows[0].resourceKey).toBe("PUT /transactions 42");
+  });
+
+  it("numbers rows above the highest sequence stored anywhere", () => {
+    const shared = JSON.stringify([{ id: "b", method: "POST", url: "/y" }]);
+    const own = JSON.stringify([
+      { id: "a", sequence: 7, method: "POST", url: "/x" },
+    ]);
+
+    // The shared row was appended by an older bundle after the numbered one;
+    // numbering it inside its own key would tie it with that row.
+    expect(highestExplicitSequence(shared, own)).toBe(7);
+    expect(hydrateQueue(shared, NOW, 7)[0].sequence).toBe(8);
+  });
+
+  it("reads the object shape a build in this branch wrote", () => {
+    const rows = hydrateQueue(
+      JSON.stringify({
+        version: 2,
+        nextSequence: 3,
+        writes: [{ id: "a", method: "POST", url: "/x", sequence: 9 }],
+      }),
+      NOW,
+    );
+
+    expect(rows.map((row) => row.id)).toEqual(["a"]);
+    expect(rows[0].sequence).toBe(9);
   });
 
   it("puts rows without a sequence after the ones already counted", () => {

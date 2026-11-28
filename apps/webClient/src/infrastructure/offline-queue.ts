@@ -4,6 +4,7 @@ import {
   carriesCredentials,
   decideReplay,
   deriveResourceKey,
+  highestExplicitSequence,
   hydrateQueue,
   isDue,
   needsOwnReplay,
@@ -85,26 +86,32 @@ let transportFailures = 0;
  */
 let ownerOf: () => string | undefined = () => undefined;
 
-function readKey(key: string, at: number, startAt = 0): QueuedWrite[] {
+function readRaw(key: string): string | null {
   try {
-    return hydrateQueue(localStorage.getItem(key), at, startAt);
+    return localStorage.getItem(key);
   } catch {
     // Storage can be unavailable (incognito, sandboxed iframe); an empty queue
     // is the only safe answer.
-    return [];
+    return null;
   }
 }
 
-/** Every pending row, oldest first, across both keys. */
+/**
+ * Every pending row, oldest first, across both keys.
+ *
+ * The sequence floor is taken from both values at once: a row an older bundle
+ * appended has no number, and numbering it inside its own key would let it tie
+ * with, and sort before, a row numbered in the other.
+ */
 function readAll(at = Date.now()): QueuedWrite[] {
-  const legacy = readKey(QUEUE_KEY, at);
-  const startAt = legacy.reduce(
-    (highest, write) => Math.max(highest, write.sequence),
-    0,
-  );
-  return [...legacy, ...readKey(REPLAY_KEY, at, startAt)].sort(
-    (a, b) => a.sequence - b.sequence,
-  );
+  const sharedRaw = readRaw(QUEUE_KEY);
+  const ownRaw = readRaw(REPLAY_KEY);
+  const floor = highestExplicitSequence(sharedRaw, ownRaw);
+
+  return [
+    ...hydrateQueue(sharedRaw, at, floor),
+    ...hydrateQueue(ownRaw, at, floor),
+  ].sort((a, b) => a.sequence - b.sequence);
 }
 
 /** Persists one key. Returns false when storage rejects the write. */
@@ -134,11 +141,19 @@ function writeAll(writes: QueuedWrite[]): boolean {
   return sharedOk && ownOk;
 }
 
-/** Whether the signed-in account may replay this row. */
+/**
+ * Whether the signed-in account may replay this row.
+ *
+ * Fails closed. Before the account is known nothing is replayed: the token the
+ * browser holds at that moment may belong to whoever signed in last, and these
+ * rows are the previous user's financial records. A row that carries an account
+ * is only replayed into the same one, and a keyed row with no account is never
+ * replayed at all — it cannot be attributed, and a resend writes rows.
+ */
 function replayable(write: QueuedWrite, owner: string | undefined): boolean {
-  return (
-    write.owner === undefined || owner === undefined || write.owner === owner
-  );
+  if (owner === undefined) return false;
+  if (write.owner !== undefined) return write.owner === owner;
+  return !needsOwnReplay(write);
 }
 
 export function resumeQueue(): void {
@@ -264,6 +279,10 @@ export async function flushQueue(apiInstance: ReplayClient): Promise<void> {
 async function drain(apiInstance: ReplayClient): Promise<void> {
   const startedAtVersion = queueVersion;
   const owner = ownerOf();
+  // No account yet: hold every row instead of sending it into a session we
+  // cannot identify. The moment the account appears, `flushQueue` runs again.
+  if (owner === undefined) return;
+
   const stored = readAll();
   // Rows queued by another account are dropped here rather than replayed into
   // the current one.

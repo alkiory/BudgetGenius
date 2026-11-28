@@ -10,6 +10,7 @@ import { isNativePlatform } from "./native";
 import {
   clearQueue,
   enqueueRequest,
+  flushQueue,
   registerOnlineListener,
   resumeQueue,
 } from "./offline-queue";
@@ -61,12 +62,27 @@ const api = axios.create({
   timeout: DEFAULT_REQUEST_TIMEOUT_MS,
 });
 
-// Register online listener to flush the offline queue when connectivity returns.
-// The getter is read lazily: the store is created after this module loads, and
-// only the account that queued a row may replay it.
-registerOnlineListener(api, () => {
+// The signed-in account, as far as the queue is concerned. Read lazily: the
+// store is created after this module loads, and the queue replays nothing until
+// it knows who is signed in.
+const queueOwner = (): string | undefined => {
   const id = store.getState().auth?.user?.id;
   return id === undefined || id === null ? undefined : String(id);
+};
+
+// Register online listener to flush the offline queue when connectivity returns.
+registerOnlineListener(api, queueOwner);
+
+// A queue held back while the account was unknown must be replayed as soon as
+// the account is known — a page load starts with no user, so the `online` event
+// alone would never release it.
+let lastQueueOwner: string | undefined;
+store.subscribe(() => {
+  const owner = queueOwner();
+  if (owner !== undefined && owner !== lastQueueOwner) {
+    lastQueueOwner = owner;
+    void flushQueue(api);
+  }
 });
 
 /** Status codes that indicate the backend is unreachable (e.g., Vite proxy returning 502). */
