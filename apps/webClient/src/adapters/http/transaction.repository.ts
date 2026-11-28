@@ -4,7 +4,7 @@ import {
   TransactionTypeFilter,
 } from "@domain/dashboard/transactions/transaction.entity";
 import { TransactionRepository } from "@domain/dashboard/transactions/transactionRepository";
-import api from "@infrastructure/api.config";
+import api, { LONG_REQUEST_TIMEOUT_MS } from "@infrastructure/api.config";
 
 // Phase 3 (T3.2): HttpTransactionRepository forwards an optional `type`
 // query param to the backend. The backend applies a sign-convention
@@ -25,7 +25,11 @@ export const HttpTransactionRepository: TransactionRepository = {
   },
 
   async importTransactions(transactions) {
-    const response = await api.post("/transactions/import", { transactions });
+    const response = await api.post(
+      "/transactions/import",
+      { transactions },
+      { timeout: LONG_REQUEST_TIMEOUT_MS },
+    );
     return response.data;
   },
 

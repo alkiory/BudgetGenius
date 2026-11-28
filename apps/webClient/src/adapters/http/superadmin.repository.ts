@@ -1,4 +1,4 @@
-import api from "@infrastructure/api.config";
+import api, { LONG_REQUEST_TIMEOUT_MS } from "@infrastructure/api.config";
 
 /** Aggregate usage returned by `GET /superadmin/overview`. No user rows. */
 export interface SuperAdminOverview {
@@ -206,7 +206,13 @@ export const superAdminRepository = {
   },
   /** Picked file as a data URL; the API stores it and returns its path. */
   async uploadImage(dataUrl: string): Promise<{ url: string }> {
-    const { data } = await api.post("/media", { dataUrl });
+    const { data } = await api.post(
+      "/media",
+      { dataUrl },
+      {
+        timeout: LONG_REQUEST_TIMEOUT_MS,
+      },
+    );
     return data;
   },
 

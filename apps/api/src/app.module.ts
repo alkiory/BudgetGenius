@@ -102,6 +102,13 @@ import { AppCatalogModule } from '@infrastructure/catalog/app-catalog.module';
         ssl: false,
         extra: {
           ssl: false, // Algunos drivers leen esto de la propiedad 'extra'
+          // `pg` waits indefinitely for a free client once the pool (default
+          // max: 10) is exhausted, so a saturated pool becomes requests that
+          // never answer: the browser keeps its six sockets open, every later
+          // query queues behind them and the app only recovers on restart.
+          // Failing after 10 s surfaces an error the client can retry, and no
+          // query that answers today comes anywhere near that ceiling.
+          connectionTimeoutMillis: 10_000,
         },
         // En producción (Docker), buscamos los archivos compilados .js
         // En local (ts-node), buscamos los .ts
